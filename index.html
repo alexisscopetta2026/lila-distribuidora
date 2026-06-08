@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<!-- v20260608173543 --><title>Distribuidora Lila — Sistema de Gestión</title>
+<!-- v20260608180547 --><title>Distribuidora Lila — Sistema de Gestión</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -1168,11 +1168,6 @@ async function emitirRemitos(cargaId){
 function resumenCarga(id){
   const cg=_cargas.find(x=>x.id===id);if(!cg)return;
   const peds=_pedidos.filter(p=>(cg.pedidos||[]).includes(p.id));
-  let allItems={};
-  peds.forEach(p=>(p.items||[]).forEach(it=>{
-    if(!allItems[it.id])allItems[it.id]={nom:it.nom,un:it.un||'',cant:0};
-    allItems[it.id].cant+=it.cant;
-  }));
   const totalGeneral=peds.reduce((a,p)=>a+p.total,0);
   document.getElementById('m-ver-title').textContent='Carga #'+cg.id+' — '+cg.vendedor;
   document.getElementById('m-ver-print').style.display='inline-flex';
@@ -1182,21 +1177,41 @@ function resumenCarga(id){
       <div style="font-size:18px;font-weight:700;color:var(--P)">${fmt(totalGeneral)}</div>
     </div>
 
-    <div style="font-weight:600;font-size:13px;margin-bottom:8px;color:var(--PD)">📦 Hoja de carga — productos a preparar:</div>
-    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
-      <thead><tr style="background:var(--bg2)">
-        <th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--brd)">Producto</th>
-        <th style="padding:7px 10px;text-align:right;border-bottom:1px solid var(--brd)">Cantidad</th>
-        <th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--brd)">Unidad</th>
-      </tr></thead>
-      <tbody>${Object.values(allItems).sort((a,b)=>a.nom.localeCompare(b.nom)).map(it=>`
-        <tr><td style="padding:6px 10px;border-bottom:0.5px solid var(--brd)">${it.nom}</td>
-        <td style="padding:6px 10px;border-bottom:0.5px solid var(--brd);text-align:right;font-weight:700;font-size:15px">${fmtN(it.cant,2)}</td>
-        <td style="padding:6px 10px;border-bottom:0.5px solid var(--brd);color:var(--txt2)">${it.un}</td></tr>`).join('')}
-      </tbody>
-    </table>
+    <div style="font-weight:600;font-size:13px;margin-bottom:8px;color:var(--PD)">📦 Hoja de carga — por cliente:</div>
 
-    <div style="font-weight:600;font-size:13px;margin-bottom:8px;color:var(--PD)">🗺️ Hoja de ruta — orden de paradas:</div>
+    ${peds.map((p,i)=>{
+      const c=_clientes.find(x=>x.id===p.cliente_id);
+      return `
+      <div style="border:1px solid var(--brd);border-radius:8px;margin-bottom:12px;overflow:hidden">
+        <div style="background:var(--PL);padding:8px 12px;display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <span style="font-weight:700;font-size:14px">${i+1}. ${p.cliente}</span>
+            <span style="color:var(--txt2);font-size:12px;margin-left:8px">${c?.direccion||'—'} · ${p.localidad||''}</span>
+          </div>
+          <span style="font-weight:700;color:var(--PD)">${fmt(p.total)}</span>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr style="background:var(--bg2)">
+            <th style="padding:6px 10px;text-align:left;border-bottom:1px solid var(--brd)">Producto</th>
+            <th style="padding:6px 10px;text-align:right;border-bottom:1px solid var(--brd)">Cant.</th>
+            <th style="padding:6px 10px;text-align:left;border-bottom:1px solid var(--brd)">Unidad</th>
+            <th style="padding:6px 10px;text-align:center;border-bottom:1px solid var(--brd)">Peso real</th>
+          </tr></thead>
+          <tbody>
+            ${(p.items||[]).map(it=>`<tr>
+              <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd)">${it.nom}</td>
+              <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);text-align:right;font-weight:700">${fmtN(it.cant,2)}</td>
+              <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);color:var(--txt2)">${it.un||''}</td>
+              <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);text-align:center">
+                ${(it.un||'').toLowerCase()==='kg'?`<input type="number" placeholder="0.00" step="0.01" style="width:80px;padding:3px 6px;border:1px solid var(--brd);border-radius:4px;text-align:center">`:'-'}
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+    }).join('')}
+
+    <div style="font-weight:600;font-size:13px;margin-bottom:8px;margin-top:4px;color:var(--PD)">🗺️ Hoja de ruta — resumen:</div>
     <table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="background:var(--bg2)">
         <th style="padding:7px 10px;text-align:center;border-bottom:1px solid var(--brd);width:32px">Nro</th>
@@ -1204,27 +1219,28 @@ function resumenCarga(id){
         <th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--brd)">Dirección</th>
         <th style="padding:7px 10px;text-align:left;border-bottom:1px solid var(--brd)">Localidad</th>
         <th style="padding:7px 10px;text-align:right;border-bottom:1px solid var(--brd)">Total</th>
-        <th style="padding:7px 10px;text-align:center;border-bottom:1px solid var(--brd)">Entregado</th>
+        <th style="padding:7px 10px;text-align:center;border-bottom:1px solid var(--brd)">☐</th>
       </tr></thead>
-      <tbody>${peds.map((p,i)=>{
-        const c=_clientes.find(x=>x.id===p.cliente_id);
-        return `<tr style="${i%2===0?'':'background:var(--bg2)'}">
-          <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);text-align:center;font-weight:700;color:var(--txt2)">${i+1}</td>
-          <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);font-weight:600">${p.cliente}</td>
-          <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);color:var(--txt2);font-size:12px">${c?.direccion||p.dir||'—'}</td>
-          <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);color:var(--txt2)">${p.localidad||''}</td>
-          <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);text-align:right;font-weight:600;color:var(--P)">${fmt(p.total)}</td>
-          <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);text-align:center">☐</td>
-        </tr>`;
-      }).join('')}
-      <tr style="background:var(--PL);font-weight:700">
-        <td colspan="4" style="padding:8px 10px;border-top:2px solid var(--brd)">TOTAL</td>
-        <td style="padding:8px 10px;border-top:2px solid var(--brd);text-align:right;color:var(--PD);font-size:15px">${fmt(totalGeneral)}</td>
-        <td style="border-top:2px solid var(--brd)"></td>
-      </tr>
+      <tbody>
+        ${peds.map((p,i)=>{
+          const c=_clientes.find(x=>x.id===p.cliente_id);
+          return `<tr style="${i%2===0?'':'background:var(--bg2)'}">
+            <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);text-align:center;font-weight:700;color:var(--txt2)">${i+1}</td>
+            <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);font-weight:600">${p.cliente}</td>
+            <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);color:var(--txt2);font-size:12px">${c?.direccion||'—'}</td>
+            <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);color:var(--txt2)">${p.localidad||''}</td>
+            <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);text-align:right;font-weight:600;color:var(--P)">${fmt(p.total)}</td>
+            <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);text-align:center">☐</td>
+          </tr>`;
+        }).join('')}
+        <tr style="background:var(--PL);font-weight:700">
+          <td colspan="4" style="padding:8px 10px;border-top:2px solid var(--brd)">TOTAL</td>
+          <td style="padding:8px 10px;border-top:2px solid var(--brd);text-align:right;color:var(--PD);font-size:15px">${fmt(totalGeneral)}</td>
+          <td style="border-top:2px solid var(--brd)"></td>
+        </tr>
       </tbody>
     </table>
-    ${peds.length?`<div style="margin-top:12px;font-size:11px;color:var(--txt2)">Pedido #${peds.map(p=>p.id).join(', #')}</div>`:''}
+    ${peds.length?`<div style="margin-top:10px;font-size:11px;color:var(--txt2)">Pedidos: #${peds.map(p=>p.id).join(', #')}</div>`:''}
   `;
   document.getElementById('m-ver').classList.add('on');
 }
