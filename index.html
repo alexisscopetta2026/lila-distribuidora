@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<!-- v20260608135059 --><title>Distribuidora Lila — Sistema de Gestión</title>
+<!-- v20260608173543 --><title>Distribuidora Lila — Sistema de Gestión</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -246,7 +246,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </select>
   </div>
   <div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>Nro</th><th>Fecha</th><th>Cliente</th><th>Localidad</th><th>Items</th><th>Total</th><th>Cobro</th><th></th></tr></thead>
+    <thead><tr><th>Nro</th><th>Fecha</th><th>Cliente</th><th>Localidad</th><th>Items</th><th>Total</th><th>Cobro</th><th>ARCA</th><th></th></tr></thead>
     <tbody id="rem-tbody"></tbody>
   </table></div>
   <div class="pg" id="rem-pg"></div>
@@ -565,6 +565,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div id="nc-items-section" style="background:var(--bg2);border-radius:8px;padding:10px;margin-bottom:10px">
       <div style="font-size:11px;font-weight:500;color:var(--txt2);text-transform:uppercase;margin-bottom:8px">Productos devueltos</div>
       <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:flex-end">
+        <div class="fg" style="width:80px">
+          <label>Código</label>
+          <input id="nc-cod" placeholder="Ej: 102" oninput="buscarPorCodigoNC()" autocomplete="off">
+        </div>
         <div class="fg drop-wrap" style="flex:2;min-width:150px">
           <label>Producto</label>
           <input id="nc-pro-q" placeholder="Buscar..." oninput="dropProNC()" autocomplete="off">
@@ -575,6 +579,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <button class="btn P" onclick="agregarItemNC()">+ Agregar</button>
       </div>
       <div id="nc-items-lista" style="margin-top:8px"></div>
+    </div>
+
+    <!-- Facturas pendientes para imputar -->
+    <div id="nc-facturas-section" style="display:none;background:var(--bg2);border-radius:8px;padding:10px;margin-bottom:10px">
+      <div style="font-size:11px;font-weight:500;color:var(--txt2);text-transform:uppercase;margin-bottom:8px">Imputar contra factura</div>
+      <div id="nc-facturas-lista"></div>
     </div>
 
     <!-- Importe manual (para descuentos) -->
@@ -1231,9 +1241,16 @@ function renderRemitos(){
     <td>${r.fecha}</td><td style="font-weight:500">${r.cliente}</td><td>${r.localidad||''}</td>
     <td>${(r.items||[]).length}</td><td style="font-weight:600">${fmt(r.total)}</td>
     <td>${r.cobrado?'<span class="b bP">Cobrado</span>':'<span class="b bW">Pendiente</span>'}</td>
+    <td>${r.factura_arca?`<span class="b bA" title="${r.nro_arca||''}" style="cursor:pointer">✅ ${r.nro_arca||'ARCA'}</span>`:`<button class="btn sm" style="font-size:11px" onclick="marcarARCA(${r.id})">+ ARCA</button>`}</td>
     <td><button class="btn sm" onclick="verRemito(${r.id})">👁</button> <button class="btn sm" onclick="impRem(${r.id})">🖨️</button></td>
-  </tr>`).join(''):'<tr><td colspan="8"><div class="empty">Sin remitos</div></td></tr>';
+  </tr>`).join(''):'<tr><td colspan="9"><div class="empty">Sin remitos</div></td></tr>';
   pag('rem-pg',tot,_remPg,p=>{_remPg=p;renderRemitos();});
+}
+async function marcarARCA(id){
+  const nro=prompt('Número de comprobante ARCA (opcional):');
+  if(nro===null)return; // canceló
+  await sb.from('remitos').update({factura_arca:true, nro_arca:nro||''}).eq('id',id);
+  await cargarRemitos();renderRemitos();
 }
 function verRemito(id){
   const r=_remitos.find(x=>x.id===id);if(!r)return;
@@ -2118,6 +2135,38 @@ function selCliNC(id){
   document.getElementById('nc-cli-id').value=id;
   document.getElementById('nc-cli-q').value=c.nombre;
   document.getElementById('nc-cli-drop').style.display='none';
+  
+  // Mostrar facturas pendientes para imputar
+  const remsPend=_remitos.filter(r=>r.cliente_id===id&&!r.cobrado).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const facturasSection=document.getElementById('nc-facturas-section');
+  const facturasList=document.getElementById('nc-facturas-lista');
+  
+  if(remsPend.length){
+    facturasSection.style.display='block';
+    facturasList.innerHTML=`<div style="font-size:12px;color:var(--txt2);margin-bottom:6px">Seleccioná la factura contra la que querés imputar la NC:</div>`+
+    remsPend.map(r=>`<div style="display:flex;align-items:center;gap:8px;padding:6px;border-bottom:0.5px solid var(--brd);font-size:13px">
+      <input type="radio" name="nc-factura" id="nc-fac-${r.id}" value="${r.id}" style="width:16px;height:16px">
+      <label for="nc-fac-${r.id}" style="flex:1;cursor:pointer">
+        <strong>R-${String(r.id).padStart(4,'0')}</strong>
+        <span style="color:var(--txt2);font-size:11px;margin-left:6px">${r.fecha}</span>
+        <span style="color:var(--D);font-weight:600;margin-left:8px">${fmt(r.saldo_pendiente||r.total)}</span>
+      </label>
+    </div>`).join('');
+  } else {
+    facturasSection.style.display='none';
+  }
+}
+function buscarPorCodigoNC(){
+  const cod=(document.getElementById('nc-cod').value||'').trim();
+  if(!cod)return;
+  const prod=_productos.find(p=>String(p.codigo).trim()===cod);
+  if(prod){
+    selProNC(prod.id);
+    document.getElementById('nc-cod').style.borderColor='var(--P)';
+    document.getElementById('nc-cant').focus();
+  } else {
+    document.getElementById('nc-cod').style.borderColor='var(--D)';
+  }
 }
 function dropProNC(){
   const q=(document.getElementById('nc-pro-q').value||'').toLowerCase();
@@ -2178,30 +2227,51 @@ async function guardarNC(){
     if(imp<=0){alert('Ingresá un importe');return;}
   }
   imp=Math.round(imp*100)/100;
+
+  // Ver si hay factura seleccionada para imputar
+  const facturaSeleccionada=document.querySelector('input[name="nc-factura"]:checked');
+  const remito_id=facturaSeleccionada?parseInt(facturaSeleccionada.value):null;
+
   const {data:nc,error}=await sb.from('notas_credito').insert({
     cliente_id:parseInt(cid),cliente:c?.nombre||'?',
     fecha:document.getElementById('nc-fecha-m').value,
     motivo,importe:imp,
     items:motivo==='devolucion'?_ncItems:null,
-    observaciones:document.getElementById('nc-obs-m').value
+    observaciones:document.getElementById('nc-obs-m').value,
+    remito_id:remito_id
   }).select().single();
   if(error){alert('Error: '+error.message);return;}
+
   // Descontar saldo cliente
   if(c){await sb.from('clientes').update({saldo:Math.max(0,(c.saldo||0)-imp)}).eq('id',c.id);}
+
+  // Si hay factura seleccionada, actualizar su saldo pendiente
+  if(remito_id){
+    const rem=_remitos.find(r=>r.id===remito_id);
+    if(rem){
+      const saldoActual=rem.saldo_pendiente||rem.total;
+      const nuevoSaldo=Math.max(0,saldoActual-imp);
+      await sb.from('remitos').update({
+        saldo_pendiente:nuevoSaldo,
+        cobrado:nuevoSaldo<=0
+      }).eq('id',remito_id);
+    }
+  }
+
   // Si es devolución, devolver stock
   if(motivo==='devolucion'){
     for(const it of _ncItems){
       const prod=_productos.find(p=>p.id===it.id);
       if(prod){
-        const nuevoStock=(prod.stock||0)+it.cant;
-        await sb.from('productos').update({stock:nuevoStock}).eq('id',prod.id);
+        await sb.from('productos').update({stock:(prod.stock||0)+it.cant}).eq('id',prod.id);
       }
     }
   }
+
   cerrar('m-nc');
-  await Promise.all([cargarClientes(),cargarProductos(),cargarNCs()]);
-  renderCC();renderDash();actualizarDeuda();renderNCs();renderProductos();
-  alert(`✅ Nota de crédito emitida por ${fmt(imp)}.\nSaldo de ${c?.nombre} actualizado.${motivo==='devolucion'?' Stock de productos actualizado.':''}`);
+  await Promise.all([cargarClientes(),cargarProductos(),cargarNCs(),cargarRemitos()]);
+  renderCC();renderDash();actualizarDeuda();renderNCs();renderProductos();renderRemitos();
+  alert(`✅ Nota de crédito emitida por ${fmt(imp)}.\nSaldo de ${c?.nombre} actualizado.${remito_id?' Imputada contra R-'+String(remito_id).padStart(4,'0')+'.':''}${motivo==='devolucion'?' Stock actualizado.':''}`);
 }
 function renderNCs(){
   const tbody=document.getElementById('nc-tbody');if(!tbody)return;
