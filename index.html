@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<!-- v20260608181915 --><title>Distribuidora Lila — Sistema de Gestión</title>
+<!-- v20260608183621 --><title>Distribuidora Lila — Sistema de Gestión</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -1067,12 +1067,12 @@ function renderItems(){
   if(!_items.length){el.innerHTML='<div class="empty" style="padding:14px">Agregá productos al pedido</div>';tb.style.display='none';return;}
   let sub=0,dtoT=0,ivaT=0,tot=0;
   el.innerHTML=_items.map((it,i)=>{
-    const base=it.precio*it.cant,dtoA=base*(it.dto/100),neto=base-dtoA,iva=neto*(it.iva/100);
-    sub+=base;dtoT+=dtoA;ivaT+=iva;tot+=neto+iva;
-    return `<div class="pitem"><span class="pnom">${it.nom}</span><input type="number" value="${it.cant}" min="0.01" step="0.01" onchange="updItem(${i},'cant',this.value)" style="width:70px"><span style="color:var(--txt2);font-size:11px">${it.un}</span><input type="number" value="${it.precio}" onchange="updItem(${i},'precio',this.value)" style="width:90px;text-align:right"><span style="width:45px;text-align:center;font-size:11px;color:var(--txt2)">${it.dto?it.dto+'%':''}</span><span class="ptot">${fmt((it.precio*it.cant*(1-it.dto/100))*(1+it.iva/100))}</span><button class="btn D sm" onclick="delItem(${i})">🗑</button></div>`;
+    const base=it.precio*it.cant,dtoA=base*(it.dto/100),neto=base-dtoA;let iva=0;
+    sub+=base;dtoT+=dtoA;ivaT+=0;tot+=neto;
+    return `<div class="pitem"><span class="pnom">${it.nom}</span><input type="number" value="${it.cant}" min="0.01" step="0.01" onchange="updItem(${i},'cant',this.value)" style="width:70px"><span style="color:var(--txt2);font-size:11px">${it.un}</span><input type="number" value="${it.precio}" onchange="updItem(${i},'precio',this.value)" style="width:90px;text-align:right"><span style="width:45px;text-align:center;font-size:11px;color:var(--txt2)">${it.dto?it.dto+'%':''}</span><span class="ptot">${fmt(it.precio*it.cant*(1-it.dto/100))}</span><button class="btn D sm" onclick="delItem(${i})">🗑</button></div>`;
   }).join('');
   tb.style.display='flex';
-  document.getElementById('np-desglose').textContent=`Sub ${fmt(sub)} | Dto ${fmt(dtoT)} | IVA ${fmt(ivaT)}`;
+  document.getElementById('np-desglose').textContent=`Sub ${fmt(sub)}${dtoT>0?' | Dto '+fmt(dtoT):''}`;
   document.getElementById('np-total').textContent=fmt(tot);
 }
 function updItem(i,k,v){_items[i][k]=parseFloat(v)||0;renderItems();}
@@ -1082,7 +1082,7 @@ async function guardarPedido(){
   if(!cid){alert('Seleccioná un cliente');return;}
   if(!_items.length){alert('Agregá al menos un producto');return;}
   const c=_clientes.find(x=>x.id==cid);
-  let tot=0;_items.forEach(it=>{tot+=(it.precio*it.cant*(1-it.dto/100))*(1+it.iva/100);});
+  let tot=0;_items.forEach(it=>{tot+=it.precio*it.cant*(1-it.dto/100);});
   const {error}=await sb.from('pedidos').insert({
     cliente_id:parseInt(cid),cliente:c?.nombre||'?',localidad:c?.localidad||'',
     zona:c?.zona||'',vendedor:document.getElementById('np-ven').value||c?.vendedor||'',
@@ -1187,6 +1187,7 @@ function resumenCarga(id){
         <div style="background:var(--PL);padding:8px 12px;display:flex;justify-content:space-between;align-items:center">
           <div>
             <span style="font-weight:700;font-size:14px">${i+1}. ${p.cliente}</span>
+            <span style="color:var(--PD);font-size:11px;margin-left:6px;font-weight:600">Cód: ${c?.codigo||p.cliente_id||'—'}</span>
             <span style="color:var(--txt2);font-size:12px;margin-left:8px">${c?.direccion||'—'} · ${p.localidad||''}</span>
           </div>
           <span style="font-weight:700;color:var(--PD)">${fmt(p.total)}</span>
@@ -1301,8 +1302,8 @@ function detalleHTML(d,isRem){
   const num=isRem?'R-'+String(d.id).padStart(4,'0'):'Pedido #'+d.id;
   let sub=0,dtoT=0,ivaT=0,tot=0;
   const rows=(d.items||[]).map(it=>{
-    const base=it.precio*it.cant,dtoA=base*(it.dto/100),neto=base-dtoA,iva=neto*(it.iva/100);
-    sub+=base;dtoT+=dtoA;ivaT+=iva;tot+=neto+iva;
+    const base=it.precio*it.cant,dtoA=base*(it.dto/100),neto=base-dtoA;let iva=0;
+    sub+=base;dtoT+=dtoA;ivaT+=0;tot+=neto;
     return `<tr><td>${it.nom}</td><td style="text-align:center">${fmtN(it.cant,2)} ${it.un||''}</td><td style="text-align:right">${fmt(it.precio)}</td><td style="text-align:center">${it.dto||0}%</td><td style="text-align:right;font-weight:600">${fmt(neto+iva)}</td></tr>`;
   }).join('');
   return `<div style="font-size:13px">
@@ -1314,7 +1315,7 @@ function detalleHTML(d,isRem){
       <thead><tr style="background:var(--bg2)"><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--brd)">Producto</th><th style="padding:6px 8px;border-bottom:1px solid var(--brd)">Cant.</th><th style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--brd)">P.Unit</th><th style="padding:6px 8px;border-bottom:1px solid var(--brd)">Dto</th><th style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--brd)">Total</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
-    <div style="margin-top:8px;font-size:12px;color:var(--txt2)">Sub: ${fmt(sub)} | Dto: ${fmt(dtoT)} | IVA: ${fmt(ivaT)}</div>
+    <div style="margin-top:8px;font-size:12px;color:var(--txt2)">${dtoT>0?'Descuento: '+fmt(dtoT):''}</div>
     <div style="margin-top:6px;text-align:right;font-size:16px">Total: <strong style="color:var(--P)">${fmt(tot)}</strong></div>
     ${d.obs?`<div style="margin-top:8px;color:var(--txt2);font-size:12px">Obs: ${d.obs}</div>`:''}
   </div>`;
@@ -1504,7 +1505,7 @@ function imprimirRecibo(id){
     <div class="nro">RECIBO N° ${nro}</div>
   </div>
   <div class="row"><span><b>Fecha:</b></span><span>${r.fecha}</span></div>
-  <div class="row"><span><b>Cliente:</b></span><span>${r.cliente}</span></div>
+  <div class="row"><span><b>Cliente:</b></span><span>${r.cliente} ${r.cliente_id?'<span style="color:#555;font-size:11px">(Cód: '+r.cliente_id+')</span>':''}</span></div>
   ${r.vendedor?`<div class="row"><span><b>Vendedor:</b></span><span>${r.vendedor}</span></div>`:''}
   ${r.reparto?`<div class="row"><span><b>Reparto:</b></span><span>${r.reparto}</span></div>`:''}
   <div class="detalle">
@@ -1933,8 +1934,8 @@ function renderItemsRR(){
   if(!_rrItems.length){el.innerHTML='<div class="empty" style="padding:14px">Agregá productos al remito</div>';tb.style.display='none';return;}
   let sub=0,dtoT=0,ivaT=0,tot=0;
   el.innerHTML=_rrItems.map((it,i)=>{
-    const base=it.precio*it.cant,dtoA=base*(it.dto/100),neto=base-dtoA,iva=neto*(it.iva/100);
-    sub+=base;dtoT+=dtoA;ivaT+=iva;tot+=neto+iva;
+    const base=it.precio*it.cant,dtoA=base*(it.dto/100),neto=base-dtoA;let iva=0;
+    sub+=base;dtoT+=dtoA;ivaT+=0;tot+=neto;
     const pedidoCant=it.pedido_cant?`<span style="color:var(--txt2);font-size:10px">(ped:${it.pedido_cant})</span>`:'';
     return `<div class="pitem" style="${it.esPeso&&it.cant===0?'border:1px solid var(--W);background:var(--WL)':''}">
       <span class="pnom">${it.nom} ${it.esPeso?'<span class="b bA" style="font-size:10px">kg</span>':''} ${pedidoCant}</span>
@@ -1942,7 +1943,7 @@ function renderItemsRR(){
       <span style="color:var(--txt2);font-size:11px">${it.un}</span>
       <input type="number" value="${it.precio}" onchange="updItemRR(${i},'precio',this.value)" style="width:90px;text-align:right">
       <span style="width:45px;text-align:center;font-size:11px;color:var(--txt2)">${it.dto?it.dto+'%':''}</span>
-      <span class="ptot">${it.cant>0?fmt((it.precio*it.cant*(1-it.dto/100))*(1+it.iva/100)):'—'}</span>
+      <span class="ptot">${it.cant>0?fmt(it.precio*it.cant*(1-it.dto/100)):'—'}</span>
       <button class="btn D sm" onclick="delItemRR(${i})">🗑</button>
     </div>`;
   }).join('');
@@ -1952,7 +1953,7 @@ function renderItemsRR(){
     el.innerHTML+=`<div style="background:var(--WL);border-radius:6px;padding:7px 10px;font-size:12px;color:var(--W);margin-top:6px">⚠️ ${sinPeso} producto(s) por peso sin cantidad. Completá el peso real de la balanza.</div>`;
   }
   tb.style.display='flex';
-  document.getElementById('rr-desglose').textContent=`Sub ${fmt(sub)} | Dto ${fmt(dtoT)} | IVA ${fmt(ivaT)}`;
+  document.getElementById('rr-desglose').textContent=`Sub ${fmt(sub)}${dtoT>0?' | Dto '+fmt(dtoT):''}`;
   document.getElementById('rr-total').textContent=fmt(tot);
 }
 function updItemRR(i,k,v){_rrItems[i][k]=parseFloat(v)||0;renderItemsRR();}
@@ -1970,7 +1971,7 @@ async function emitirRemitoRapido(){
   if(!cid){alert('Seleccioná un cliente');return;}
   if(!_rrItems.length){alert('Agregá al menos un producto');return;}
   const c=_clientes.find(x=>x.id==cid);
-  let tot=0;_rrItems.forEach(it=>{tot+=(it.precio*it.cant*(1-it.dto/100))*(1+it.iva/100);});
+  let tot=0;_rrItems.forEach(it=>{tot+=it.precio*it.cant*(1-it.dto/100);});
   tot=Math.round(tot*100)/100;
   const {data:rem,error}=await sb.from('remitos').insert({
     cliente_id:parseInt(cid),cliente:c?.nombre||'?',localidad:c?.localidad||'',
@@ -2063,7 +2064,7 @@ async function informeProductos(){
   data.forEach(r=>(r.items||[]).forEach(it=>{
     if(!prod[it.nom])prod[it.nom]={cant:0,total:0};
     prod[it.nom].cant+=it.cant;
-    prod[it.nom].total+=(it.precio*it.cant*(1-it.dto/100))*(1+it.iva/100);
+    prod[it.nom].total+=it.precio*it.cant*(1-it.dto/100);
   }));
   el.innerHTML=`<div style="font-size:12px;color:var(--txt2);margin-bottom:8px">Basado en últimos 200 remitos</div>`+
   Object.entries(prod).sort((a,b)=>b[1].total-a[1].total).slice(0,15).map(([nom,d])=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--brd);font-size:12px"><span><b>${nom}</b></span><span style="color:var(--P);font-weight:600">${fmt(d.total)}</span></div>`).join('');
@@ -2231,7 +2232,7 @@ function renderItemsNC(){
   if(!_ncItems.length){el.innerHTML='';tb.style.display='none';return;}
   let tot=0;
   el.innerHTML=_ncItems.map((it,i)=>{
-    const subtot=it.precio*it.cant*(1+it.iva/100);tot+=subtot;
+    const subtot=it.precio*it.cant;tot+=subtot;
     return `<div class="pitem">
       <span class="pnom">${it.nom}</span>
       <input type="number" value="${it.cant}" min="0.01" step="0.01" onchange="_ncItems[${i}].cant=parseFloat(this.value)||0;renderItemsNC()" style="width:70px">
@@ -2251,7 +2252,7 @@ async function guardarNC(){
   let imp=0;
   if(motivo==='devolucion'){
     if(!_ncItems.length){alert('Agregá al menos un producto a devolver');return;}
-    imp=_ncItems.reduce((a,it)=>a+it.precio*it.cant*(1+it.iva/100),0);
+    imp=_ncItems.reduce((a,it)=>a+it.precio*it.cant,0);
   } else {
     imp=parseFloat(document.getElementById('nc-importe')?.value)||0;
     if(imp<=0){alert('Ingresá un importe');return;}
