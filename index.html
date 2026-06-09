@@ -672,6 +672,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <div class="drop" id="cob-cli-drop"></div>
         <input type="hidden" id="cob-cli-id">
       </div>
+      <div class="fg" style="max-width:90px"><label>Código</label><input id="cob-cli-cod" readonly placeholder="—" style="background:var(--bg2);color:var(--txt2)"></div>
       <div class="fg"><label>Fecha</label><input type="date" id="cob-fecha"></div>
     </div>
     <div class="fr x3">
@@ -699,12 +700,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="fr x3">
         <div class="fg"><label>Efectivo ($)</label><input id="cob-efectivo" type="number" value="0" min="0" oninput="calcTotalCobro()"></div>
         <div class="fg"><label>Transferencia ($)</label><input id="cob-transferencia" type="number" value="0" min="0" oninput="calcTotalCobro()"></div>
-        <div class="fg"><label>Cheque propio ($)</label><input id="cob-cheque" type="number" value="0" min="0" oninput="calcTotalCobro()"></div>
+
       </div>
       <div class="fr x3">
         <div class="fg"><label>Cheque 3ros ($)</label><input id="cob-cheque3" type="number" value="0" min="0" oninput="calcTotalCobro()"></div>
         <div class="fg"><label>Banco cheque 3ros</label><input id="cob-banco" placeholder="Nombre banco"></div>
         <div class="fg"><label>Nro cheque</label><input id="cob-nrocheque"></div>
+        <div class="fg"><label>Fecha cheque</label><input type="date" id="cob-fecha-cheque"></div>
       </div>
     </div>
     <div style="background:var(--bg2);border-radius:8px;padding:10px;margin-bottom:10px">
@@ -1377,20 +1379,20 @@ function detalleHTML(d,isRem){
 function calcTotalCobro(){
   const ef=parseFloat(document.getElementById('cob-efectivo')?.value)||0;
   const tr=parseFloat(document.getElementById('cob-transferencia')?.value)||0;
-  const ch=parseFloat(document.getElementById('cob-cheque')?.value)||0;
   const ch3=parseFloat(document.getElementById('cob-cheque3')?.value)||0;
   const rg=parseFloat(document.getElementById('cob-ret-gan')?.value)||0;
   const rib=parseFloat(document.getElementById('cob-ret-ib')?.value)||0;
   const ro=parseFloat(document.getElementById('cob-ret-otras')?.value)||0;
-  const tot=ef+tr+ch+ch3+rg+rib+ro;
+  const tot=ef+tr+ch3+rg+rib+ro;
   const el=document.getElementById('cob-total-display');
   if(el)el.textContent=fmt(tot);
 }
 function abrirCobro(){
-  ['cob-cli-q','cob-ven-nom','cob-reparto','cob-banco','cob-nrocheque','cob-obs2'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['cob-cli-q','cob-ven-nom','cob-reparto','cob-banco','cob-nrocheque','cob-obs2','cob-cli-cod'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('cob-cli-id').value='';
   const el=document.getElementById('cob-tipo-cobrador');if(el)el.value='';
-  ['cob-efectivo','cob-transferencia','cob-cheque','cob-cheque3','cob-ret-gan','cob-ret-ib','cob-ret-otras'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='0';});
+  ['cob-efectivo','cob-transferencia','cob-cheque3','cob-ret-gan','cob-ret-ib','cob-ret-otras'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='0';});
+  const fch=document.getElementById('cob-fecha-cheque');if(fch)fch.value='';
   const td=document.getElementById('cob-total-display');if(td)td.textContent='$0';
   document.getElementById('cob-fecha').value=new Date().toISOString().split('T')[0];
   document.getElementById('m-cobro').classList.add('on');
@@ -1408,6 +1410,7 @@ function selCliCob(id){
   document.getElementById('cob-cli-id').value=id;
   document.getElementById('cob-cli-q').value=c.nombre;
   document.getElementById('cob-cli-drop').style.display='none';
+  const codEl=document.getElementById('cob-cli-cod');if(codEl)codEl.value=c.id||'';
   // Mostrar remitos pendientes para imputar
   const remsPend=_remitos.filter(r=>r.cliente_id===id&&!r.cobrado).sort((a,b)=>a.fecha.localeCompare(b.fecha));
   const seccion=document.getElementById('cob-imputacion-section');
@@ -1452,18 +1455,17 @@ async function guardarCobro(){
   if(!cid){alert('Seleccioná un cliente');return;}
   const ef=parseFloat(document.getElementById('cob-efectivo')?.value)||0;
   const tr=parseFloat(document.getElementById('cob-transferencia')?.value)||0;
-  const ch=parseFloat(document.getElementById('cob-cheque')?.value)||0;
   const ch3=parseFloat(document.getElementById('cob-cheque3')?.value)||0;
   const rg=parseFloat(document.getElementById('cob-ret-gan')?.value)||0;
   const rib=parseFloat(document.getElementById('cob-ret-ib')?.value)||0;
   const ro=parseFloat(document.getElementById('cob-ret-otras')?.value)||0;
-  const imp=ef+tr+ch+ch3+rg+rib+ro;
+  const imp=ef+tr+ch3+rg+rib+ro;
   if(imp<=0){alert('Ingresá al menos un importe');return;}
   const c=_clientes.find(x=>x.id==cid);
   const formas=[];
   if(ef>0)formas.push('efectivo');
   if(tr>0)formas.push('transf');
-  if(ch>0||ch3>0)formas.push('cheque');
+  if(ch3>0)formas.push('cheque');
   if(rg>0||rib>0||ro>0)formas.push('ret');
 
   // Recolectar imputaciones
@@ -1480,10 +1482,11 @@ async function guardarCobro(){
     cliente_id:parseInt(cid),cliente:c?.nombre||'?',
     fecha:document.getElementById('cob-fecha').value,
     forma:formas.join('+')||'efectivo',importe:imp,
-    efectivo:ef,transferencia:tr,cheque_propio:ch,cheque_terceros:ch3,
+    efectivo:ef,transferencia:tr,cheque_terceros:ch3,
     ret_ganancias:rg,ret_ing_brutos:rib,ret_otras:ro,
     banco_cheque:document.getElementById('cob-banco')?.value||'',
     nro_cheque:document.getElementById('cob-nrocheque')?.value||'',
+    fecha_cheque:document.getElementById('cob-fecha-cheque')?.value||'',
     reparto:document.getElementById('cob-reparto')?.value||'',
     tipo_cobrador:document.getElementById('cob-tipo-cobrador')?.value||'',
     vendedor:document.getElementById('cob-ven-nom')?.value||'',
