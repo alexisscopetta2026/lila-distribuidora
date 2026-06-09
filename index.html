@@ -2303,14 +2303,15 @@ async function emitirRemitoRapido(){
     ultimo_remito:rem.fecha
   }).eq('id',c.id);
   await Promise.all([cargarRemitos(),cargarClientes()]);
-  // Mostrar remito para imprimir
-  _remActual=rem;
-  document.getElementById('m-ver-title').textContent='Remito R-'+String(rem.id).padStart(4,'0')+' — '+rem.cliente;
-  document.getElementById('m-ver-body').innerHTML=detalleHTML(rem,true);
-  document.getElementById('m-ver-print').style.display='inline-flex';
-  document.getElementById('m-ver').classList.add('on');
   limpiarRR();
   renderDash();renderCC();renderRemitos();
+  // Guardar remito actual por si quiere imprimir después
+  _remActual=rem;_verTipo='remito';
+  // Preguntar si quiere imprimir
+  const num='R-'+String(rem.id).padStart(4,'0');
+  if(confirm('✅ Remito '+num+' grabado para '+rem.cliente+'\n\n¿Querés imprimirlo ahora?')){
+    imprimirRemito();
+  }
 }
 
 // ─── INFORMES ───
