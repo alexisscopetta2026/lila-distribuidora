@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<!-- v20260608233903 --><title>Distribuidora Lila — Sistema de Gestión</title>
+<!-- v20260609111905 --><title>Distribuidora Lila — Sistema de Gestión</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -2674,44 +2674,6 @@ async function generarRendicion(){
       </table>
     </div>
 
-    <button class="btn A" onclick="imprimirRendicion()" style="margin-top:8px">🖨️ Imprimir rendición</button>
-  `;
-}
-  const el=document.getElementById('rend-resultado');
-  if(!cobros.length){el.innerHTML='<div class="empty">Sin cobros en ese período / reparto</div>';return;}
-  // Agrupar por reparto
-  const porReparto={};
-  cobros.forEach(c=>{
-    const k=c.reparto||'Sin reparto';
-    if(!porReparto[k])porReparto[k]={cobros:[],total:0,ef:0,tr:0,ch:0,ret:0};
-    porReparto[k].cobros.push(c);
-    porReparto[k].total+=c.importe||0;
-    porReparto[k].ef+=(c.efectivo||0);
-    porReparto[k].tr+=(c.transferencia||0);
-    porReparto[k].ch+=(c.cheque_propio||0)+(c.cheque_terceros||0);
-    porReparto[k].ret+=(c.ret_ganancias||0)+(c.ret_ing_brutos||0)+(c.ret_otras||0);
-  });
-  const totalGeneral=cobros.reduce((a,c)=>a+(c.importe||0),0);
-  el.innerHTML=`
-    <div style="background:var(--PL);border-radius:8px;padding:12px 16px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
-      <span style="font-weight:600">${cobros.length} cobros · ${desde} al ${hasta}</span>
-      <span style="font-size:20px;font-weight:700;color:var(--PD)">${fmt(totalGeneral)}</span>
-    </div>
-    ${Object.entries(porReparto).map(([rep,d])=>`
-      <div class="card" style="margin-bottom:8px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <span style="font-weight:600;font-size:14px">Reparto: ${rep}</span>
-          <span style="font-size:16px;font-weight:700;color:var(--P)">${fmt(d.total)}</span>
-        </div>
-        <div style="display:flex;gap:12px;font-size:12px;color:var(--txt2);flex-wrap:wrap;margin-bottom:8px">
-          ${d.ef>0?`<span>Efectivo: <b>${fmt(d.ef)}</b></span>`:''}
-          ${d.tr>0?`<span>Transferencia: <b>${fmt(d.tr)}</b></span>`:''}
-          ${d.ch>0?`<span>Cheques: <b>${fmt(d.ch)}</b></span>`:''}
-          ${d.ret>0?`<span>Retenciones: <b>${fmt(d.ret)}</b></span>`:''}
-        </div>
-        ${d.cobros.map(c=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:0.5px solid var(--brd);font-size:12px"><span>${c.cliente}</span><span style="font-weight:600">${fmt(c.importe)}</span></div>`).join('')}
-      </div>
-    `).join('')}
     <button class="btn A" onclick="imprimirRendicion()" style="margin-top:8px">🖨️ Imprimir rendición</button>
   `;
 }
