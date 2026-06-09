@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<!-- v20260608183621 --><title>Distribuidora Lila — Sistema de Gestión</title>
+<!-- v20260608233903 --><title>Distribuidora Lila — Sistema de Gestión</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -361,19 +361,32 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="fg"><label>Nro reparto</label><input id="rend-reparto" placeholder="Ej: 1, 1/1 o vacío=todos"></div>
     </div>
     <div class="fr">
-      <div class="fg"><label>Cobrador</label>
-        <select id="rend-cobrador">
-          <option value="">Todos</option>
-          <option value="2">Vendedor 1</option>
-          <option value="3">Vendedor 2</option>
-          <option value="4">Repartidor</option>
-        </select>
+      <div class="fg"><label>Vendedor</label>
+        <input id="rend-cobrador-nom" placeholder="Nombre vendedor o vacío=todos">
       </div>
       <div class="fg" style="justify-content:flex-end"><label>&nbsp;</label>
         <button class="btn P" onclick="generarRendicion()" style="width:100%">📊 Generar rendición</button>
       </div>
     </div>
   </div>
+
+  <!-- Desglose de billetes -->
+  <div class="card">
+    <div style="font-weight:600;font-size:13px;margin-bottom:10px;color:var(--PD)">💵 Conteo de efectivo</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px" id="billetes-grid">
+      ${[20000,10000,2000,1000,500,200,100,50,20,10].map(b=>`
+      <div style="display:flex;align-items:center;gap:6px;background:var(--bg2);border-radius:6px;padding:6px 8px">
+        <span style="font-size:12px;color:var(--txt2);width:55px">\$${b.toLocaleString('es-AR')}</span>
+        <input type="number" id="bill-${b}" value="0" min="0" style="width:50px;text-align:center;padding:3px 5px;border:1px solid var(--brd);border-radius:4px" oninput="calcEfectivo()">
+        <span style="font-size:11px;color:var(--txt2)" id="bill-sub-${b}">$0</span>
+      </div>`).join('')}
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;background:var(--PL);border-radius:8px;padding:10px 14px;margin-top:10px">
+      <span style="font-weight:600;color:var(--PD)">Total efectivo contado</span>
+      <span style="font-size:20px;font-weight:700;color:var(--PD)" id="total-efectivo-contado">$0</span>
+    </div>
+  </div>
+
   <div id="rend-resultado"></div>
 </div>
 
@@ -381,9 +394,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="panel" id="p-remito-rapido">
   <div class="sech"><h2>⚡ Remito rápido</h2></div>
   <div class="card">
-    <div class="fr">
-      <div class="fg drop-wrap">
-        <label>Cliente *</label>
+    <div class="fr x3">
+      <div class="fg">
+        <label>Código cliente</label>
+        <input id="rr-cli-cod" placeholder="Ej: 40" oninput="buscarPorCodCli()" autocomplete="off" style="font-size:15px;font-weight:600">
+      </div>
+      <div class="fg drop-wrap" style="flex:2">
+        <label>O buscar por nombre</label>
         <input id="rr-cli-q" placeholder="Buscar cliente..." oninput="dropCliRR()" autocomplete="off">
         <div class="drop" id="rr-cli-drop"></div>
         <input type="hidden" id="rr-cli-id">
@@ -727,8 +744,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="mh"><h3>Nueva carga</h3><button class="btn sm" onclick="cerrar('m-carga')">✕</button></div>
   <div class="mb">
     <div class="fr">
-      <div class="fg"><label>Vendedor</label><input id="nc-ven" placeholder="Nombre del vendedor" oninput="loadPedsCarga()"></div>
+      <div class="fg"><label>Nombre de la carga</label><input id="nc-nombre" placeholder="Ej: Reparto lunes zona norte"></div>
       <div class="fg"><label>Fecha</label><input type="date" id="nc-fecha"></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label>Vendedor / Repartidor</label><input id="nc-ven" placeholder="Nombre" oninput="loadPedsCarga()"></div>
     </div>
     <div style="font-size:12px;color:var(--txt2);margin-bottom:8px">Pedidos pendientes:</div>
     <div id="nc-peds"></div>
@@ -736,6 +756,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="mf">
     <button class="btn" onclick="cerrar('m-carga')">Cancelar</button>
     <button class="btn P" onclick="guardarCarga()">✓ Crear carga</button>
+  </div>
+</div>
+</div>
+
+<!-- Modal editar carga -->
+<div class="mbg" id="m-editar-carga">
+<div class="mdl">
+  <div class="mh"><h3>Editar carga</h3><button class="btn sm" onclick="cerrar('m-editar-carga')">✕</button></div>
+  <div class="mb">
+    <input type="hidden" id="ec-id">
+    <div class="fr">
+      <div class="fg"><label>Nombre de la carga</label><input id="ec-nombre" placeholder="Ej: Reparto lunes zona norte"></div>
+      <div class="fg"><label>Fecha</label><input type="date" id="ec-fecha"></div>
+    </div>
+    <div class="fg"><label>Vendedor / Repartidor</label><input id="ec-ven" placeholder="Nombre"></div>
+  </div>
+  <div class="mf">
+    <button class="btn" onclick="cerrar('m-editar-carga')">Cancelar</button>
+    <button class="btn P" onclick="guardarEditarCarga()">✓ Guardar cambios</button>
   </div>
 </div>
 </div>
@@ -1119,7 +1158,8 @@ async function guardarCarga(){
   const tot=peds.reduce((a,p)=>a+p.total,0);
   const ven=document.getElementById('nc-ven').value;
   const fecha=document.getElementById('nc-fecha').value;
-  const {data:carga,error}=await sb.from('cargas').insert({fecha,vendedor:ven,pedidos:pedIds,total:tot,estado:'armando'}).select().single();
+  const nombre=document.getElementById('nc-nombre').value||'';
+  const {data:carga,error}=await sb.from('cargas').insert({fecha,vendedor:ven,pedidos:pedIds,total:tot,estado:'armando',nombre}).select().single();
   if(error){alert('Error: '+error.message);return;}
   for(const pid of pedIds){await sb.from('pedidos').update({estado:'en_carga',carga_id:carga.id}).eq('id',pid);}
   cerrar('m-carga');await Promise.all([cargarCargas(),cargarPedidos()]);renderCargas();renderPedidos();renderDash();
@@ -1129,10 +1169,11 @@ function renderCargas(){
   if(!_cargas.length){el.innerHTML='<div class="empty">Sin cargas</div>';return;}
   el.innerHTML=_cargas.map(cg=>{
     const peds=_pedidos.filter(p=>(cg.pedidos||[]).includes(p.id));
+    const titulo=cg.nombre?`<b>${cg.nombre}</b> — Carga #${cg.id}`:`Carga #${cg.id}`;
     return `<div class="ccard">
       <div class="ccard-h">
         <div>
-          <div class="ccard-nm">Carga #${cg.id} — ${cg.vendedor||'Sin vendedor'}</div>
+          <div class="ccard-nm">${titulo} ${cg.vendedor?'— '+cg.vendedor:''}</div>
           <div class="ccard-sub">${cg.fecha} · ${(cg.pedidos||[]).length} pedidos</div>
           <div style="font-size:11px;color:var(--txt2);margin-top:2px">${peds.map(p=>p.cliente).join(' · ')}</div>
         </div>
@@ -1141,10 +1182,28 @@ function renderCargas(){
       <div class="ccard-acts">
         ${cg.estado==='armando'?`<button class="btn P sm" onclick="marcarLista(${cg.id})">✓ Marcar lista</button>`:''}
         ${cg.estado==='lista'?`<button class="btn A sm" onclick="emitirRemitos(${cg.id})">📄 Emitir remitos</button>`:''}
+        <button class="btn sm" onclick="editarCarga(${cg.id})">✏️</button>
         <button class="btn sm" onclick="resumenCarga(${cg.id})">📋 Resumen</button>
       </div>
     </div>`;
   }).join('');
+}
+function editarCarga(id){
+  const cg=_cargas.find(x=>x.id===id);if(!cg)return;
+  document.getElementById('ec-id').value=id;
+  document.getElementById('ec-nombre').value=cg.nombre||'';
+  document.getElementById('ec-fecha').value=cg.fecha||'';
+  document.getElementById('ec-ven').value=cg.vendedor||'';
+  document.getElementById('m-editar-carga').classList.add('on');
+}
+async function guardarEditarCarga(){
+  const id=parseInt(document.getElementById('ec-id').value);
+  const nombre=document.getElementById('ec-nombre').value;
+  const fecha=document.getElementById('ec-fecha').value;
+  const vendedor=document.getElementById('ec-ven').value;
+  await sb.from('cargas').update({nombre,fecha,vendedor}).eq('id',id);
+  cerrar('m-editar-carga');
+  await cargarCargas();renderCargas();
 }
 async function marcarLista(id){
   await sb.from('cargas').update({estado:'lista'}).eq('id',id);
@@ -1798,6 +1857,7 @@ function initRR(){
   _rrItems=[];_rrProTemp=null;
   ['rr-cli-q','rr-pro-q','rr-obs'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   const cod=document.getElementById('rr-cod');if(cod){cod.value='';cod.style.borderColor='';}
+  const codCli=document.getElementById('rr-cli-cod');if(codCli){codCli.value='';codCli.style.borderColor='';}
   document.getElementById('rr-cli-id').value='';
   document.getElementById('rr-cant').value='1';
   document.getElementById('rr-peso').value='0';
@@ -1805,6 +1865,18 @@ function initRR(){
   document.getElementById('rr-dto').value='0';
   const info=document.getElementById('rr-cli-info');if(info)info.style.display='none';
   renderItemsRR();
+}
+function buscarPorCodCli(){
+  const cod=(document.getElementById('rr-cli-cod').value||'').trim();
+  if(!cod)return;
+  const c=_clientes.find(x=>String(x.codigo).trim()===cod||String(x.id).trim()===cod);
+  if(c){
+    selCliRR(c.id);
+    document.getElementById('rr-cli-cod').style.borderColor='var(--P)';
+    document.getElementById('rr-pro-q').focus();
+  } else {
+    document.getElementById('rr-cli-cod').style.borderColor='var(--D)';
+  }
 }
 function dropCliRR(){
   const q=(document.getElementById('rr-cli-q').value||'').toLowerCase();
@@ -2491,15 +2563,120 @@ function initRendicion(){
   document.getElementById('rend-desde').value=hace7;
   document.getElementById('rend-hasta').value=hoy;
 }
+function calcEfectivo(){
+  const billetes=[20000,10000,2000,1000,500,200,100,50,20,10];
+  let total=0;
+  billetes.forEach(b=>{
+    const cant=parseInt(document.getElementById(`bill-${b}`)?.value)||0;
+    const sub=cant*b;
+    total+=sub;
+    const el=document.getElementById(`bill-sub-${b}`);
+    if(el)el.textContent=sub>0?fmt(sub):'$0';
+  });
+  const el=document.getElementById('total-efectivo-contado');
+  if(el)el.textContent=fmt(total);
+}
 async function generarRendicion(){
   const desde=document.getElementById('rend-desde').value;
   const hasta=document.getElementById('rend-hasta').value;
   const reparto=document.getElementById('rend-reparto').value.trim();
-  const cobrador=document.getElementById('rend-cobrador').value;
+  const cobrador=document.getElementById('rend-cobrador-nom')?.value.trim().toLowerCase()||'';
   const {data}=await sb.from('cobros').select('*').gte('fecha',desde).lte('fecha',hasta);
   let cobros=data||[];
   if(reparto)cobros=cobros.filter(c=>c.reparto===reparto);
-  if(cobrador)cobros=cobros.filter(c=>c.tipo_cobrador===cobrador);
+  if(cobrador)cobros=cobros.filter(c=>(c.vendedor||'').toLowerCase().includes(cobrador));
+  const el=document.getElementById('rend-resultado');
+  if(!cobros.length){el.innerHTML='<div class="empty">Sin cobros en ese período</div>';return;}
+
+  // Totales generales
+  const totalGeneral=cobros.reduce((a,c)=>a+(c.importe||0),0);
+  const totalEf=cobros.reduce((a,c)=>a+(c.efectivo||0),0);
+  const totalTr=cobros.reduce((a,c)=>a+(c.transferencia||0),0);
+  const totalCh=cobros.reduce((a,c)=>a+(c.cheque_propio||0)+(c.cheque_terceros||0),0);
+  const totalRet=cobros.reduce((a,c)=>a+(c.ret_ganancias||0)+(c.ret_ing_brutos||0)+(c.ret_otras||0),0);
+
+  // Efectivo contado
+  const billetes=[20000,10000,2000,1000,500,200,100,50,20,10];
+  let totalContado=0;
+  billetes.forEach(b=>{totalContado+=(parseInt(document.getElementById(`bill-${b}`)?.value)||0)*b;});
+  const diferencia=totalContado-totalEf;
+
+  // Agrupar por reparto
+  const porReparto={};
+  cobros.forEach(c=>{
+    const k=c.reparto||'Sin reparto';
+    if(!porReparto[k])porReparto[k]={cobros:[],total:0,ef:0,tr:0,ch:0,ret:0};
+    porReparto[k].cobros.push(c);
+    porReparto[k].total+=c.importe||0;
+    porReparto[k].ef+=(c.efectivo||0);
+    porReparto[k].tr+=(c.transferencia||0);
+    porReparto[k].ch+=(c.cheque_propio||0)+(c.cheque_terceros||0);
+    porReparto[k].ret+=(c.ret_ganancias||0)+(c.ret_ing_brutos||0)+(c.ret_otras||0);
+  });
+
+  el.innerHTML=`
+    <!-- Resumen general -->
+    <div style="background:var(--PL);border-radius:8px;padding:12px 16px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-weight:600">${cobros.length} cobros · ${desde} al ${hasta}</span>
+        <span style="font-size:20px;font-weight:700;color:var(--PD)">${fmt(totalGeneral)}</span>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px">
+        ${totalEf>0?`<span>Efectivo: <b>${fmt(totalEf)}</b></span>`:''}
+        ${totalTr>0?`<span>Transferencia: <b>${fmt(totalTr)}</b></span>`:''}
+        ${totalCh>0?`<span>Cheques: <b>${fmt(totalCh)}</b></span>`:''}
+        ${totalRet>0?`<span>Retenciones: <b>${fmt(totalRet)}</b></span>`:''}
+      </div>
+    </div>
+
+    <!-- Diferencia con conteo -->
+    ${totalContado>0?`<div style="background:${diferencia===0?'var(--PL)':diferencia>0?'#e8f5e9':'#fdecea'};border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-weight:600;font-size:13px">Cuadre de caja</div>
+        <div style="font-size:11px;color:var(--txt2)">Efectivo cobros: ${fmt(totalEf)} · Contado: ${fmt(totalContado)}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:18px;font-weight:700;color:${diferencia===0?'var(--P)':diferencia>0?'green':'var(--D)'}">${diferencia>=0?'+':''}${fmt(diferencia)}</div>
+        <div style="font-size:11px">${diferencia===0?'✅ Cuadra perfecto':diferencia>0?'⬆️ Sobra efectivo':'⬇️ Falta efectivo'}</div>
+      </div>
+    </div>`:''}
+
+    <!-- Detalle por cliente -->
+    <div class="card">
+      <div style="font-weight:600;font-size:13px;margin-bottom:10px">Detalle por cliente</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:var(--bg2)">
+          <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--brd)">Cód.</th>
+          <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--brd)">Cliente</th>
+          <th style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--brd)">Importe</th>
+          <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--brd)">Forma</th>
+          <th style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--brd)">Reparto</th>
+          <th style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--brd)">Firma</th>
+        </tr></thead>
+        <tbody>
+          ${cobros.map(c=>{
+            const cli=_clientes.find(x=>x.id===c.cliente_id);
+            return `<tr>
+              <td style="padding:5px 8px;border-bottom:0.5px solid var(--brd);color:var(--txt2)">${cli?.codigo||'—'}</td>
+              <td style="padding:5px 8px;border-bottom:0.5px solid var(--brd);font-weight:500">${c.cliente}</td>
+              <td style="padding:5px 8px;border-bottom:0.5px solid var(--brd);text-align:right;font-weight:600;color:var(--P)">${fmt(c.importe)}</td>
+              <td style="padding:5px 8px;border-bottom:0.5px solid var(--brd);font-size:11px;color:var(--txt2)">${c.forma||'—'}</td>
+              <td style="padding:5px 8px;border-bottom:0.5px solid var(--brd);text-align:center;color:var(--txt2)">${c.reparto||'—'}</td>
+              <td style="padding:5px 8px;border-bottom:0.5px solid var(--brd);text-align:center;color:var(--txt2)">___________</td>
+            </tr>`;
+          }).join('')}
+          <tr style="background:var(--PL);font-weight:700">
+            <td colspan="2" style="padding:7px 8px;border-top:2px solid var(--brd)">TOTAL</td>
+            <td style="padding:7px 8px;border-top:2px solid var(--brd);text-align:right;color:var(--PD)">${fmt(totalGeneral)}</td>
+            <td colspan="3" style="border-top:2px solid var(--brd)"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <button class="btn A" onclick="imprimirRendicion()" style="margin-top:8px">🖨️ Imprimir rendición</button>
+  `;
+}
   const el=document.getElementById('rend-resultado');
   if(!cobros.length){el.innerHTML='<div class="empty">Sin cobros en ese período / reparto</div>';return;}
   // Agrupar por reparto
