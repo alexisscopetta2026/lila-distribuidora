@@ -246,6 +246,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <option value="true">Cobrados</option>
     </select>
   </div>
+  <!-- Impresión grupal -->
+  <div style="background:var(--bg2);border:1px solid var(--brd);border-radius:8px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <span style="font-size:12px;color:var(--txt2);font-weight:500">🖨️ Hoja de ruta grupal:</span>
+    <input type="date" id="rem-grupo-fecha" style="padding:5px 9px;border:1px solid var(--brd);border-radius:6px;font-size:13px;font-family:inherit">
+    <input id="rem-grupo-ven" placeholder="Vendedor (vacío=todos)" style="padding:5px 9px;border:1px solid var(--brd);border-radius:6px;font-size:13px;font-family:inherit;width:180px">
+    <button class="btn A" onclick="imprimirHojaRutaGrupal()">🗺️ Imprimir hoja de ruta</button>
+  </div>
   <div class="tbl-wrap"><table class="tbl">
     <thead><tr><th>Nro</th><th>Fecha</th><th>Cliente</th><th>Localidad</th><th>Items</th><th>Total</th><th>Cobro</th><th>ARCA</th><th></th></tr></thead>
     <tbody id="rem-tbody"></tbody>
@@ -1196,6 +1203,13 @@ function renderCargas(){
   el.innerHTML=_cargas.map(cg=>{
     const peds=_pedidos.filter(p=>(cg.pedidos||[]).includes(p.id));
     const titulo=cg.nombre?`<b>${cg.nombre}</b> — Carga #${cg.id}`:`Carga #${cg.id}`;
+    // Detectar si hay remitos vinculados a esta carga
+    const pedIds=(cg.pedidos||[]);
+    const remsCarga=_remitos.filter(r=>pedIds.includes(r.pedido_id));
+    // Fallback: remitos del mismo día y vendedor si no hay por pedido_id
+    const remsDisp=remsCarga.length>0?remsCarga:
+      (cg.fecha&&cg.vendedor?_remitos.filter(r=>r.fecha===cg.fecha&&(r.vendedor||'').toLowerCase()===(cg.vendedor||'').toLowerCase()):[]);
+    const tieneRemitos=remsDisp.length>0;
     return `<div class="ccard">
       <div class="ccard-h">
         <div>
@@ -1210,9 +1224,116 @@ function renderCargas(){
         ${cg.estado==='lista'?`<button class="btn A sm" onclick="emitirRemitos(${cg.id})">📄 Emitir remitos</button>`:''}
         <button class="btn sm" onclick="editarCarga(${cg.id})">✏️</button>
         <button class="btn sm" onclick="resumenCarga(${cg.id})">📋 Resumen</button>
+        ${tieneRemitos?`<button class="btn A sm" onclick="imprimirRemitosCarga(${cg.id})">🖨️ Remitos (${remsDisp.length})</button>`:''}
       </div>
     </div>`;
   }).join('');
+}
+function imprimirRemitosCarga(cargaId){
+  const cg=_cargas.find(x=>x.id===cargaId);if(!cg)return;
+  const pedIds=(cg.pedidos||[]);
+  let rems=_remitos.filter(r=>pedIds.includes(r.pedido_id));
+  // Fallback: misma fecha y vendedor
+  if(!rems.length&&cg.fecha&&cg.vendedor){
+    rems=_remitos.filter(r=>r.fecha===cg.fecha&&(r.vendedor||'').toLowerCase()===(cg.vendedor||'').toLowerCase());
+  }
+  if(!rems.length){alert('No hay remitos emitidos para esta carga todavía.');return;}
+
+  rems=rems.slice().sort((a,b)=>(a.localidad||'').localeCompare(b.localidad||'')||(a.cliente||'').localeCompare(b.cliente||''));
+  const totalGeneral=rems.reduce((a,r)=>a+(r.total||0),0);
+  const titulo=(cg.nombre||'Carga #'+cg.id);
+
+  const bloques=rems.map((r,i)=>{
+    const cli=_clientes.find(x=>String(x.id)===String(r.cliente_id))||{};
+    const dir=r.lugar_entrega||r.direccion||cli.direccion||cli.domicilio||'';
+    let tot=0;
+    const filas=(r.items||[]).map(it=>{
+      const neto=it.precio*it.cant*(1-(it.dto||0)/100);tot+=neto;
+      return '<tr>'
+        +'<td style="padding:4px 7px;border:1px solid #ccc">'+it.nom+'</td>'
+        +'<td style="padding:4px 7px;border:1px solid #ccc;text-align:center">'+it.cant+' '+(it.un||'')+'</td>'
+        +'<td style="padding:4px 7px;border:1px solid #ccc;text-align:right">'+fmt(it.precio)+'</td>'
+        +((it.dto||0)>0?'<td style="padding:4px 7px;border:1px solid #ccc;text-align:center">'+it.dto+'%</td>':'<td style="padding:4px 7px;border:1px solid #ccc;text-align:center">—</td>')
+        +'<td style="padding:4px 7px;border:1px solid #ccc;text-align:right;font-weight:600">'+fmt(neto)+'</td>'
+        +'</tr>';
+    }).join('');
+    return '<div style="margin-bottom:16px;page-break-inside:avoid;border:1px solid #ccc;border-radius:4px;overflow:hidden">'
+      +'<div style="background:#1a7a52;color:#fff;padding:6px 10px;display:flex;justify-content:space-between;align-items:center">'
+        +'<span style="font-weight:700;font-size:13px">'+(i+1)+'. R-'+String(r.id).padStart(4,'0')+' — '+r.cliente+'</span>'
+        +'<span style="font-size:11px;font-weight:400">'+(dir?dir+' · ':'')+r.localidad+'</span>'
+      +'</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
+        +'<thead><tr style="background:#e8f5e9">'
+          +'<th style="padding:4px 7px;border:1px solid #ccc;text-align:left">Producto</th>'
+          +'<th style="padding:4px 7px;border:1px solid #ccc;text-align:center;width:80px">Cant.</th>'
+          +'<th style="padding:4px 7px;border:1px solid #ccc;text-align:right;width:80px">P.Unit</th>'
+          +'<th style="padding:4px 7px;border:1px solid #ccc;text-align:center;width:45px">Dto</th>'
+          +'<th style="padding:4px 7px;border:1px solid #ccc;text-align:right;width:90px">Total</th>'
+        +'</tr></thead>'
+        +'<tbody>'+filas+'</tbody>'
+      +'</table>'
+      +'<div style="display:flex;justify-content:space-between;padding:5px 10px;background:#fafafa;border-top:1px solid #ccc;font-size:12px">'
+        +(r.observaciones?'<span style="color:#555">Obs: '+r.observaciones+'</span>':'<span></span>')
+        +'<span style="font-weight:700;color:#1a7a52">Total: '+fmt(tot)+'</span>'
+      +'</div>'
+    +'</div>';
+  }).join('');
+
+  const resumen=rems.map((r,i)=>{
+    const cli=_clientes.find(x=>String(x.id)===String(r.cliente_id))||{};
+    const dir=r.lugar_entrega||r.direccion||cli.direccion||'';
+    return '<tr style="'+(i%2===0?'':'background:#f9f9f9')+'">'
+      +'<td style="padding:5px 7px;border:1px solid #ccc;text-align:center;color:#777;font-size:11px">'+(i+1)+'</td>'
+      +'<td style="padding:5px 7px;border:1px solid #ccc;font-size:11px;color:#555">R-'+String(r.id).padStart(4,'0')+'</td>'
+      +'<td style="padding:5px 7px;border:1px solid #ccc;font-weight:600">'+r.cliente+'</td>'
+      +'<td style="padding:5px 7px;border:1px solid #ccc;font-size:11px;color:#555">'+dir+'</td>'
+      +'<td style="padding:5px 7px;border:1px solid #ccc;font-size:11px">'+r.localidad+'</td>'
+      +'<td style="padding:5px 7px;border:1px solid #ccc;text-align:right;font-weight:600">'+fmt(r.total)+'</td>'
+      +'<td style="padding:5px 7px;border:1px solid #ccc;text-align:center">☐</td>'
+    +'</tr>';
+  }).join('');
+
+  const w=window.open('','_blank');
+  w.document.write('<!DOCTYPE html><html><head><title>Remitos — '+titulo+'</title>'
+    +'<style>body{font-family:Arial,sans-serif;padding:15px;color:#000;font-size:12px;margin:0}'
+    +'@page{size:A4 portrait;margin:10mm}@media print{.no-print{display:none}}'
+    +'</style></head><body>'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1a7a52;padding-bottom:8px;margin-bottom:14px">'
+      +'<div>'
+        +'<div style="font-size:16px;font-weight:700;color:#1a7a52">🌸 DISTRIBUIDORA LILA</div>'
+        +'<div style="font-size:13px;font-weight:600;margin-top:2px">'+titulo+'</div>'
+        +'<div style="font-size:12px;margin-top:2px"><b>Fecha:</b> '+cg.fecha+' &nbsp;&nbsp; <b>Vendedor:</b> '+(cg.vendedor||'—')+'</div>'
+      +'</div>'
+      +'<div style="text-align:right;font-size:11px;color:#777">'
+        +'<div>'+rems.length+' remitos</div>'
+        +'<div style="font-size:15px;font-weight:700;color:#1a7a52;margin-top:4px">'+fmt(totalGeneral)+'</div>'
+      +'</div>'
+    +'</div>'
+    +'<div style="font-weight:600;font-size:13px;margin-bottom:6px;color:#1a7a52">📋 Resumen</div>'
+    +'<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:18px">'
+      +'<thead><tr style="background:#e8e8e8">'
+        +'<th style="padding:5px 7px;border:1px solid #ccc;width:28px;text-align:center">Nro</th>'
+        +'<th style="padding:5px 7px;border:1px solid #ccc;width:55px">Remito</th>'
+        +'<th style="padding:5px 7px;border:1px solid #ccc;text-align:left">Cliente</th>'
+        +'<th style="padding:5px 7px;border:1px solid #ccc;text-align:left">Dirección</th>'
+        +'<th style="padding:5px 7px;border:1px solid #ccc;text-align:left">Localidad</th>'
+        +'<th style="padding:5px 7px;border:1px solid #ccc;text-align:right;width:90px">Total</th>'
+        +'<th style="padding:5px 7px;border:1px solid #ccc;text-align:center;width:35px">✓</th>'
+      +'</tr></thead>'
+      +'<tbody>'+resumen+'</tbody>'
+      +'<tfoot><tr style="background:#e8f5e9;font-weight:700">'
+        +'<td colspan="5" style="padding:6px 7px;border:1px solid #ccc;text-align:right">TOTAL</td>'
+        +'<td style="padding:6px 7px;border:1px solid #ccc;text-align:right;color:#1a7a52;font-size:14px">'+fmt(totalGeneral)+'</td>'
+        +'<td style="border:1px solid #ccc"></td>'
+      +'</tr></tfoot>'
+    +'</table>'
+    +'<div style="font-weight:600;font-size:13px;margin-bottom:8px;color:#1a7a52">📄 Detalle por cliente</div>'
+    +bloques
+    +'<div class="no-print" style="text-align:center;margin-top:16px">'
+      +'<button onclick="window.print()" style="padding:8px 24px;background:#1a7a52;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨️ Imprimir</button>'
+    +'</div>'
+    +'</body></html>');
+  w.document.close();
 }
 function editarCarga(id){
   const cg=_cargas.find(x=>x.id===id);if(!cg)return;
@@ -1559,6 +1680,117 @@ function imprimirRemito(){
     ((d.observaciones||d.obs)?'<div style="margin-top:8px;color:#555;font-size:12px;border-top:1px solid #eee;padding-top:6px">Obs: '+(d.observaciones||d.obs)+'</div>':'')+
     '<div class="no-print" style="text-align:center;margin-top:20px"><button onclick="window.print()" style="padding:8px 24px;background:#1a7a52;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨️ Imprimir</button></div>'+
     '</body></html>');
+  w.document.close();
+}
+function imprimirHojaRutaGrupal(){
+  const fecha=document.getElementById('rem-grupo-fecha').value;
+  const ven=(document.getElementById('rem-grupo-ven').value||'').toLowerCase().trim();
+  if(!fecha){alert('Seleccioná una fecha');return;}
+  let rems=_remitos.filter(r=>r.fecha===fecha);
+  if(ven)rems=rems.filter(r=>(r.vendedor||'').toLowerCase().includes(ven));
+  if(!rems.length){alert('No hay remitos para esa fecha'+(ven?' y vendedor':''));return;}
+
+  // Ordenar por localidad y cliente
+  rems=rems.slice().sort((a,b)=>(a.localidad||'').localeCompare(b.localidad||'')||(a.cliente||'').localeCompare(b.cliente||''));
+  const totalGeneral=rems.reduce((a,r)=>a+(r.total||0),0);
+  const vendedorTitulo=ven||[...new Set(rems.map(r=>r.vendedor||'').filter(Boolean))].join(', ')||'—';
+
+  // Bloques detalle por remito
+  const bloques=rems.map((r,i)=>{
+    const cli=_clientes.find(x=>String(x.id)===String(r.cliente_id))||{};
+    const dir=r.lugar_entrega||r.direccion||cli.direccion||cli.domicilio||'';
+    let tot=0;
+    const filas=(r.items||[]).map(it=>{
+      const neto=it.precio*it.cant*(1-(it.dto||0)/100);tot+=neto;
+      return '<tr>'
+        +'<td style="padding:4px 7px;border:1px solid #ccc">'+it.nom+'</td>'
+        +'<td style="padding:4px 7px;border:1px solid #ccc;text-align:center">'+it.cant+' '+(it.un||'')+'</td>'
+        +'<td style="padding:4px 7px;border:1px solid #ccc;text-align:right">'+fmt(it.precio)+'</td>'
+        +((it.dto||0)>0?'<td style="padding:4px 7px;border:1px solid #ccc;text-align:center">'+it.dto+'%</td>':'<td style="padding:4px 7px;border:1px solid #ccc;text-align:center">—</td>')
+        +'<td style="padding:4px 7px;border:1px solid #ccc;text-align:right;font-weight:600">'+fmt(neto)+'</td>'
+        +'</tr>';
+    }).join('');
+    return '<div style="margin-bottom:18px;page-break-inside:avoid;border:1px solid #ccc;border-radius:4px;overflow:hidden">'
+      +'<div style="background:#1a7a52;color:#fff;padding:6px 10px;display:flex;justify-content:space-between;align-items:center">'
+        +'<span style="font-weight:700;font-size:13px">'+(i+1)+'. R-'+String(r.id).padStart(4,'0')+' — '+r.cliente+'</span>'
+        +'<span style="font-size:11px;font-weight:400">'+(dir?dir+' · ':'')+r.localidad+'</span>'
+      +'</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
+        +'<thead><tr style="background:#e8f5e9">'
+          +'<th style="padding:4px 7px;border:1px solid #ccc;text-align:left">Producto</th>'
+          +'<th style="padding:4px 7px;border:1px solid #ccc;text-align:center">Cant.</th>'
+          +'<th style="padding:4px 7px;border:1px solid #ccc;text-align:right">P.Unit</th>'
+          +'<th style="padding:4px 7px;border:1px solid #ccc;text-align:center">Dto</th>'
+          +'<th style="padding:4px 7px;border:1px solid #ccc;text-align:right">Total</th>'
+        +'</tr></thead>'
+        +'<tbody>'+filas+'</tbody>'
+      +'</table>'
+      +'<div style="display:flex;justify-content:space-between;padding:5px 10px;background:#fafafa;border-top:1px solid #ccc;font-size:12px">'
+        +'<span style="color:#555">'+(r.observaciones?'Obs: '+r.observaciones:'')+'</span>'
+        +'<span style="font-weight:700;color:#1a7a52">Total: '+fmt(tot)+'</span>'
+      +'</div>'
+    +'</div>';
+  }).join('');
+
+  // Tabla resumen final
+  const resumen=rems.map((r,i)=>{
+    const cli=_clientes.find(x=>String(x.id)===String(r.cliente_id))||{};
+    const dir=r.lugar_entrega||r.direccion||cli.direccion||'';
+    return '<tr style="'+(i%2===0?'':'background:#f9f9f9')+'">'
+      +'<td style="padding:5px 7px;border:1px solid #ccc;text-align:center;color:#777;font-size:11px">'+(i+1)+'</td>'
+      +'<td style="padding:5px 7px;border:1px solid #ccc;font-size:11px;color:#555">R-'+String(r.id).padStart(4,'0')+'</td>'
+      +'<td style="padding:5px 7px;border:1px solid #ccc;font-weight:600">'+r.cliente+'</td>'
+      +'<td style="padding:5px 7px;border:1px solid #ccc;font-size:11px;color:#555">'+dir+'</td>'
+      +'<td style="padding:5px 7px;border:1px solid #ccc;font-size:11px">'+r.localidad+'</td>'
+      +'<td style="padding:5px 7px;border:1px solid #ccc;text-align:right;font-weight:600">'+fmt(r.total)+'</td>'
+      +'<td style="padding:5px 7px;border:1px solid #ccc;text-align:center">'+( r.cobrado?'✅':'☐')+'</td>'
+    +'</tr>';
+  }).join('');
+
+  const w=window.open('','_blank');
+  w.document.write('<!DOCTYPE html><html><head><title>Hoja de Ruta Grupal — '+fecha+'</title>'
+    +'<style>'
+    +'body{font-family:Arial,sans-serif;padding:15px;color:#000;font-size:12px;margin:0}'
+    +'@page{size:A4 portrait;margin:10mm}'
+    +'@media print{.no-print{display:none}}'
+    +'</style></head><body>'
+    // Header
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1a7a52;padding-bottom:8px;margin-bottom:14px">'
+      +'<div>'
+        +'<div style="font-size:16px;font-weight:700;color:#1a7a52">🌸 DISTRIBUIDORA LILA — Hoja de Ruta</div>'
+        +'<div style="font-size:12px;margin-top:3px"><b>Fecha:</b> '+fecha+' &nbsp;&nbsp; <b>Vendedor:</b> '+vendedorTitulo+'</div>'
+      +'</div>'
+      +'<div style="text-align:right;font-size:11px;color:#777">'
+        +'<div>'+rems.length+' remitos</div>'
+        +'<div style="font-size:15px;font-weight:700;color:#1a7a52;margin-top:4px">'+fmt(totalGeneral)+'</div>'
+      +'</div>'
+    +'</div>'
+    // Resumen primero
+    +'<div style="font-weight:600;font-size:13px;margin-bottom:6px;color:#1a7a52">📋 Resumen</div>'
+    +'<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:18px">'
+      +'<thead><tr style="background:#e8e8e8">'
+        +'<th style="padding:5px 7px;border:1px solid #ccc;width:28px;text-align:center">Nro</th>'
+        +'<th style="padding:5px 7px;border:1px solid #ccc;width:55px">Remito</th>'
+        +'<th style="padding:5px 7px;border:1px solid #ccc;text-align:left">Cliente</th>'
+        +'<th style="padding:5px 7px;border:1px solid #ccc;text-align:left">Dirección</th>'
+        +'<th style="padding:5px 7px;border:1px solid #ccc;text-align:left">Localidad</th>'
+        +'<th style="padding:5px 7px;border:1px solid #ccc;text-align:right;width:90px">Total</th>'
+        +'<th style="padding:5px 7px;border:1px solid #ccc;text-align:center;width:35px">✓</th>'
+      +'</tr></thead>'
+      +'<tbody>'+resumen+'</tbody>'
+      +'<tfoot><tr style="background:#e8f5e9;font-weight:700">'
+        +'<td colspan="5" style="padding:6px 7px;border:1px solid #ccc;text-align:right">TOTAL</td>'
+        +'<td style="padding:6px 7px;border:1px solid #ccc;text-align:right;color:#1a7a52;font-size:14px">'+fmt(totalGeneral)+'</td>'
+        +'<td style="border:1px solid #ccc"></td>'
+      +'</tr></tfoot>'
+    +'</table>'
+    // Detalle por remito
+    +'<div style="font-weight:600;font-size:13px;margin-bottom:8px;color:#1a7a52">📄 Detalle por cliente</div>'
+    +bloques
+    +'<div class="no-print" style="text-align:center;margin-top:16px">'
+      +'<button onclick="window.print()" style="padding:8px 24px;background:#1a7a52;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨️ Imprimir</button>'
+    +'</div>'
+    +'</body></html>');
   w.document.close();
 }
 function detalleHTML(d,isRem){
@@ -3163,6 +3395,7 @@ function go(p){
   if(p==='rendicion')initRendicion();
   if(p==='stock')iniciarConteo();
   if(p==='nc')renderNCs();
+  if(p==='remitos'){const f=document.getElementById('rem-grupo-fecha');if(f&&!f.value)f.value=new Date().toISOString().split('T')[0];}
 }
 </script>
 </body>
