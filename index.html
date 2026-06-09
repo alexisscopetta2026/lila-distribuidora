@@ -262,101 +262,136 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <!-- COBRANZA -->
 <div class="panel" id="p-cobranza">
-  <!-- Formulario de cobro directo (siempre visible) -->
   <div class="card" id="cob-form-inline">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+
+    <!-- Encabezado -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <h2 style="font-size:14px;font-weight:600">💰 Registrar cobro</h2>
-      <button class="btn sm" onclick="toggleListaCobros()" title="Ver historial de cobros (F1)">📋 Historial [F1]</button>
+      <button class="btn sm" onclick="toggleListaCobros()">📋 Historial</button>
     </div>
 
-    <!-- Cliente -->
-    <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px">
-      <div class="fg" style="width:90px">
-        <label>Código <span style="font-size:10px;color:var(--txt2)">[F1=buscar]</span></label>
-        <input id="cob-cli-cod" placeholder="Ej: 40" autocomplete="off" style="font-size:16px;font-weight:700;padding:8px 10px"
+    <!-- Fila cliente -->
+    <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px">
+      <div class="fg" style="width:85px">
+        <label>Cód. <span style="font-size:9px;color:var(--txt2)">[F1=buscar]</span></label>
+        <input id="cob-cli-cod" placeholder="40" autocomplete="off"
+          style="font-size:18px;font-weight:700;padding:7px 10px;border:2px solid var(--brd);border-radius:8px"
           onkeydown="if(event.key==='F1'){event.preventDefault();abrirBuscadorCli('cob');}else if(event.key==='Enter'||(event.key==='Tab'&&this.value.trim())){event.preventDefault();buscarCodCli('cob');}">
       </div>
-      <div class="fg drop-wrap" style="flex:2;min-width:150px">
-        <label>O nombre</label>
-        <input id="cob-cli-q" placeholder="Buscar cliente..." oninput="dropCliCob()" autocomplete="off">
+      <div class="fg drop-wrap" style="flex:2;min-width:140px">
+        <label>Cliente</label>
+        <input id="cob-cli-q" placeholder="Buscar por nombre..." oninput="dropCliCob()" autocomplete="off">
         <div class="drop" id="cob-cli-drop"></div>
         <input type="hidden" id="cob-cli-id">
       </div>
-      <div class="fg" style="width:130px"><label>Fecha</label><input type="date" id="cob-fecha"></div>
-      <div class="fg" style="width:140px"><label>Vendedor</label><input id="cob-ven-nom" placeholder="Nombre"></div>
-      <div class="fg" style="width:100px"><label>Nro reparto</label><input id="cob-reparto" placeholder="Ej: 1"></div>
+      <div class="fg" style="width:120px"><label>Fecha</label><input type="date" id="cob-fecha"></div>
+      <div class="fg" style="width:120px"><label>Vendedor</label><input id="cob-ven-nom" placeholder="Nombre"></div>
+      <div class="fg" style="width:80px"><label>Reparto</label><input id="cob-reparto" placeholder="Ej: 1"></div>
     </div>
 
     <!-- Info cliente -->
-    <div id="cob-cli-info" style="display:none;background:var(--bg2);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--txt2);margin-bottom:10px"></div>
+    <div id="cob-cli-info" style="display:none;background:var(--PL);border-radius:6px;padding:7px 12px;font-size:12px;color:var(--PD);margin-bottom:8px;font-weight:500"></div>
 
-    <!-- Imputación -->
-    <div id="cob-imputacion-section" style="display:none;background:var(--bg2);border-radius:8px;padding:10px;margin-bottom:8px">
-      <div style="font-size:11px;font-weight:500;color:var(--txt2);text-transform:uppercase;margin-bottom:8px">Facturas pendientes — imputar cobro</div>
-      <div id="cob-remitos-pendientes"></div>
-    </div>
+    <!-- CUERPO PRINCIPAL: dos columnas -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">
 
-    <!-- Panel resto -->
-    <div id="cob-resto-section" style="display:none;background:var(--WL);border:1px solid var(--W);border-radius:8px;padding:8px 14px;margin-bottom:8px">
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-        <span style="font-size:13px;font-weight:600;color:var(--W)">⚠️ Resto sin imputar: <span id="cob-resto-monto">$0</span></span>
-        <button class="btn sm" style="background:var(--P);color:#fff;border-color:var(--P)" onclick="dejarComoSaldoFavor()">✅ Saldo a favor</button>
-        <span style="font-size:11px;color:var(--txt2)">o imputalo a otra factura arriba</span>
-      </div>
-      <div id="cob-saldo-favor-aviso" style="display:none;margin-top:6px;font-size:12px;color:var(--P);font-weight:500"></div>
-    </div>
-
-    <!-- Valores recibidos — acordeón -->
-    <div style="background:var(--bg2);border-radius:8px;margin-bottom:8px">
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;cursor:pointer" onclick="toggleValores()">
-        <span style="font-size:11px;font-weight:600;color:var(--txt2);text-transform:uppercase">💵 Valores recibidos</span>
-        <div style="display:flex;align-items:center;gap:10px">
-          <span id="cob-valores-resumen" style="font-size:13px;font-weight:700;color:var(--PD)">$0</span>
-          <span id="cob-valores-chevron" style="color:var(--txt2);font-size:12px">▼</span>
-        </div>
-      </div>
-      <div id="cob-valores-body" style="padding:0 12px 10px 12px">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-          <div class="fg"><label>Efectivo ($)</label><input id="cob-efectivo" type="number" value="0" min="0" oninput="calcTotalCobro()"></div>
-          <div class="fg"><label>Transferencia ($)</label><input id="cob-transferencia" type="number" value="0" min="0" oninput="calcTotalCobro()"></div>
-        </div>
-        <!-- Cheque y retenciones colapsables -->
-        <div style="margin-bottom:6px">
-          <span style="font-size:11px;color:var(--txt2);cursor:pointer;text-decoration:underline" onclick="toggleChequeRet()">+ Cheque / Retenciones</span>
-        </div>
-        <div id="cob-cheque-ret-body" style="display:none">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-            <div class="fg"><label>Cheque 3ros ($)</label><input id="cob-cheque3" type="number" value="0" min="0" oninput="calcTotalCobro()"></div>
-            <div class="fg"><label>Banco cheque</label><input id="cob-banco" placeholder="Nombre banco"></div>
-            <div class="fg"><label>Nro cheque</label><input id="cob-nrocheque"></div>
-            <div class="fg"><label>Fecha cheque</label><input type="date" id="cob-fecha-cheque"></div>
+      <!-- COLUMNA IZQUIERDA: Valores recibidos -->
+      <div style="background:var(--bg2);border-radius:8px;padding:10px">
+        <div style="font-size:11px;font-weight:600;color:var(--txt2);text-transform:uppercase;margin-bottom:10px;border-bottom:1px solid var(--brd);padding-bottom:6px">💵 Valores recibidos</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <label style="font-size:12px;width:110px;color:var(--txt2)">Efectivo</label>
+            <input id="cob-efectivo" type="number" value="0" min="0" oninput="calcTotalCobro()"
+              style="flex:1;padding:6px 8px;border:1.5px solid var(--brd);border-radius:6px;font-size:14px;font-weight:600;text-align:right">
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
-            <div class="fg"><label>Ret. Ganancias ($)</label><input id="cob-ret-gan" type="number" value="0" min="0" oninput="calcTotalCobro()"></div>
-            <div class="fg"><label>Ret. Ing. Brutos ($)</label><input id="cob-ret-ib" type="number" value="0" min="0" oninput="calcTotalCobro()"></div>
-            <div class="fg"><label>Otras ret. ($)</label><input id="cob-ret-otras" type="number" value="0" min="0" oninput="calcTotalCobro()"></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <label style="font-size:12px;width:110px;color:var(--txt2)">Transferencia</label>
+            <input id="cob-transferencia" type="number" value="0" min="0" oninput="calcTotalCobro()"
+              style="flex:1;padding:6px 8px;border:1.5px solid var(--brd);border-radius:6px;font-size:14px;font-weight:600;text-align:right">
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <label style="font-size:12px;width:110px;color:var(--txt2)">Cheque 3ros</label>
+            <input id="cob-cheque3" type="number" value="0" min="0" oninput="calcTotalCobro()"
+              style="flex:1;padding:6px 8px;border:1.5px solid var(--brd);border-radius:6px;font-size:14px;font-weight:600;text-align:right">
+          </div>
+          <!-- Cheque detalle colapsable -->
+          <div id="cob-cheque-det" style="display:none;padding:6px;background:var(--bg);border-radius:6px;margin-top:2px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+              <div class="fg"><label>Banco</label><input id="cob-banco" placeholder="Nombre banco"></div>
+              <div class="fg"><label>Nro cheque</label><input id="cob-nrocheque"></div>
+              <div class="fg"><label>Fecha cheque</label><input type="date" id="cob-fecha-cheque"></div>
+            </div>
+          </div>
+          <div style="border-top:1px dashed var(--brd);margin:2px 0"></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <label style="font-size:12px;width:110px;color:var(--txt2)">Ret. Ganancias</label>
+            <input id="cob-ret-gan" type="number" value="0" min="0" oninput="calcTotalCobro()"
+              style="flex:1;padding:5px 8px;border:1px solid var(--brd);border-radius:6px;font-size:13px;text-align:right">
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <label style="font-size:12px;width:110px;color:var(--txt2)">Ret. Ing. Brutos</label>
+            <input id="cob-ret-ib" type="number" value="0" min="0" oninput="calcTotalCobro()"
+              style="flex:1;padding:5px 8px;border:1px solid var(--brd);border-radius:6px;font-size:13px;text-align:right">
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <label style="font-size:12px;width:110px;color:var(--txt2)">Otras ret.</label>
+            <input id="cob-ret-otras" type="number" value="0" min="0" oninput="calcTotalCobro()"
+              style="flex:1;padding:5px 8px;border:1px solid var(--brd);border-radius:6px;font-size:13px;text-align:right">
           </div>
         </div>
+        <!-- Total valores -->
+        <div style="margin-top:10px;border-top:2px solid var(--brd);padding-top:8px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:12px;font-weight:600;color:var(--txt2)">TOTAL RECIBIDO</span>
+          <span id="cob-total-display" style="font-size:20px;font-weight:700;color:var(--PD)">$0</span>
+        </div>
+      </div>
+
+      <!-- COLUMNA DERECHA: Imputación de comprobantes -->
+      <div style="background:var(--bg2);border-radius:8px;padding:10px">
+        <div style="font-size:11px;font-weight:600;color:var(--txt2);text-transform:uppercase;margin-bottom:10px;border-bottom:1px solid var(--brd);padding-bottom:6px">📋 Imputación de comprobantes</div>
+        <div id="cob-imputacion-section" style="display:block">
+          <div id="cob-remitos-pendientes" style="font-size:12px;color:var(--txt2);font-style:italic">Seleccioná un cliente para ver las facturas pendientes</div>
+        </div>
+        <!-- Saldo a favor -->
+        <div id="cob-saldo-favor-aviso" style="display:none;margin-top:8px;font-size:12px;color:var(--P);font-weight:500;background:var(--PL);padding:6px 10px;border-radius:6px"></div>
+      </div>
+
+    </div><!-- fin dos columnas -->
+
+    <!-- RESTO — siempre visible al pie -->
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 14px;border-radius:8px;margin-bottom:8px"
+      id="cob-pie" style="background:var(--bg2)">
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:10px;color:var(--txt2);text-transform:uppercase">Imputado</div>
+          <div style="font-size:16px;font-weight:700;color:var(--P)" id="cob-imputado-monto">$0</div>
+        </div>
+        <div style="font-size:20px;color:var(--brd)">−</div>
+        <div>
+          <div style="font-size:10px;color:var(--txt2);text-transform:uppercase">Recibido</div>
+          <div style="font-size:16px;font-weight:700;color:var(--PD)" id="cob-recibido-monto">$0</div>
+        </div>
+        <div style="font-size:20px;color:var(--brd)">=</div>
+        <div>
+          <div style="font-size:10px;color:var(--txt2);text-transform:uppercase">RESTO</div>
+          <div style="font-size:22px;font-weight:700" id="cob-resto-display" style="color:var(--W)">$0</div>
+        </div>
+        <div id="cob-resto-section" style="display:none">
+          <button class="btn sm" style="background:var(--P);color:#fff;border-color:var(--P)" onclick="dejarComoSaldoFavor()">✅ Saldo a favor</button>
+          <span id="cob-resto-monto" style="display:none"></span>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div class="fg"><label style="font-size:11px">Observaciones</label><input id="cob-obs2" placeholder="Opcional" style="width:160px"></div>
+        <button class="btn P" onclick="guardarCobro()" style="padding:10px 22px;font-size:14px;align-self:flex-end">✓ Guardar</button>
+        <button class="btn" onclick="limpiarModalCobro()" style="align-self:flex-end">🗑</button>
       </div>
     </div>
 
-    <!-- Total y guardar -->
-    <div style="display:flex;justify-content:space-between;align-items:center;background:var(--PL);border-radius:8px;padding:10px 14px;margin-bottom:8px">
-      <div>
-        <div style="font-size:13px;font-weight:500;color:var(--PD)">Total cobro</div>
-        <div style="font-size:11px;color:var(--PD)" id="cob-imputado-label"></div>
-      </div>
-      <span style="font-size:22px;font-weight:700;color:var(--PD)" id="cob-total-display">$0</span>
-    </div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <div class="fg" style="flex:1;min-width:160px"><label>Observaciones</label><input id="cob-obs2" placeholder="Opcional"></div>
-      <button class="btn P" onclick="guardarCobro()" style="padding:10px 20px;font-size:14px;align-self:flex-end">✓ Guardar cobro</button>
-      <button class="btn" onclick="limpiarModalCobro()" style="align-self:flex-end">🗑 Limpiar</button>
-    </div>
-  </div>
+  </div><!-- fin card -->
 
-  <!-- Historial (oculto por defecto, F1 lo muestra) -->
-  <div id="cob-historial-section" style="display:none">
+  <!-- Historial -->
+  <div id="cob-historial-section" style="display:none;margin-top:8px">
     <div style="display:flex;gap:7px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
       <input id="cob-q" placeholder="Buscar cliente..." oninput="renderCobros()" style="padding:7px 10px;border:1px solid var(--brd);border-radius:8px;font-size:13px;flex:1;min-width:120px">
       <select id="cob-f" onchange="renderCobros()" style="padding:7px 10px;border:1px solid var(--brd);border-radius:8px;font-size:13px">
@@ -1924,15 +1959,17 @@ function limpiarModalCobro(){
   const rs=document.getElementById('cob-valores-resumen');if(rs)rs.textContent='$0';
   const lbl=document.getElementById('cob-imputado-label');if(lbl)lbl.textContent='';
   const fecEl=document.getElementById('cob-fecha');if(fecEl)fecEl.value=new Date().toISOString().split('T')[0];
-  const imp=document.getElementById('cob-imputacion-section');if(imp)imp.style.display='none';
-  const rp=document.getElementById('cob-remitos-pendientes');if(rp)rp.innerHTML='';
+  const rp=document.getElementById('cob-remitos-pendientes');
+  if(rp)rp.innerHTML='<span style="font-size:12px;color:var(--txt2);font-style:italic">Seleccioná un cliente para ver las facturas pendientes</span>';
   const rs2=document.getElementById('cob-resto-section');if(rs2)rs2.style.display='none';
   const av=document.getElementById('cob-saldo-favor-aviso');if(av)av.style.display='none';
-  const btn=document.querySelector('#cob-resto-section button');if(btn)btn.style.display='';
   const ci=document.getElementById('cob-cli-info');if(ci)ci.style.display='none';
-  const vb=document.getElementById('cob-valores-body');if(vb)vb.style.display='block';
-  const chev=document.getElementById('cob-valores-chevron');if(chev)chev.textContent='▼';
-  const crb=document.getElementById('cob-cheque-ret-body');if(crb)crb.style.display='none';
+  // Resetear pie
+  const elImp=document.getElementById('cob-imputado-monto');if(elImp)elImp.textContent='$0';
+  const elRec=document.getElementById('cob-recibido-monto');if(elRec)elRec.textContent='$0';
+  const elRes=document.getElementById('cob-resto-display');if(elRes){elRes.textContent='$0';elRes.style.color='var(--W)';}
+  // Resetear borde código
+  const codEl=document.getElementById('cob-cli-cod');if(codEl)codEl.style.borderColor='';
   _cobRestoSaldoFavor=0;
   setTimeout(()=>{const f=document.getElementById('cob-cli-cod');if(f)f.focus();},100);
 }
@@ -2002,30 +2039,31 @@ function calcTotalDesdeImputacion(){
   const totalCobrado=ef+tr+ch3+rg+rib+ro;
   const resto=Math.round((totalCobrado-totalImputado)*100)/100;
 
-  const lbl=document.getElementById('cob-imputado-label');
-  if(lbl){
-    if(totalCobrado>0){
-      const color=resto<0?'color:var(--D)':resto===0?'color:var(--P)':'color:var(--W)';
-      lbl.innerHTML=`Imputado: <b>${fmt(totalImputado)}</b> &nbsp;|&nbsp; `+
-        `<span style="${color}"><b>Resto: ${fmt(resto)}</b></span>`+
-        (resto<0?' ⚠️ Excede lo cobrado':resto===0?' ✅':'');
-    } else {
-      lbl.textContent=totalImputado>0?`Imputado: ${fmt(totalImputado)}`:'';
-    }
+  // Actualizar pie: Imputado / Recibido / Resto
+  const elImp=document.getElementById('cob-imputado-monto');
+  const elRec=document.getElementById('cob-recibido-monto');
+  const elRes=document.getElementById('cob-resto-display');
+  const elResM=document.getElementById('cob-resto-monto');
+  if(elImp)elImp.textContent=fmt(totalImputado);
+  if(elRec)elRec.textContent=fmt(totalCobrado);
+  if(elResM)elResM.textContent=fmt(Math.abs(resto));
+  if(elRes){
+    if(resto===0){elRes.textContent='$0';elRes.style.color='var(--P)';}
+    else if(resto>0){elRes.textContent=fmt(resto);elRes.style.color='var(--W)';}
+    else{elRes.textContent='-'+fmt(Math.abs(resto));elRes.style.color='var(--D)';}
   }
 
-  // Mostrar panel de resto si hay saldo sin imputar
-  const restoSection=document.getElementById('cob-resto-section');
-  const restoMonto=document.getElementById('cob-resto-monto');
-  const aviso=document.getElementById('cob-saldo-favor-aviso');
-  if(restoSection){
-    if(resto>0&&totalCobrado>0){
-      restoSection.style.display='block';
-      if(restoMonto)restoMonto.textContent=fmt(resto);
-      if(aviso)aviso.style.display='none'; // limpiar aviso previo
-    } else {
-      restoSection.style.display='none';
-    }
+  // Mostrar botón saldo a favor si hay resto positivo
+  const rsSection=document.getElementById('cob-resto-section');
+  if(rsSection)rsSection.style.display=(resto>0&&totalCobrado>0)?'block':'none';
+
+  // Label bajo total (compatibilidad)
+  const lbl=document.getElementById('cob-imputado-label');
+  if(lbl){
+    if(totalCobrado>0&&totalImputado>0){
+      const color=resto<0?'color:var(--D)':resto===0?'color:var(--P)':'color:var(--W)';
+      lbl.innerHTML=`Imputado: <b>${fmt(totalImputado)}</b> &nbsp;|&nbsp;<span style="${color}"><b>Resto: ${fmt(resto)}</b></span>${resto<0?' ⚠️':resto===0?' ✅':''}`;
+    } else { lbl.textContent=''; }
   }
 }
 let _cobRestoSaldoFavor=0;
