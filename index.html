@@ -1235,7 +1235,8 @@ async function emitirRemitos(cargaId){
     const {data:rem}=await sb.from('remitos').insert({
       pedido_id:p.id,cliente_id:p.cliente_id,cliente:p.cliente,localidad:p.localidad,
       zona:p.zona,vendedor:p.vendedor,fecha:new Date().toISOString().split('T')[0],
-      items:p.items,total:p.total,cobrado:false
+      items:p.items,total:p.total,cobrado:false,
+    direccion:c?.direccion||c?.domicilio||'',telefono:c?.telefono||''
     }).select().single();
     await sb.from('pedidos').update({estado:'remitado',remito_id:rem.id}).eq('id',p.id);
     const c=_clientes.find(x=>x.id===p.cliente_id);
@@ -1348,8 +1349,10 @@ async function marcarARCA(id){
   await sb.from('remitos').update({factura_arca:true, nro_arca:nro||''}).eq('id',id);
   await cargarRemitos();renderRemitos();
 }
+let _remActual=null;
 function verRemito(id){
   const r=_remitos.find(x=>x.id===id);if(!r)return;
+  _remActual=r;
   document.getElementById('m-ver-title').textContent='Remito R-'+String(r.id).padStart(4,'0')+' — '+r.cliente;
   document.getElementById('m-ver-body').innerHTML=detalleHTML(r,true);
   document.getElementById('m-ver-print').style.display='inline-flex';
@@ -1357,31 +1360,56 @@ function verRemito(id){
 }
 function impRem(id){verRemito(id);setTimeout(imprimirRemito,200);}
 function imprimirRemito(){
-  const body=document.getElementById('m-ver-body').innerHTML;
-  const titulo=document.getElementById('m-ver-title').textContent;
+  const d=_remActual;
+  if(!d){alert('No hay remito activo');return;}
+  const num='R-'+String(d.id).padStart(4,'0');
+  const titulo=num+' — '+d.cliente;
+  const cli=_clientes.find(x=>x.id==d.cliente_id)||{};
+  const dir=d.lugar_entrega||d.direccion||cli.direccion||cli.domicilio||'';
+  const tel=d.telefono||cli.telefono||'';
+  let sub=0,dtoT=0,tot=0;
+  const rows=(d.items||[]).map(it=>{
+    const base=it.precio*it.cant,dtoA=base*(it.dto/100),neto=base-dtoA;
+    sub+=base;dtoT+=dtoA;tot+=neto;
+    return '<tr><td style="padding:5px 7px;border:1px solid #ccc">'+it.nom+'</td><td style="padding:5px 7px;border:1px solid #ccc;text-align:center">'+fmtN(it.cant,2)+' '+(it.un||'')+'</td><td style="padding:5px 7px;border:1px solid #ccc;text-align:right">'+fmt(it.precio)+'</td><td style="padding:5px 7px;border:1px solid #ccc;text-align:center">'+(it.dto||0)+'%</td><td style="padding:5px 7px;border:1px solid #ccc;text-align:right;font-weight:600">'+fmt(neto)+'</td></tr>';
+  }).join('');
   const w=window.open('','_blank');
-  w.document.write(`<!DOCTYPE html><html><head><title>${titulo}</title>
-  <style>
-    body{font-family:Arial,sans-serif;padding:15px;color:#000;font-size:12px;margin:0}
-    table{width:100%;border-collapse:collapse}
-    th,td{padding:5px 7px;border:1px solid #ccc}
-    th{background:#f5f5f5;font-size:11px}
-    @page{size:A4 portrait;margin:10mm}
-    @media print{button{display:none}}
-    .no-print{text-align:center;margin-top:12px}
-  </style></head><body>
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border-bottom:2px solid #1a7a52;padding-bottom:8px"><div><div style="font-size:15px;font-weight:700;color:#1a7a52">🌸 Distribuidora Lila</div><div style="font-size:11px;color:#777">Sistema de distribución</div></div><div style="font-size:13px;color:#555">${titulo}</div></div>
-  ${body}
-  <div class="no-print"><button onclick="window.print()" style="padding:8px 20px;background:#1a7a52;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨️ Imprimir</button></div>
-  </body></html>`);
+  w.document.write('<!DOCTYPE html><html><head><title>'+titulo+'</title><style>body{font-family:Arial,sans-serif;padding:20px;color:#000;font-size:12px;margin:0}table{width:100%;border-collapse:collapse}th{background:#f0f0f0;padding:6px 8px;border:1px solid #ccc;font-size:11px}@page{size:A4 portrait;margin:10mm}@media print{.no-print{display:none}}</style></head><body>'+
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1a7a52;padding-bottom:10px;margin-bottom:14px">'+
+      '<div><div style="font-size:16px;font-weight:700;color:#1a7a52">🌸 Distribuidora Lila</div><div style="font-size:11px;color:#777;margin-top:2px">Sistema de distribución</div></div>'+
+      '<div style="text-align:right">'+
+        '<div style="font-size:18px;font-weight:700">'+num+'</div>'+
+        '<div style="color:#555;font-size:11px">Fecha: '+d.fecha+'</div>'+
+        (d.vendedor?'<div style="color:#555;font-size:11px">Vendedor: '+d.vendedor+'</div>':'')+
+      '</div>'+
+    '</div>'+
+    '<div style="background:#f8f8f8;border:1px solid #ddd;border-radius:6px;padding:10px 14px;margin-bottom:14px">'+
+      '<div style="font-weight:700;font-size:14px">'+d.cliente+'</div>'+
+      (dir?'<div style="color:#555;margin-top:3px">'+dir+'</div>':'')+
+      '<div style="color:#555;margin-top:2px">'+( d.localidad||'')+' · Zona '+(d.zona||'-')+'</div>'+
+      (tel?'<div style="color:#555;margin-top:2px">Tel: '+tel+'</div>':'')+
+      (d.lugar_entrega?'<div style="color:#c07000;font-weight:600;margin-top:4px">📍 Entrega: '+d.lugar_entrega+'</div>':'')+
+    '</div>'+
+    '<table><thead><tr>'+
+      '<th style="text-align:left">Producto</th>'+
+      '<th>Cant.</th>'+
+      '<th style="text-align:right">P.Unit</th>'+
+      '<th>Dto</th>'+
+      '<th style="text-align:right">Total</th>'+
+    '</tr></thead><tbody>'+rows+'</tbody></table>'+
+    (dtoT>0?'<div style="margin-top:8px;font-size:12px;color:#777">Descuento: '+fmt(dtoT)+'</div>':'')+
+    '<div style="margin-top:10px;text-align:right;font-size:16px;font-weight:700;color:#1a7a52">Total: '+fmt(tot)+'</div>'+
+    ((d.observaciones||d.obs)?'<div style="margin-top:8px;color:#555;font-size:12px;border-top:1px solid #eee;padding-top:6px">Obs: '+(d.observaciones||d.obs)+'</div>':'')+
+    '<div class="no-print" style="text-align:center;margin-top:20px"><button onclick="window.print()" style="padding:8px 24px;background:#1a7a52;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨️ Imprimir</button></div>'+
+    '</body></html>');
   w.document.close();
 }
 function detalleHTML(d,isRem){
   const num=isRem?'R-'+String(d.id).padStart(4,'0'):'Pedido #'+d.id;
   // Buscar datos completos del cliente
-  const cli=_clientes.find(x=>x.id===d.cliente_id)||{};
-  const dir=d.lugar_entrega||cli.direccion||cli.domicilio||'';
-  const tel=cli.telefono||'';
+  const cli=_clientes.find(x=>x.id==d.cliente_id)||{};
+  const dir=d.lugar_entrega||d.direccion||cli.direccion||cli.domicilio||'';
+  const tel=d.telefono||cli.telefono||'';
   let sub=0,dtoT=0,tot=0;
   const rows=(d.items||[]).map(it=>{
     const base=it.precio*it.cant,dtoA=base*(it.dto/100),neto=base-dtoA;
@@ -2115,7 +2143,9 @@ async function emitirRemitoRapido(){
     fecha:document.getElementById('rr-fecha').value,
     items:_rrItems,total:tot,cobrado:false,
     observaciones:document.getElementById('rr-obs').value,
-    lugar_entrega:document.getElementById('rr-lugar')?.value||''
+    lugar_entrega:document.getElementById('rr-lugar')?.value||'',
+    direccion:c?.direccion||c?.domicilio||'',
+    telefono:c?.telefono||''
   }).select().single();
   if(error){alert('Error: '+error.message);return;}
   // Actualizar CC cliente
@@ -2126,6 +2156,7 @@ async function emitirRemitoRapido(){
   }).eq('id',c.id);
   await Promise.all([cargarRemitos(),cargarClientes()]);
   // Mostrar remito para imprimir
+  _remActual=rem;
   document.getElementById('m-ver-title').textContent='Remito R-'+String(rem.id).padStart(4,'0')+' — '+rem.cliente;
   document.getElementById('m-ver-body').innerHTML=detalleHTML(rem,true);
   document.getElementById('m-ver-print').style.display='inline-flex';
