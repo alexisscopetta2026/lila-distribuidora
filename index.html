@@ -373,14 +373,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <!-- Desglose de billetes -->
   <div class="card">
     <div style="font-weight:600;font-size:13px;margin-bottom:10px;color:var(--PD)">💵 Conteo de efectivo</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px" id="billetes-grid">
-      ${[20000,10000,2000,1000,500,200,100,50,20,10].map(b=>`
-      <div style="display:flex;align-items:center;gap:6px;background:var(--bg2);border-radius:6px;padding:6px 8px">
-        <span style="font-size:12px;color:var(--txt2);width:55px">\$${b.toLocaleString('es-AR')}</span>
-        <input type="number" id="bill-${b}" value="0" min="0" style="width:50px;text-align:center;padding:3px 5px;border:1px solid var(--brd);border-radius:4px" oninput="calcEfectivo()">
-        <span style="font-size:11px;color:var(--txt2)" id="bill-sub-${b}">$0</span>
-      </div>`).join('')}
-    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px" id="billetes-grid"></div>
     <div style="display:flex;justify-content:space-between;align-items:center;background:var(--PL);border-radius:8px;padding:10px 14px;margin-top:10px">
       <span style="font-weight:600;color:var(--PD)">Total efectivo contado</span>
       <span style="font-size:20px;font-weight:700;color:var(--PD)" id="total-efectivo-contado">$0</span>
@@ -2562,6 +2555,11 @@ function initRendicion(){
   const hace7=new Date(Date.now()-7*864e5).toISOString().split('T')[0];
   document.getElementById('rend-desde').value=hace7;
   document.getElementById('rend-hasta').value=hoy;
+  const grid=document.getElementById('billetes-grid');
+  if(grid&&!grid.hasChildNodes()){
+    const billetes=[20000,10000,2000,1000,500,200,100,50,20,10];
+    grid.innerHTML=billetes.map(b=>'<div style="display:flex;align-items:center;gap:6px;background:var(--bg2);border-radius:6px;padding:6px 8px"><span style="font-size:12px;color:var(--txt2);width:55px">$'+b.toLocaleString('es-AR')+'</span><input type="number" id="bill-'+b+'" value="0" min="0" style="width:50px;text-align:center;padding:3px 5px;border:1px solid var(--brd);border-radius:4px" oninput="calcEfectivo()"><span style="font-size:11px;color:var(--txt2)" id="bill-sub-'+b+'">/bin/sh</span></div>').join('');
+  }
 }
 function calcEfectivo(){
   const billetes=[20000,10000,2000,1000,500,200,100,50,20,10];
