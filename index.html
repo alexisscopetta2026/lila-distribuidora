@@ -1364,9 +1364,12 @@ function imprimirRemito(){
   if(!d){alert('No hay remito activo');return;}
   const num='R-'+String(d.id).padStart(4,'0');
   const titulo=num+' — '+d.cliente;
-  const cli=_clientes.find(x=>x.id==d.cliente_id)||{};
+  // Buscar cliente con comparación flexible de tipos
+  const cli=_clientes.find(x=>String(x.id)===String(d.cliente_id))||
+            _clientes.find(x=>String(x.codigo)===String(d.cliente_id))||{};
+  console.log('DEBUG remito cliente_id:',d.cliente_id, 'cli encontrado:',cli, 'dir:',cli.direccion, 'tel:',cli.telefono);
   const dir=d.lugar_entrega||d.direccion||cli.direccion||cli.domicilio||'';
-  const tel=d.telefono||cli.telefono||'';
+  const tel=d.telefono||cli.telefono||cli.celular||'';
   let sub=0,dtoT=0,tot=0;
   const rows=(d.items||[]).map(it=>{
     const base=it.precio*it.cant,dtoA=base*(it.dto/100),neto=base-dtoA;
