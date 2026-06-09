@@ -452,7 +452,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="card" id="stock-conteo-section" style="display:none">
     <div style="font-weight:600;font-size:13px;margin-bottom:10px;color:var(--PD)">Conteo físico — ingresá lo que hay en la heladera/depósito</div>
     <div class="tb">
-      <input id="stock-q" placeholder="Buscar producto..." oninput="filtrarConteo()">
+      <input id="stock-q" placeholder="Buscar producto..." oninput="filtrarConteo()" onkeydown="navStockBusq(event)">
       <select id="stock-cat" onchange="filtrarConteo()">
         <option value="">Todas las categorías</option>
         <option value="FIAMBRES">Fiambres</option>
@@ -1239,15 +1239,17 @@ async function emitirRemitos(cargaId){
   const cg=_cargas.find(x=>x.id===cargaId);if(!cg)return;
   const peds=_pedidos.filter(p=>(cg.pedidos||[]).includes(p.id)&&p.estado!=='remitado');
   for(const p of peds){
+  for(const p of peds){
+    const c=_clientes.find(x=>x.id===p.cliente_id);
     const {data:rem}=await sb.from('remitos').insert({
       pedido_id:p.id,cliente_id:p.cliente_id,cliente:p.cliente,localidad:p.localidad,
       zona:p.zona,vendedor:p.vendedor,fecha:new Date().toISOString().split('T')[0],
       items:p.items,total:p.total,cobrado:false,
-    direccion:c?.direccion||c?.domicilio||'',telefono:c?.telefono||''
+      direccion:c?.direccion||c?.domicilio||'',telefono:c?.telefono||''
     }).select().single();
     await sb.from('pedidos').update({estado:'remitado',remito_id:rem.id}).eq('id',p.id);
-    const c=_clientes.find(x=>x.id===p.cliente_id);
     if(c){await sb.from('clientes').update({saldo:(c.saldo||0)+p.total,total_comprado:(c.total_comprado||0)+p.total,ultimo_remito:rem.fecha}).eq('id',c.id);}
+  }
   }
   await cargarTodo();renderCargas();renderRemitos();renderDash();
   alert(`${peds.length} remito(s) emitido(s).`);go('remitos');
@@ -1365,9 +1367,11 @@ function verRemito(id){
   const r=_remitos.find(x=>x.id===id);if(!r)return;
   _remActual=r;_verTipo='remito';
   document.getElementById('m-ver-title').textContent='Remito R-'+String(r.id).padStart(4,'0')+' — '+r.cliente;
-  const _p2=document.getElementById('m-ver-print2');if(_p2)_p2.style.display='none';
+  // Ocultar ambos botones de carga, mostrar solo impresión de remito
+  const _p2=document.getElementById('m-ver-print2');if(_p2){_p2.style.display='none';}
+  const _p=document.getElementById('m-ver-print');
+  if(_p){_p.textContent='🖨️ Imprimir remito';_p.onclick=imprimirRemito;_p.style.display='inline-flex';}
   document.getElementById('m-ver-body').innerHTML=detalleHTML(r,true);
-  document.getElementById('m-ver-print').style.display='inline-flex';
   document.getElementById('m-ver').classList.add('on');
 }
 function impRem(id){verRemito(id);setTimeout(imprimirRemito,200);}
@@ -1518,7 +1522,6 @@ function imprimirRemito(){
   // Buscar cliente con comparación flexible de tipos
   const cli=_clientes.find(x=>String(x.id)===String(d.cliente_id))||
             _clientes.find(x=>String(x.codigo)===String(d.cliente_id))||{};
-  console.log('DEBUG remito cliente_id:',d.cliente_id, 'cli encontrado:',cli, 'dir:',cli.direccion, 'tel:',cli.telefono);
   const dir=d.lugar_entrega||d.direccion||cli.direccion||cli.domicilio||'';
   const tel=d.telefono||cli.telefono||cli.celular||'';
   let sub=0,dtoT=0,tot=0;
@@ -1560,8 +1563,9 @@ function imprimirRemito(){
 }
 function detalleHTML(d,isRem){
   const num=isRem?'R-'+String(d.id).padStart(4,'0'):'Pedido #'+d.id;
-  // Buscar datos completos del cliente
-  const cli=_clientes.find(x=>x.id==d.cliente_id)||{};
+  // Buscar datos completos del cliente con comparación flexible de tipos
+  const cli=_clientes.find(x=>String(x.id)===String(d.cliente_id))||
+            _clientes.find(x=>String(x.codigo||'')===String(d.cliente_id))||{};
   const dir=d.lugar_entrega||d.direccion||cli.direccion||cli.domicilio||'';
   const tel=d.telefono||cli.telefono||'';
   let sub=0,dtoT=0,tot=0;
@@ -3109,6 +3113,31 @@ function imprimirRendicion(){
   const w=window.open('','_blank');
   w.document.write(`<html><head><title>Rendición</title><style>body{font-family:Arial;padding:20px;font-size:13px}table{width:100%;border-collapse:collapse}.card{border:1px solid #ddd;border-radius:8px;padding:12px;margin-bottom:8px}</style></head><body><h2>Rendición de cobranza — Distribuidora Lila</h2>${body}</body></html>`);
   w.document.close();w.print();
+}
+
+// ─── NAVEGACIÓN CON FLECHAS EN BUSCADOR DE STOCK ───
+let _stockIdx = -1;
+function navStockBusq(e) {
+  const rows = document.querySelectorAll('#stock-tbody tr');
+  if (!rows.length) return;
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    _stockIdx = Math.min(_stockIdx + 1, rows.length - 1);
+    rows.forEach((r, i) => r.style.background = i === _stockIdx ? 'var(--PL)' : '');
+    rows[_stockIdx]?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    _stockIdx = Math.max(_stockIdx - 1, 0);
+    rows.forEach((r, i) => r.style.background = i === _stockIdx ? 'var(--PL)' : '');
+    rows[_stockIdx]?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (_stockIdx >= 0 && rows[_stockIdx]) {
+      const inp = rows[_stockIdx].querySelector('input[type="number"]');
+      if (inp) { inp.focus(); inp.select(); }
+    }
+    _stockIdx = -1;
+  }
 }
 
 // ─── CERRAR DROPS ───
