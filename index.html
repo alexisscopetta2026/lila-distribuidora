@@ -391,7 +391,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="fg">
         <label>Código cliente &nbsp;<span style="font-size:10px;color:var(--txt2)">[F1=buscar]</span></label>
         <div style="display:flex;gap:4px">
-          <input id="rr-cli-cod" placeholder="Ej: 40" onkeydown="if(event.key==='F1'){event.preventDefault();abrirBuscadorCli('rr');}else if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();buscarPorCodCli();}" autocomplete="off" style="font-size:15px;font-weight:600;flex:1">
+          <input id="rr-cli-cod" placeholder="Ej: 40" onkeydown="if(event.key==='F1'){event.preventDefault();abrirBuscadorCli('rr');}else if(event.key==='Enter'||(event.key==='Tab'&&this.value.trim())){event.preventDefault();buscarPorCodCli();}" autocomplete="off" style="font-size:15px;font-weight:600;flex:1">
           <button class="btn sm" onclick="abrirBuscadorCli('rr')" title="Buscar por nombre (F1)" style="padding:4px 8px;font-size:13px">🔍</button>
         </div>
       </div>
@@ -415,7 +415,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <div class="fg" style="width:110px">
           <label>Código &nbsp;<span style="font-size:10px;color:var(--txt2)">[F1]</span></label>
           <div style="display:flex;gap:3px">
-            <input id="rr-cod" placeholder="Ej: 102" onkeydown="if(event.key==='F1'){event.preventDefault();abrirBuscadorPro('rr');}else if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();buscarPorCodigoRR();}" autocomplete="off" style="flex:1;min-width:0">
+            <input id="rr-cod" placeholder="Ej: 102" onkeydown="if(event.key==='F1'){event.preventDefault();abrirBuscadorPro('rr');}else if(event.key==='Enter'||(event.key==='Tab'&&this.value.trim())){event.preventDefault();buscarPorCodigoRR();}" autocomplete="off" style="flex:1;min-width:0">
             <button class="btn sm" onclick="abrirBuscadorPro('rr')" title="Buscar por nombre (F1)" style="padding:4px 6px;font-size:12px">🔍</button>
           </div>
         </div>
@@ -561,7 +561,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="fr">
       <div class="fg" style="max-width:90px">
         <label>Código *</label>
-        <input id="nc-cli-cod" placeholder="Ej: 40" onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();buscarCodCli('nc');}" autocomplete="off" style="font-size:15px;font-weight:600">
+        <input id="nc-cli-cod" placeholder="Ej: 40" onkeydown="if(event.key==='Enter'||(event.key==='Tab'&&this.value.trim())){event.preventDefault();buscarCodCli('nc');}" autocomplete="off" style="font-size:15px;font-weight:600">
       </div>
       <div class="fg drop-wrap" style="flex:2">
         <label>O nombre</label>
@@ -593,7 +593,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         </div>
         <div class="fg" style="width:80px">
           <label>Código</label>
-          <input id="nc-cod" placeholder="Ej: 102" onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();buscarCodPro('nc');}" autocomplete="off">
+          <input id="nc-cod" placeholder="Ej: 102" onkeydown="if(event.key==='Enter'||(event.key==='Tab'&&this.value.trim())){event.preventDefault();buscarCodPro('nc');}" autocomplete="off">
         </div>
         <div class="fg drop-wrap" style="flex:2;min-width:150px">
           <label>Producto</label>
@@ -637,7 +637,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="fr">
       <div class="fg" style="max-width:90px">
         <label>Código *</label>
-        <input id="np-cli-cod" placeholder="Ej: 40" onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();buscarCodCli('np');}" autocomplete="off" style="font-size:15px;font-weight:600">
+        <input id="np-cli-cod" placeholder="Ej: 40" onkeydown="if(event.key==='Enter'||(event.key==='Tab'&&this.value.trim())){event.preventDefault();buscarCodCli('np');}" autocomplete="off" style="font-size:15px;font-weight:600">
       </div>
       <div class="fg drop-wrap" style="flex:2">
         <label>O nombre</label>
@@ -657,7 +657,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:flex-end">
         <div class="fg" style="width:80px">
           <label>Código</label>
-          <input id="np-cod" placeholder="Ej: 102" onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();buscarCodPro('np');}" autocomplete="off">
+          <input id="np-cod" placeholder="Ej: 102" onkeydown="if(event.key==='Enter'||(event.key==='Tab'&&this.value.trim())){event.preventDefault();buscarCodPro('np');}" autocomplete="off">
         </div>
         <div class="fg drop-wrap" style="flex:2;min-width:150px">
           <label>Producto</label>
@@ -691,7 +691,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="fr">
       <div class="fg" style="max-width:90px">
         <label>Código *</label>
-        <input id="cob-cli-cod" placeholder="Ej: 40" onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();buscarCodCli('cob');}" autocomplete="off" style="font-size:15px;font-weight:600">
+        <input id="cob-cli-cod" placeholder="Ej: 40" onkeydown="if(event.key==='Enter'||(event.key==='Tab'&&this.value.trim())){event.preventDefault();buscarCodCli('cob');}" autocomplete="off" style="font-size:15px;font-weight:600">
       </div>
       <div class="fg drop-wrap" style="flex:2">
         <label>O nombre</label>
