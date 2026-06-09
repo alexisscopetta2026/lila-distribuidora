@@ -390,7 +390,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="fr x3">
       <div class="fg">
         <label>Código cliente</label>
-        <input id="rr-cli-cod" placeholder="Ej: 40" oninput="buscarPorCodCli()" autocomplete="off" style="font-size:15px;font-weight:600">
+        <input id="rr-cli-cod" placeholder="Ej: 40" onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();buscarPorCodCli();}" autocomplete="off" style="font-size:15px;font-weight:600">
       </div>
       <div class="fg drop-wrap" style="flex:2">
         <label>O buscar por nombre</label>
@@ -410,7 +410,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:flex-end">
         <div class="fg" style="width:80px">
           <label>Código</label>
-          <input id="rr-cod" placeholder="Ej: 102" oninput="buscarPorCodigoRR()" autocomplete="off">
+          <input id="rr-cod" placeholder="Ej: 102" onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();buscarPorCodigoRR();}" autocomplete="off">
         </div>
         <div class="fg drop-wrap" style="flex:2;min-width:150px">
           <label>Producto</label>
@@ -554,7 +554,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="fr">
       <div class="fg" style="max-width:90px">
         <label>Código *</label>
-        <input id="nc-cli-cod" placeholder="Ej: 40" oninput="buscarCodCli('nc')" autocomplete="off" style="font-size:15px;font-weight:600">
+        <input id="nc-cli-cod" placeholder="Ej: 40" onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();buscarCodCli('nc');}" autocomplete="off" style="font-size:15px;font-weight:600">
       </div>
       <div class="fg drop-wrap" style="flex:2">
         <label>O nombre</label>
@@ -586,7 +586,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         </div>
         <div class="fg" style="width:80px">
           <label>Código</label>
-          <input id="nc-cod" placeholder="Ej: 102" oninput="buscarCodPro('nc')" autocomplete="off">
+          <input id="nc-cod" placeholder="Ej: 102" onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();buscarCodPro('nc');}" autocomplete="off">
         </div>
         <div class="fg drop-wrap" style="flex:2;min-width:150px">
           <label>Producto</label>
@@ -630,7 +630,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="fr">
       <div class="fg" style="max-width:90px">
         <label>Código *</label>
-        <input id="np-cli-cod" placeholder="Ej: 40" oninput="buscarCodCli('np')" autocomplete="off" style="font-size:15px;font-weight:600">
+        <input id="np-cli-cod" placeholder="Ej: 40" onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();buscarCodCli('np');}" autocomplete="off" style="font-size:15px;font-weight:600">
       </div>
       <div class="fg drop-wrap" style="flex:2">
         <label>O nombre</label>
@@ -650,7 +650,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:flex-end">
         <div class="fg" style="width:80px">
           <label>Código</label>
-          <input id="np-cod" placeholder="Ej: 102" oninput="buscarCodPro('np')" autocomplete="off">
+          <input id="np-cod" placeholder="Ej: 102" onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();buscarCodPro('np');}" autocomplete="off">
         </div>
         <div class="fg drop-wrap" style="flex:2;min-width:150px">
           <label>Producto</label>
@@ -684,7 +684,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="fr">
       <div class="fg" style="max-width:90px">
         <label>Código *</label>
-        <input id="cob-cli-cod" placeholder="Ej: 40" oninput="buscarCodCli('cob')" autocomplete="off" style="font-size:15px;font-weight:600">
+        <input id="cob-cli-cod" placeholder="Ej: 40" onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();buscarCodCli('cob');}" autocomplete="off" style="font-size:15px;font-weight:600">
       </div>
       <div class="fg drop-wrap" style="flex:2">
         <label>O nombre</label>
@@ -1889,10 +1889,10 @@ function initRR(){
 // ─── BÚSQUEDA GENÉRICA POR CÓDIGO ───
 // Mapeo: prefijo modal → {selCli, selPro, campoNombre, campoCodPro, campoNomPro, foco siguiente}
 const _modalMap = {
-  'np':  {selCli: selCli,    selPro: selPro,    qCli:'np-cli-q',  idCli:'np-cli-id',  codCli:'np-cli-cod',  qPro:'np-pro-q',  codPro:'np-cod',  focoTras:'np-cant'},
-  'nc':  {selCli: selCliNC,  selPro: selProNC,  qCli:'nc-cli-q',  idCli:'nc-cli-id',  codCli:'nc-cli-cod',  qPro:'nc-pro-q',  codPro:'nc-cod',  focoTras:'nc-cant'},
-  'cob': {selCli: selCliCob, selPro: null,       qCli:'cob-cli-q', idCli:'cob-cli-id', codCli:'cob-cli-cod', qPro:null,        codPro:null,      focoTras:'cob-efectivo'},
-  'rr':  {selCli: selCliRR,  selPro: selProRR,  qCli:'rr-cli-q',  idCli:'rr-cli-id',  codCli:'rr-cli-cod',  qPro:'rr-pro-q',  codPro:'rr-cod',  focoTras:'rr-cant'},
+  'np':  {selCli: selCli,    selPro: selPro,    qCli:'np-cli-q',  idCli:'np-cli-id',  codCli:'np-cli-cod',  qPro:'np-pro-q',  codPro:'np-cod',  focoCliTras:'np-cod',  focoProTras:'np-cant'},
+  'nc':  {selCli: selCliNC,  selPro: selProNC,  qCli:'nc-cli-q',  idCli:'nc-cli-id',  codCli:'nc-cli-cod',  qPro:'nc-pro-q',  codPro:'nc-cod',  focoCliTras:'nc-cod',  focoProTras:'nc-cant'},
+  'cob': {selCli: selCliCob, selPro: null,       qCli:'cob-cli-q', idCli:'cob-cli-id', codCli:'cob-cli-cod', qPro:null,        codPro:null,      focoCliTras:'cob-efectivo', focoProTras:null},
+  'rr':  {selCli: selCliRR,  selPro: selProRR,  qCli:'rr-cli-q',  idCli:'rr-cli-id',  codCli:'rr-cli-cod',  qPro:'rr-pro-q',  codPro:'rr-cod',  focoCliTras:'rr-cod',  focoProTras:'rr-cant'},
 };
 function buscarCodCli(pfx){
   const m=_modalMap[pfx];if(!m)return;
@@ -1904,7 +1904,7 @@ function buscarCodCli(pfx){
     m.selCli(c.id);
     if(el)el.style.borderColor='var(--P)';
     // foco al siguiente campo útil
-    const sig=document.getElementById(m.focoTras)||document.getElementById(m.qPro);
+    const sig=document.getElementById(m.focoCliTras);
     if(sig)setTimeout(()=>sig.focus(),50);
   } else {
     if(el)el.style.borderColor='var(--D)';
@@ -1919,7 +1919,7 @@ function buscarCodPro(pfx){
   if(p){
     m.selPro(p.id);
     if(el)el.style.borderColor='var(--P)';
-    setTimeout(()=>{const f=document.getElementById(m.focoTras);if(f)f.focus();},50);
+    setTimeout(()=>{const f=document.getElementById(m.focoProTras);if(f)f.focus();},50);
   } else {
     el.style.borderColor='var(--D)';
   }
