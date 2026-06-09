@@ -1606,6 +1606,7 @@ function calcTotalCobro(){
   const tot=ef+tr+ch3+rg+rib+ro;
   const el=document.getElementById('cob-total-display');
   if(el)el.textContent=fmt(tot);
+  calcTotalDesdeImputacion();
 }
 function abrirCobro(){
   ['cob-cli-q','cob-ven-nom','cob-reparto','cob-banco','cob-nrocheque','cob-obs2','cob-cli-cod'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
@@ -1662,13 +1663,29 @@ function imputarTotal(remId, total){
   if(input){input.value=total;calcTotalDesdeImputacion();}
 }
 function calcTotalDesdeImputacion(){
-  // Actualizar label de imputado
   const inputs=document.querySelectorAll('[id^="imp-rem-"]');
   let totalImputado=0;
   inputs.forEach(inp=>totalImputado+=parseFloat(inp.value)||0);
+  // Total cobrado ingresado
+  const ef=parseFloat(document.getElementById('cob-efectivo')?.value)||0;
+  const tr=parseFloat(document.getElementById('cob-transferencia')?.value)||0;
+  const ch3=parseFloat(document.getElementById('cob-cheque3')?.value)||0;
+  const rg=parseFloat(document.getElementById('cob-ret-gan')?.value)||0;
+  const rib=parseFloat(document.getElementById('cob-ret-ib')?.value)||0;
+  const ro=parseFloat(document.getElementById('cob-ret-otras')?.value)||0;
+  const totalCobrado=ef+tr+ch3+rg+rib+ro;
+  const resto=totalCobrado-totalImputado;
   const lbl=document.getElementById('cob-imputado-label');
-  if(lbl&&totalImputado>0)lbl.textContent=`Imputado a facturas: ${fmt(totalImputado)}`;
-  else if(lbl)lbl.textContent='';
+  if(lbl){
+    if(totalCobrado>0){
+      const color=resto<0?'color:var(--D)':resto===0?'color:var(--P)':'color:var(--W)';
+      lbl.innerHTML=`Imputado: <b>${fmt(totalImputado)}</b> &nbsp;|&nbsp; `+
+        `<span style="${color}"><b>Resto: ${fmt(resto)}</b></span>`+
+        (resto<0?' ⚠️ Excede lo cobrado':resto===0?' ✅':'');
+    } else {
+      lbl.textContent=totalImputado>0?`Imputado: ${fmt(totalImputado)}`:'';
+    }
+  }
 }
 async function guardarCobro(){
   const cid=document.getElementById('cob-cli-id').value;
@@ -2101,7 +2118,8 @@ function abrirBuscadorCli(pfx){
       </div>
       <input id="busq-cli-q" placeholder="Escribí nombre, dirección o teléfono..." autocomplete="off"
         style="padding:8px 12px;border:1px solid var(--brd);border-radius:8px;font-size:14px;margin-bottom:10px"
-        oninput="filtrarBusqCli()">
+        oninput="filtrarBusqCli()"
+        onkeydown="navBusq(event,'busq-cli-list','busq-cli-q',false)">
       <div id="busq-cli-list" style="overflow-y:auto;flex:1;max-height:50vh"></div>
     </div>`;
   document.body.appendChild(div);
@@ -2113,7 +2131,45 @@ function abrirBuscadorCli(pfx){
   },50);
   div._pfx=pfx;
 }
+
+// ─── NAVEGACIÓN CON FLECHAS EN BUSCADOR F1 ───
+let _busqIdx=-1;
+function navBusq(e, listaId, inputId, esPro){
+  const lista=document.getElementById(listaId);
+  if(!lista)return;
+  const items=lista.querySelectorAll('div[onmousedown]');
+  if(!items.length)return;
+
+  if(e.key==='ArrowDown'){
+    e.preventDefault();
+    _busqIdx=Math.min(_busqIdx+1, items.length-1);
+    items.forEach((el,i)=>el.style.background=i===_busqIdx?'var(--PL)':'');
+    items[_busqIdx]?.scrollIntoView({block:'nearest'});
+  } else if(e.key==='ArrowUp'){
+    e.preventDefault();
+    _busqIdx=Math.max(_busqIdx-1, 0);
+    items.forEach((el,i)=>el.style.background=i===_busqIdx?'var(--PL)':'');
+    items[_busqIdx]?.scrollIntoView({block:'nearest'});
+  } else if(e.key==='Enter'){
+    e.preventDefault();
+    if(_busqIdx>=0 && items[_busqIdx]){
+      // Simular click en el item seleccionado
+      const attr=items[_busqIdx].getAttribute('onmousedown');
+      if(attr) eval(attr);
+    } else if(items.length===1){
+      // Si hay solo uno, seleccionarlo directo
+      const attr=items[0].getAttribute('onmousedown');
+      if(attr) eval(attr);
+    }
+    _busqIdx=-1;
+  } else if(e.key==='Escape'){
+    const modal=esPro?document.getElementById('modal-busq-pro'):document.getElementById('modal-busq');
+    if(modal)modal.remove();
+    _busqIdx=-1;
+  }
+}
 function filtrarBusqCli(){
+  _busqIdx=-1;
   const div=document.getElementById('modal-busq');if(!div)return;
   const pfx=div._pfx||'rr';
   const m=_modalMap[pfx];if(!m)return;
@@ -2155,7 +2211,8 @@ function abrirBuscadorPro(pfx){
       </div>
       <input id="busq-pro-q" placeholder="Escribí nombre o código..." autocomplete="off"
         style="padding:8px 12px;border:1px solid var(--brd);border-radius:8px;font-size:14px;margin-bottom:10px"
-        oninput="filtrarBusqPro()">
+        oninput="filtrarBusqPro()"
+        onkeydown="navBusq(event,'busq-pro-list','busq-pro-q',true)">
       <div id="busq-pro-list" style="overflow-y:auto;flex:1;max-height:50vh"></div>
     </div>`;
   document.body.appendChild(div);
@@ -2167,6 +2224,7 @@ function abrirBuscadorPro(pfx){
   },50);
 }
 function filtrarBusqPro(){
+  _busqIdx=-1;
   const div=document.getElementById('modal-busq-pro');if(!div)return;
   const pfx=div._pfx||'rr';
   const m=_modalMap[pfx];if(!m)return;
