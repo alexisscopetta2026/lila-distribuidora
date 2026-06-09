@@ -725,7 +725,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div id="cob-imputacion-section" style="display:none;background:var(--bg2);border-radius:8px;padding:10px;margin-bottom:10px">
       <div style="font-size:11px;font-weight:500;color:var(--txt2);text-transform:uppercase;margin-bottom:8px">Imputar a facturas pendientes</div>
       <div id="cob-remitos-pendientes"></div>
-      <div style="font-size:11px;color:var(--txt2);margin-top:6px">Dejá en 0 las que no querés imputar. El resto queda pendiente.</div>
+    </div>
+
+    <!-- Panel resto -->
+    <div id="cob-resto-section" style="display:none;background:var(--WL);border:1px solid var(--W);border-radius:8px;padding:10px 14px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:13px;font-weight:600;color:var(--W)">⚠️ Resto sin imputar: <span id="cob-resto-monto">$0</span></span>
+      </div>
+      <div style="font-size:12px;color:var(--txt2);margin-bottom:8px">¿Qué hacemos con este resto?</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn sm" style="background:var(--P);color:#fff;border-color:var(--P)" onclick="dejarComoSaldoFavor()">✅ Dejar como saldo a favor</button>
+        <span style="font-size:11px;color:var(--txt2);align-self:center">o imputalo a otra factura arriba</span>
+      </div>
+      <div id="cob-saldo-favor-aviso" style="display:none;margin-top:8px;font-size:12px;color:var(--P);font-weight:500"></div>
     </div>
 
     <div style="background:var(--bg2);border-radius:8px;padding:10px;margin-bottom:10px">
@@ -1845,14 +1857,26 @@ function calcTotalCobro(){
   calcTotalDesdeImputacion();
 }
 function abrirCobro(){
+  limpiarModalCobro();
+  document.getElementById('m-cobro').classList.add('on');
+}
+function limpiarModalCobro(){
   ['cob-cli-q','cob-ven-nom','cob-reparto','cob-banco','cob-nrocheque','cob-obs2','cob-cli-cod'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('cob-cli-id').value='';
   const el=document.getElementById('cob-tipo-cobrador');if(el)el.value='';
   ['cob-efectivo','cob-transferencia','cob-cheque3','cob-ret-gan','cob-ret-ib','cob-ret-otras'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='0';});
   const fch=document.getElementById('cob-fecha-cheque');if(fch)fch.value='';
   const td=document.getElementById('cob-total-display');if(td)td.textContent='$0';
+  const lbl=document.getElementById('cob-imputado-label');if(lbl)lbl.textContent='';
   document.getElementById('cob-fecha').value=new Date().toISOString().split('T')[0];
-  document.getElementById('m-cobro').classList.add('on');
+  document.getElementById('cob-imputacion-section').style.display='none';
+  document.getElementById('cob-remitos-pendientes').innerHTML='';
+  const rs=document.getElementById('cob-resto-section');if(rs)rs.style.display='none';
+  const av=document.getElementById('cob-saldo-favor-aviso');if(av)av.style.display='none';
+  const btn=document.querySelector('#cob-resto-section button');if(btn)btn.style.display='';
+  _cobRestoSaldoFavor=0;
+  // Foco al campo cliente
+  setTimeout(()=>{const f=document.getElementById('cob-cli-cod');if(f)f.focus();},100);
 }
 function dropCliCob(){
   const q=(document.getElementById('cob-cli-q').value||'').toLowerCase();
@@ -1902,7 +1926,6 @@ function calcTotalDesdeImputacion(){
   const inputs=document.querySelectorAll('[id^="imp-rem-"]');
   let totalImputado=0;
   inputs.forEach(inp=>totalImputado+=parseFloat(inp.value)||0);
-  // Total cobrado ingresado
   const ef=parseFloat(document.getElementById('cob-efectivo')?.value)||0;
   const tr=parseFloat(document.getElementById('cob-transferencia')?.value)||0;
   const ch3=parseFloat(document.getElementById('cob-cheque3')?.value)||0;
@@ -1910,7 +1933,8 @@ function calcTotalDesdeImputacion(){
   const rib=parseFloat(document.getElementById('cob-ret-ib')?.value)||0;
   const ro=parseFloat(document.getElementById('cob-ret-otras')?.value)||0;
   const totalCobrado=ef+tr+ch3+rg+rib+ro;
-  const resto=totalCobrado-totalImputado;
+  const resto=Math.round((totalCobrado-totalImputado)*100)/100;
+
   const lbl=document.getElementById('cob-imputado-label');
   if(lbl){
     if(totalCobrado>0){
@@ -1922,6 +1946,35 @@ function calcTotalDesdeImputacion(){
       lbl.textContent=totalImputado>0?`Imputado: ${fmt(totalImputado)}`:'';
     }
   }
+
+  // Mostrar panel de resto si hay saldo sin imputar
+  const restoSection=document.getElementById('cob-resto-section');
+  const restoMonto=document.getElementById('cob-resto-monto');
+  const aviso=document.getElementById('cob-saldo-favor-aviso');
+  if(restoSection){
+    if(resto>0&&totalCobrado>0){
+      restoSection.style.display='block';
+      if(restoMonto)restoMonto.textContent=fmt(resto);
+      if(aviso)aviso.style.display='none'; // limpiar aviso previo
+    } else {
+      restoSection.style.display='none';
+    }
+  }
+}
+let _cobRestoSaldoFavor=0;
+function dejarComoSaldoFavor(){
+  const restoMonto=document.getElementById('cob-resto-monto');
+  const monto=parseFloat((restoMonto?.textContent||'0').replace(/[^0-9.,-]/g,'').replace(',','.'))||0;
+  if(monto<=0)return;
+  _cobRestoSaldoFavor=monto;
+  const aviso=document.getElementById('cob-saldo-favor-aviso');
+  if(aviso){
+    aviso.style.display='block';
+    aviso.textContent=`✅ ${fmt(monto)} quedará como saldo a favor del cliente`;
+  }
+  // Ocultar el botón para que no lo presionen dos veces
+  const btn=document.querySelector('#cob-resto-section button');
+  if(btn)btn.style.display='none';
 }
 async function guardarCobro(){
   const cid=document.getElementById('cob-cli-id').value;
@@ -1934,6 +1987,18 @@ async function guardarCobro(){
   const ro=parseFloat(document.getElementById('cob-ret-otras')?.value)||0;
   const imp=ef+tr+ch3+rg+rib+ro;
   if(imp<=0){alert('Ingresá al menos un importe');return;}
+
+  // Verificar si hay resto sin imputar y sin marcar como saldo a favor
+  const inputs=document.querySelectorAll('[id^="imp-rem-"]');
+  let totalImputado=0;
+  inputs.forEach(inp=>totalImputado+=parseFloat(inp.value)||0);
+  const resto=Math.round((imp-totalImputado)*100)/100;
+  if(resto>0&&_cobRestoSaldoFavor===0&&inputs.length>0){
+    const ok=confirm(`Hay ${fmt(resto)} sin imputar.\n¿Lo dejamos como saldo a favor del cliente?`);
+    if(!ok)return;
+    _cobRestoSaldoFavor=resto;
+  }
+
   const c=_clientes.find(x=>x.id==cid);
   const formas=[];
   if(ef>0)formas.push('efectivo');
@@ -1942,7 +2007,6 @@ async function guardarCobro(){
   if(rg>0||rib>0||ro>0)formas.push('ret');
 
   // Recolectar imputaciones
-  const inputs=document.querySelectorAll('[id^="imp-rem-"]');
   const imputaciones=[];
   for(const inp of inputs){
     const remId=parseInt(inp.id.replace('imp-rem-',''));
@@ -1951,7 +2015,7 @@ async function guardarCobro(){
   }
 
   // Guardar cobro
-  const {data:cobro}=await sb.from('cobros').insert({
+  await sb.from('cobros').insert({
     cliente_id:parseInt(cid),cliente:c?.nombre||'?',
     fecha:document.getElementById('cob-fecha').value,
     forma:formas.join('+')||'efectivo',importe:imp,
@@ -1964,7 +2028,8 @@ async function guardarCobro(){
     tipo_cobrador:document.getElementById('cob-tipo-cobrador')?.value||'',
     vendedor:document.getElementById('cob-ven-nom')?.value||'',
     observaciones:document.getElementById('cob-obs2')?.value||'',
-    imputaciones:imputaciones
+    imputaciones:imputaciones,
+    saldo_favor:_cobRestoSaldoFavor||0
   }).select().single();
 
   // Actualizar saldo_pendiente de cada remito imputado
@@ -1982,11 +2047,21 @@ async function guardarCobro(){
     }
   }
 
-  // Actualizar saldo cliente
-  if(c){await sb.from('clientes').update({saldo:Math.max(0,(c.saldo||0)-imp)}).eq('id',c.id);}
-  cerrar('m-cobro');
+  // Actualizar saldo cliente: descontar lo cobrado, pero sumar saldo a favor
+  if(c){
+    const nuevoSaldo=Math.max(0,(c.saldo||0)-imp+(_cobRestoSaldoFavor||0));
+    await sb.from('clientes').update({saldo:nuevoSaldo}).eq('id',c.id);
+  }
+
   await Promise.all([cargarCobros(),cargarClientes(),cargarRemitos()]);
   renderCobros();renderCC();renderDash();renderRemitos();actualizarDeuda();
+
+  // Mostrar confirmación breve y limpiar para el siguiente cobro (modal queda abierto)
+  const nombreCli=c?.nombre||'cliente';
+  const restoMsg=_cobRestoSaldoFavor>0?`\nSaldo a favor: ${fmt(_cobRestoSaldoFavor)}`:'';
+  _cobRestoSaldoFavor=0;
+  alert(`✅ Cobro de ${fmt(imp)} guardado para ${nombreCli}.${restoMsg}\n\nListo para el siguiente cobro.`);
+  limpiarModalCobro();
 }
 function renderCobros(){
   const q=(document.getElementById('cob-q').value||'').toLowerCase();
