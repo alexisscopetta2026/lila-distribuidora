@@ -552,8 +552,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="mh"><h3>Nueva nota de crédito</h3><button class="btn sm" onclick="cerrar('m-nc')">✕</button></div>
   <div class="mb">
     <div class="fr">
-      <div class="fg drop-wrap">
-        <label>Cliente *</label>
+      <div class="fg" style="max-width:90px">
+        <label>Código *</label>
+        <input id="nc-cli-cod" placeholder="Ej: 40" oninput="buscarCodCli('nc')" autocomplete="off" style="font-size:15px;font-weight:600">
+      </div>
+      <div class="fg drop-wrap" style="flex:2">
+        <label>O nombre</label>
         <input id="nc-cli-q" placeholder="Buscar cliente..." oninput="dropCliNC()" autocomplete="off">
         <div class="drop" id="nc-cli-drop"></div>
         <input type="hidden" id="nc-cli-id">
@@ -579,6 +583,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <div class="fg" style="width:80px">
           <label>Código</label>
           <input id="nc-cod" placeholder="Ej: 102" oninput="buscarPorCodigoNC()" autocomplete="off">
+        </div>
+        <div class="fg" style="width:80px">
+          <label>Código</label>
+          <input id="nc-cod" placeholder="Ej: 102" oninput="buscarCodPro('nc')" autocomplete="off">
         </div>
         <div class="fg drop-wrap" style="flex:2;min-width:150px">
           <label>Producto</label>
@@ -620,8 +628,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="mh"><h3>Nuevo pedido</h3><button class="btn sm" onclick="cerrar('m-pedido')">✕</button></div>
   <div class="mb">
     <div class="fr">
-      <div class="fg drop-wrap">
-        <label>Cliente *</label>
+      <div class="fg" style="max-width:90px">
+        <label>Código *</label>
+        <input id="np-cli-cod" placeholder="Ej: 40" oninput="buscarCodCli('np')" autocomplete="off" style="font-size:15px;font-weight:600">
+      </div>
+      <div class="fg drop-wrap" style="flex:2">
+        <label>O nombre</label>
         <input id="np-cli-q" placeholder="Buscar cliente..." oninput="dropCli()" autocomplete="off">
         <div class="drop" id="np-cli-drop"></div>
         <input type="hidden" id="np-cli-id">
@@ -636,6 +648,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div style="background:var(--bg2);border-radius:8px;padding:10px;margin-bottom:10px">
       <div style="font-size:11px;color:var(--txt2);font-weight:500;margin-bottom:7px;text-transform:uppercase">Agregar producto</div>
       <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:flex-end">
+        <div class="fg" style="width:80px">
+          <label>Código</label>
+          <input id="np-cod" placeholder="Ej: 102" oninput="buscarCodPro('np')" autocomplete="off">
+        </div>
         <div class="fg drop-wrap" style="flex:2;min-width:150px">
           <label>Producto</label>
           <input id="np-pro-q" placeholder="Buscar..." oninput="dropPro()" autocomplete="off">
@@ -666,13 +682,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="mh"><h3>Registrar cobro</h3><button class="btn sm" onclick="cerrar('m-cobro')">✕</button></div>
   <div class="mb">
     <div class="fr">
-      <div class="fg drop-wrap">
-        <label>Cliente *</label>
+      <div class="fg" style="max-width:90px">
+        <label>Código *</label>
+        <input id="cob-cli-cod" placeholder="Ej: 40" oninput="buscarCodCli('cob')" autocomplete="off" style="font-size:15px;font-weight:600">
+      </div>
+      <div class="fg drop-wrap" style="flex:2">
+        <label>O nombre</label>
         <input id="cob-cli-q" placeholder="Buscar cliente..." oninput="dropCliCob()" autocomplete="off">
         <div class="drop" id="cob-cli-drop"></div>
         <input type="hidden" id="cob-cli-id">
       </div>
-      <div class="fg" style="max-width:90px"><label>Código</label><input id="cob-cli-cod" readonly placeholder="—" style="background:var(--bg2);color:var(--txt2)"></div>
       <div class="fg"><label>Fecha</label><input type="date" id="cob-fecha"></div>
     </div>
     <div class="fr x3">
@@ -1040,6 +1059,7 @@ function abrirPedido(){
   _items=[];_proTemp=null;
   ['np-cli-q','np-ven','np-obs','np-pro-q'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('np-cli-id').value='';
+  ['np-cli-cod','np-cod'].forEach(id=>{const e=document.getElementById(id);if(e){e.value='';e.style.borderColor='';}});
   document.getElementById('np-cant').value='1';
   document.getElementById('np-precio').value='0';
   document.getElementById('np-dto').value='0';
@@ -1060,6 +1080,7 @@ function selCli(id){
   document.getElementById('np-cli-id').value=id;
   document.getElementById('np-cli-q').value=c.nombre;
   document.getElementById('np-cli-drop').style.display='none';
+  const cc=document.getElementById('np-cli-cod');if(cc){cc.value=id;cc.style.borderColor='var(--P)';}
   document.getElementById('np-ven').value=c.vendedor||'';
   document.getElementById('np-dto').value=c.descuento||0;
   const dias=diasDesde(c.ultimo_remito);
@@ -1079,6 +1100,7 @@ function selPro(id){
   _proTemp=_productos.find(x=>x.id===id);if(!_proTemp)return;
   document.getElementById('np-pro-q').value=_proTemp.nombre;
   document.getElementById('np-pro-drop').style.display='none';
+  const cp=document.getElementById('np-cod');if(cp){cp.value=_proTemp.codigo||_proTemp.id;cp.style.borderColor='var(--P)';}
   document.getElementById('np-precio').value=_proTemp.precio||0;
   const cid=document.getElementById('np-cli-id').value;
   const c=cid?_clientes.find(x=>x.id==cid):null;
@@ -1094,6 +1116,7 @@ function agregarItem(){
   const ex=_items.find(i=>i.id===_proTemp.id);
   if(ex){ex.cant+=cant;}else{_items.push({id:_proTemp.id,nom:_proTemp.nombre,un:_proTemp.unidad||'',cant,precio,dto,iva:_proTemp.iva||21});}
   _proTemp=null;document.getElementById('np-pro-q').value='';document.getElementById('np-cant').value='1';
+  const _npc=document.getElementById('np-cod');if(_npc){_npc.value='';_npc.style.borderColor='';}
   renderItems();
 }
 function renderItems(){
@@ -1120,7 +1143,7 @@ async function guardarPedido(){
   const {error}=await sb.from('pedidos').insert({
     cliente_id:parseInt(cid),cliente:c?.nombre||'?',localidad:c?.localidad||'',
     zona:c?.zona||'',vendedor:document.getElementById('np-ven').value||c?.vendedor||'',
-    fecha:document.getElementById('np-fecha').value,obs:document.getElementById('np-obs').value,
+    fecha:document.getElementById('np-fecha').value,observaciones:document.getElementById('np-obs').value,
     items:_items,total:Math.round(tot*100)/100,estado:'pendiente'
   });
   if(error){alert('Error: '+error.message);return;}
@@ -1862,18 +1885,46 @@ function initRR(){
   const info=document.getElementById('rr-cli-info');if(info)info.style.display='none';
   renderItemsRR();
 }
-function buscarPorCodCli(){
-  const cod=(document.getElementById('rr-cli-cod').value||'').trim();
-  if(!cod)return;
-  const c=_clientes.find(x=>String(x.codigo).trim()===cod||String(x.id).trim()===cod);
+
+// ─── BÚSQUEDA GENÉRICA POR CÓDIGO ───
+// Mapeo: prefijo modal → {selCli, selPro, campoNombre, campoCodPro, campoNomPro, foco siguiente}
+const _modalMap = {
+  'np':  {selCli: selCli,    selPro: selPro,    qCli:'np-cli-q',  idCli:'np-cli-id',  codCli:'np-cli-cod',  qPro:'np-pro-q',  codPro:'np-cod',  focoTras:'np-cant'},
+  'nc':  {selCli: selCliNC,  selPro: selProNC,  qCli:'nc-cli-q',  idCli:'nc-cli-id',  codCli:'nc-cli-cod',  qPro:'nc-pro-q',  codPro:'nc-cod',  focoTras:'nc-cant'},
+  'cob': {selCli: selCliCob, selPro: null,       qCli:'cob-cli-q', idCli:'cob-cli-id', codCli:'cob-cli-cod', qPro:null,        codPro:null,      focoTras:'cob-efectivo'},
+  'rr':  {selCli: selCliRR,  selPro: selProRR,  qCli:'rr-cli-q',  idCli:'rr-cli-id',  codCli:'rr-cli-cod',  qPro:'rr-pro-q',  codPro:'rr-cod',  focoTras:'rr-cant'},
+};
+function buscarCodCli(pfx){
+  const m=_modalMap[pfx];if(!m)return;
+  const cod=(document.getElementById(m.codCli)?.value||'').trim();
+  const el=document.getElementById(m.codCli);
+  if(!cod){if(el)el.style.borderColor='';return;}
+  const c=_clientes.find(x=>String(x.id).trim()===cod||String(x.codigo||'').trim()===cod);
   if(c){
-    selCliRR(c.id);
-    document.getElementById('rr-cli-cod').style.borderColor='var(--P)';
-    document.getElementById('rr-pro-q').focus();
+    m.selCli(c.id);
+    if(el)el.style.borderColor='var(--P)';
+    // foco al siguiente campo útil
+    const sig=document.getElementById(m.focoTras)||document.getElementById(m.qPro);
+    if(sig)setTimeout(()=>sig.focus(),50);
   } else {
-    document.getElementById('rr-cli-cod').style.borderColor='var(--D)';
+    if(el)el.style.borderColor='var(--D)';
   }
 }
+function buscarCodPro(pfx){
+  const m=_modalMap[pfx];if(!m||!m.codPro)return;
+  const cod=(document.getElementById(m.codPro)?.value||'').trim();
+  const el=document.getElementById(m.codPro);
+  if(!cod){if(el)el.style.borderColor='';return;}
+  const p=_productos.find(x=>String(x.codigo||'').trim()===cod||String(x.id).trim()===cod);
+  if(p){
+    m.selPro(p.id);
+    if(el)el.style.borderColor='var(--P)';
+    setTimeout(()=>{const f=document.getElementById(m.focoTras);if(f)f.focus();},50);
+  } else {
+    el.style.borderColor='var(--D)';
+  }
+}
+function buscarPorCodCli(){buscarCodCli('rr');}
 function dropCliRR(){
   const q=(document.getElementById('rr-cli-q').value||'').toLowerCase();
   const drop=document.getElementById('rr-cli-drop');
@@ -1887,6 +1938,7 @@ function selCliRR(id){
   document.getElementById('rr-cli-id').value=id;
   document.getElementById('rr-cli-q').value=c.nombre;
   document.getElementById('rr-cli-drop').style.display='none';
+  const cc=document.getElementById('rr-cli-cod');if(cc){cc.value=id;cc.style.borderColor='var(--P)';}
   document.getElementById('rr-ven').value=c.vendedor||'';
   const dias=diasDesde(c.ultimo_remito);
   const info=document.getElementById('rr-cli-info');
@@ -1970,6 +2022,7 @@ function selProRR(id){
   _rrProTemp=_productos.find(x=>x.id===id);if(!_rrProTemp)return;
   document.getElementById('rr-pro-q').value=_rrProTemp.nombre;
   document.getElementById('rr-pro-drop').style.display='none';
+  const cp=document.getElementById('rr-cod');if(cp){cp.value=_rrProTemp.codigo||_rrProTemp.id;cp.style.borderColor='var(--P)';}
   document.getElementById('rr-precio').value=_rrProTemp.precio||0;
   const cid=document.getElementById('rr-cli-id').value;
   const c=cid?_clientes.find(x=>x.id==cid):null;
@@ -2046,7 +2099,7 @@ async function emitirRemitoRapido(){
     zona:c?.zona||'',vendedor:document.getElementById('rr-ven').value||c?.vendedor||'',
     fecha:document.getElementById('rr-fecha').value,
     items:_rrItems,total:tot,cobrado:false,
-    obs:document.getElementById('rr-obs').value
+    observaciones:document.getElementById('rr-obs').value
   }).select().single();
   if(error){alert('Error: '+error.message);return;}
   // Actualizar CC cliente
@@ -2211,6 +2264,8 @@ function toggleNCItems(){
 function abrirNC(){
   _ncItems=[];_ncProTemp=null;
   document.getElementById('nc-cli-q').value='';document.getElementById('nc-cli-id').value='';
+  const _nccod=document.getElementById('nc-cli-cod');if(_nccod){_nccod.value='';_nccod.style.borderColor='';}
+  const _nccpro=document.getElementById('nc-cod');if(_nccpro){_nccpro.value='';_nccpro.style.borderColor='';}
   document.getElementById('nc-obs-m').value='';document.getElementById('nc-pro-q').value='';
   document.getElementById('nc-cant').value='1';document.getElementById('nc-precio').value='0';
   document.getElementById('nc-motivo').value='devolucion';
@@ -2234,6 +2289,7 @@ function selCliNC(id){
   document.getElementById('nc-cli-id').value=id;
   document.getElementById('nc-cli-q').value=c.nombre;
   document.getElementById('nc-cli-drop').style.display='none';
+  const cc=document.getElementById('nc-cli-cod');if(cc){cc.value=id;cc.style.borderColor='var(--P)';}
   
   // Mostrar facturas pendientes para imputar
   const remsPend=_remitos.filter(r=>r.cliente_id===id&&!r.cobrado).sort((a,b)=>a.fecha.localeCompare(b.fecha));
@@ -2280,6 +2336,7 @@ function selProNC(id){
   document.getElementById('nc-pro-q').value=_ncProTemp.nombre;
   document.getElementById('nc-pro-drop').style.display='none';
   document.getElementById('nc-precio').value=_ncProTemp.precio||0;
+  const cp=document.getElementById('nc-cod');if(cp){cp.value=_ncProTemp.codigo||_ncProTemp.id;cp.style.borderColor='var(--P)';}
 }
 function agregarItemNC(){
   if(!_ncProTemp){const q=(document.getElementById('nc-pro-q').value||'').toLowerCase();_ncProTemp=_productos.find(p=>(p.nombre||'').toLowerCase().includes(q));}
@@ -2292,6 +2349,7 @@ function agregarItemNC(){
   _ncProTemp=null;
   document.getElementById('nc-pro-q').value='';
   document.getElementById('nc-cant').value='1';
+  const _ncc=document.getElementById('nc-cod');if(_ncc){_ncc.value='';_ncc.style.borderColor='';}
   renderItemsNC();
 }
 function renderItemsNC(){
