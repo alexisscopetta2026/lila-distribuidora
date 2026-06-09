@@ -402,6 +402,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div class="fr">
       <div class="fg"><label>Vendedor</label><input id="rr-ven" placeholder="Nombre vendedor"></div>
+      <div class="fg"><label>Lugar de entrega</label><input id="rr-lugar" placeholder="Si difiere de la dirección habitual"></div>
       <div class="fg"><label>Observaciones</label><input id="rr-obs"></div>
     </div>
     <div id="rr-cli-info" style="display:none;background:var(--bg2);border-radius:8px;padding:9px 12px;font-size:12px;color:var(--txt2);margin-bottom:11px"></div>
@@ -1080,7 +1081,7 @@ function selCli(id){
   document.getElementById('np-cli-id').value=id;
   document.getElementById('np-cli-q').value=c.nombre;
   document.getElementById('np-cli-drop').style.display='none';
-  const cc=document.getElementById('np-cli-cod');if(cc){cc.value=id;cc.style.borderColor='var(--P)';}
+  const cc=document.getElementById('np-cli-cod');if(cc){cc.value=c.codigo||c.id||'';cc.style.borderColor='var(--P)';}
   document.getElementById('np-ven').value=c.vendedor||'';
   document.getElementById('np-dto').value=c.descuento||0;
   const dias=diasDesde(c.ultimo_remito);
@@ -1369,7 +1370,7 @@ function imprimirRemito(){
     @media print{button{display:none}}
     .no-print{text-align:center;margin-top:12px}
   </style></head><body>
-  <h3 style="margin-bottom:10px">🌸 Distribuidora Lila — ${titulo}</h3>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border-bottom:2px solid #1a7a52;padding-bottom:8px"><div><div style="font-size:15px;font-weight:700;color:#1a7a52">🌸 Distribuidora Lila</div><div style="font-size:11px;color:#777">Sistema de distribución</div></div><div style="font-size:13px;color:#555">${titulo}</div></div>
   ${body}
   <div class="no-print"><button onclick="window.print()" style="padding:8px 20px;background:#1a7a52;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨️ Imprimir</button></div>
   </body></html>`);
@@ -1377,24 +1378,38 @@ function imprimirRemito(){
 }
 function detalleHTML(d,isRem){
   const num=isRem?'R-'+String(d.id).padStart(4,'0'):'Pedido #'+d.id;
-  let sub=0,dtoT=0,ivaT=0,tot=0;
+  // Buscar datos completos del cliente
+  const cli=_clientes.find(x=>x.id===d.cliente_id)||{};
+  const dir=d.lugar_entrega||cli.direccion||cli.domicilio||'';
+  const tel=cli.telefono||'';
+  let sub=0,dtoT=0,tot=0;
   const rows=(d.items||[]).map(it=>{
-    const base=it.precio*it.cant,dtoA=base*(it.dto/100),neto=base-dtoA;let iva=0;
-    sub+=base;dtoT+=dtoA;ivaT+=0;tot+=neto;
-    return `<tr><td>${it.nom}</td><td style="text-align:center">${fmtN(it.cant,2)} ${it.un||''}</td><td style="text-align:right">${fmt(it.precio)}</td><td style="text-align:center">${it.dto||0}%</td><td style="text-align:right;font-weight:600">${fmt(neto+iva)}</td></tr>`;
+    const base=it.precio*it.cant,dtoA=base*(it.dto/100),neto=base-dtoA;
+    sub+=base;dtoT+=dtoA;tot+=neto;
+    return `<tr><td>${it.nom}</td><td style="text-align:center">${fmtN(it.cant,2)} ${it.un||''}</td><td style="text-align:right">${fmt(it.precio)}</td><td style="text-align:center">${it.dto||0}%</td><td style="text-align:right;font-weight:600">${fmt(neto)}</td></tr>`;
   }).join('');
   return `<div style="font-size:13px">
     <div style="display:flex;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-      <div><div style="font-size:16px;font-weight:700;color:var(--P)">${num}</div><div style="color:var(--txt2)">Fecha: ${d.fecha||''}</div>${d.vendedor?`<div style="color:var(--txt2)">Vendedor: ${d.vendedor}</div>`:''}</div>
-      <div style="text-align:right"><div style="font-weight:600">${d.cliente}</div><div style="color:var(--txt2)">${d.localidad||''} · Zona ${d.zona||'-'}</div></div>
+      <div>
+        <div style="font-size:16px;font-weight:700;color:#1a7a52">${num}</div>
+        <div style="color:#555">Fecha: ${d.fecha||''}</div>
+        ${d.vendedor?`<div style="color:#555">Vendedor: ${d.vendedor}</div>`:''}
+      </div>
+      <div style="text-align:right;border-left:3px solid #1a7a52;padding-left:12px">
+        <div style="font-weight:700;font-size:14px">${d.cliente}</div>
+        ${dir?`<div style="color:#555">${dir}</div>`:''}
+        <div style="color:#555">${d.localidad||''} · Zona ${d.zona||'-'}</div>
+        ${tel?`<div style="color:#555">Tel: ${tel}</div>`:''}
+        ${d.lugar_entrega?`<div style="color:#c07000;font-weight:600">📍 Entrega: ${d.lugar_entrega}</div>`:''}
+      </div>
     </div>
     <div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px">
-      <thead><tr style="background:var(--bg2)"><th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--brd)">Producto</th><th style="padding:6px 8px;border-bottom:1px solid var(--brd)">Cant.</th><th style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--brd)">P.Unit</th><th style="padding:6px 8px;border-bottom:1px solid var(--brd)">Dto</th><th style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--brd)">Total</th></tr></thead>
+      <thead><tr style="background:#f5f5f5"><th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ccc">Producto</th><th style="padding:6px 8px;border-bottom:1px solid #ccc">Cant.</th><th style="padding:6px 8px;text-align:right;border-bottom:1px solid #ccc">P.Unit</th><th style="padding:6px 8px;border-bottom:1px solid #ccc">Dto</th><th style="padding:6px 8px;text-align:right;border-bottom:1px solid #ccc">Total</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
-    <div style="margin-top:8px;font-size:12px;color:var(--txt2)">${dtoT>0?'Descuento: '+fmt(dtoT):''}</div>
-    <div style="margin-top:6px;text-align:right;font-size:16px">Total: <strong style="color:var(--P)">${fmt(tot)}</strong></div>
-    ${d.obs?`<div style="margin-top:8px;color:var(--txt2);font-size:12px">Obs: ${d.obs}</div>`:''}
+    <div style="margin-top:8px;font-size:12px;color:#777">${dtoT>0?'Descuento: '+fmt(dtoT):''}</div>
+    <div style="margin-top:6px;text-align:right;font-size:16px">Total: <strong style="color:#1a7a52">${fmt(tot)}</strong></div>
+    ${(d.observaciones||d.obs)?`<div style="margin-top:8px;color:#555;font-size:12px">Obs: ${d.observaciones||d.obs}</div>`:''}
   </div>`;
 }
 
@@ -1433,7 +1448,7 @@ function selCliCob(id){
   document.getElementById('cob-cli-id').value=id;
   document.getElementById('cob-cli-q').value=c.nombre;
   document.getElementById('cob-cli-drop').style.display='none';
-  const codEl=document.getElementById('cob-cli-cod');if(codEl)codEl.value=c.id||'';
+  const codEl=document.getElementById('cob-cli-cod');if(codEl)codEl.value=c.codigo||c.id||'';
   // Mostrar remitos pendientes para imputar
   const remsPend=_remitos.filter(r=>r.cliente_id===id&&!r.cobrado).sort((a,b)=>a.fecha.localeCompare(b.fecha));
   const seccion=document.getElementById('cob-imputacion-section');
@@ -1874,7 +1889,7 @@ let _rrItems=[], _rrProTemp=null;
 function initRR(){
   document.getElementById('rr-fecha').value=new Date().toISOString().split('T')[0];
   _rrItems=[];_rrProTemp=null;
-  ['rr-cli-q','rr-pro-q','rr-obs'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['rr-cli-q','rr-pro-q','rr-obs','rr-lugar'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   const cod=document.getElementById('rr-cod');if(cod){cod.value='';cod.style.borderColor='';}
   const codCli=document.getElementById('rr-cli-cod');if(codCli){codCli.value='';codCli.style.borderColor='';}
   document.getElementById('rr-cli-id').value='';
@@ -1899,7 +1914,7 @@ function buscarCodCli(pfx){
   const cod=(document.getElementById(m.codCli)?.value||'').trim();
   const el=document.getElementById(m.codCli);
   if(!cod){if(el)el.style.borderColor='';return;}
-  const c=_clientes.find(x=>String(x.id).trim()===cod||String(x.codigo||'').trim()===cod);
+  const c=_clientes.find(x=>String(x.codigo||'').trim()===cod||String(x.id).trim()===cod);
   if(c){
     m.selCli(c.id);
     if(el)el.style.borderColor='var(--P)';
@@ -1938,7 +1953,7 @@ function selCliRR(id){
   document.getElementById('rr-cli-id').value=id;
   document.getElementById('rr-cli-q').value=c.nombre;
   document.getElementById('rr-cli-drop').style.display='none';
-  const cc=document.getElementById('rr-cli-cod');if(cc){cc.value=id;cc.style.borderColor='var(--P)';}
+  const cc=document.getElementById('rr-cli-cod');if(cc){cc.value=c.codigo||c.id||'';cc.style.borderColor='var(--P)';}
   document.getElementById('rr-ven').value=c.vendedor||'';
   const dias=diasDesde(c.ultimo_remito);
   const info=document.getElementById('rr-cli-info');
@@ -2099,7 +2114,8 @@ async function emitirRemitoRapido(){
     zona:c?.zona||'',vendedor:document.getElementById('rr-ven').value||c?.vendedor||'',
     fecha:document.getElementById('rr-fecha').value,
     items:_rrItems,total:tot,cobrado:false,
-    observaciones:document.getElementById('rr-obs').value
+    observaciones:document.getElementById('rr-obs').value,
+    lugar_entrega:document.getElementById('rr-lugar')?.value||''
   }).select().single();
   if(error){alert('Error: '+error.message);return;}
   // Actualizar CC cliente
@@ -2289,7 +2305,7 @@ function selCliNC(id){
   document.getElementById('nc-cli-id').value=id;
   document.getElementById('nc-cli-q').value=c.nombre;
   document.getElementById('nc-cli-drop').style.display='none';
-  const cc=document.getElementById('nc-cli-cod');if(cc){cc.value=id;cc.style.borderColor='var(--P)';}
+  const cc=document.getElementById('nc-cli-cod');if(cc){cc.value=c.codigo||c.id||'';cc.style.borderColor='var(--P)';}
   
   // Mostrar facturas pendientes para imputar
   const remsPend=_remitos.filter(r=>r.cliente_id===id&&!r.cobrado).sort((a,b)=>a.fecha.localeCompare(b.fecha));
