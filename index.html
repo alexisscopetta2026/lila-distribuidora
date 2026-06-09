@@ -389,8 +389,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="card">
     <div class="fr x3">
       <div class="fg">
-        <label>Código cliente</label>
-        <input id="rr-cli-cod" placeholder="Ej: 40" onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();buscarPorCodCli();}" autocomplete="off" style="font-size:15px;font-weight:600">
+        <label>Código cliente &nbsp;<span style="font-size:10px;color:var(--txt2)">[F1=buscar]</span></label>
+        <div style="display:flex;gap:4px">
+          <input id="rr-cli-cod" placeholder="Ej: 40" onkeydown="if(event.key==='F1'){event.preventDefault();abrirBuscadorCli('rr');}else if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();buscarPorCodCli();}" autocomplete="off" style="font-size:15px;font-weight:600;flex:1">
+          <button class="btn sm" onclick="abrirBuscadorCli('rr')" title="Buscar por nombre (F1)" style="padding:4px 8px;font-size:13px">🔍</button>
+        </div>
       </div>
       <div class="fg drop-wrap" style="flex:2">
         <label>O buscar por nombre</label>
@@ -409,9 +412,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div style="background:var(--bg2);border-radius:8px;padding:10px;margin-bottom:10px">
       <div style="font-size:11px;color:var(--txt2);font-weight:500;margin-bottom:7px;text-transform:uppercase">Agregar producto</div>
       <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:flex-end">
-        <div class="fg" style="width:80px">
-          <label>Código</label>
-          <input id="rr-cod" placeholder="Ej: 102" onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();buscarPorCodigoRR();}" autocomplete="off">
+        <div class="fg" style="width:110px">
+          <label>Código &nbsp;<span style="font-size:10px;color:var(--txt2)">[F1]</span></label>
+          <div style="display:flex;gap:3px">
+            <input id="rr-cod" placeholder="Ej: 102" onkeydown="if(event.key==='F1'){event.preventDefault();abrirBuscadorPro('rr');}else if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();buscarPorCodigoRR();}" autocomplete="off" style="flex:1;min-width:0">
+            <button class="btn sm" onclick="abrirBuscadorPro('rr')" title="Buscar por nombre (F1)" style="padding:4px 6px;font-size:12px">🔍</button>
+          </div>
         </div>
         <div class="fg drop-wrap" style="flex:2;min-width:150px">
           <label>Producto</label>
@@ -2077,6 +2083,114 @@ function initRR(){
   renderItemsRR();
 }
 
+
+// ─── BUSCADOR POR NOMBRE (F1) ───
+function abrirBuscadorCli(pfx){
+  const m=_modalMap[pfx];if(!m)return;
+  // Crear modal overlay temporal
+  const existing=document.getElementById('modal-busq');
+  if(existing)existing.remove();
+  const div=document.createElement('div');
+  div.id='modal-busq';
+  div.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center';
+  div.innerHTML=`
+    <div style="background:var(--bg);border-radius:12px;padding:20px;width:420px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.3)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <span style="font-weight:600;font-size:14px">🔍 Buscar cliente</span>
+        <button onclick="document.getElementById('modal-busq').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--txt2)">✕</button>
+      </div>
+      <input id="busq-cli-q" placeholder="Escribí nombre, dirección o teléfono..." autocomplete="off"
+        style="padding:8px 12px;border:1px solid var(--brd);border-radius:8px;font-size:14px;margin-bottom:10px"
+        oninput="filtrarBusqCli()">
+      <div id="busq-cli-list" style="overflow-y:auto;flex:1;max-height:50vh"></div>
+    </div>`;
+  document.body.appendChild(div);
+  // Cerrar al hacer click fuera
+  div.addEventListener('click',e=>{if(e.target===div)div.remove();});
+  setTimeout(()=>{
+    document.getElementById('busq-cli-q')?.focus();
+    filtrarBusqCli(pfx);
+  },50);
+  div._pfx=pfx;
+}
+function filtrarBusqCli(){
+  const div=document.getElementById('modal-busq');if(!div)return;
+  const pfx=div._pfx||'rr';
+  const m=_modalMap[pfx];if(!m)return;
+  const q=(document.getElementById('busq-cli-q')?.value||'').toLowerCase();
+  const lista=document.getElementById('busq-cli-list');if(!lista)return;
+  const res=_clientes.filter(c=>
+    !q||
+    (c.nombre||'').toLowerCase().includes(q)||
+    (c.direccion||'').toLowerCase().includes(q)||
+    (c.telefono||'').includes(q)||
+    String(c.codigo||'').includes(q)
+  ).slice(0,20);
+  lista.innerHTML=res.length?res.map(c=>`
+    <div onmousedown="selDesدeBuscador('${pfx}',${c.id})"
+      style="padding:8px 10px;border-bottom:0.5px solid var(--brd);cursor:pointer;border-radius:6px"
+      onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
+      <div style="font-weight:600">${c.nombre} <span style="color:var(--txt2);font-size:11px">Cód: ${c.codigo||c.id}</span></div>
+      <div style="font-size:11px;color:var(--txt2)">${c.direccion||''} ${c.localidad||''} ${c.telefono?'· Tel: '+c.telefono:''}</div>
+    </div>`).join(''):'<div style="padding:12px;color:var(--txt2);font-size:12px">Sin resultados</div>';
+}
+function selDesدeBuscador(pfx,id){
+  document.getElementById('modal-busq')?.remove();
+  const m=_modalMap[pfx];if(!m)return;
+  m.selCli(id);
+}
+
+function abrirBuscadorPro(pfx){
+  const m=_modalMap[pfx];if(!m||!m.codPro)return;
+  const existing=document.getElementById('modal-busq-pro');
+  if(existing)existing.remove();
+  const div=document.createElement('div');
+  div.id='modal-busq-pro';
+  div.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center';
+  div.innerHTML=`
+    <div style="background:var(--bg);border-radius:12px;padding:20px;width:420px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.3)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <span style="font-weight:600;font-size:14px">🔍 Buscar producto</span>
+        <button onclick="document.getElementById('modal-busq-pro').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--txt2)">✕</button>
+      </div>
+      <input id="busq-pro-q" placeholder="Escribí nombre o código..." autocomplete="off"
+        style="padding:8px 12px;border:1px solid var(--brd);border-radius:8px;font-size:14px;margin-bottom:10px"
+        oninput="filtrarBusqPro()">
+      <div id="busq-pro-list" style="overflow-y:auto;flex:1;max-height:50vh"></div>
+    </div>`;
+  document.body.appendChild(div);
+  div.addEventListener('click',e=>{if(e.target===div)div.remove();});
+  div._pfx=pfx;
+  setTimeout(()=>{
+    document.getElementById('busq-pro-q')?.focus();
+    filtrarBusqPro();
+  },50);
+}
+function filtrarBusqPro(){
+  const div=document.getElementById('modal-busq-pro');if(!div)return;
+  const pfx=div._pfx||'rr';
+  const m=_modalMap[pfx];if(!m)return;
+  const q=(document.getElementById('busq-pro-q')?.value||'').toLowerCase();
+  const lista=document.getElementById('busq-pro-list');if(!lista)return;
+  const res=_productos.filter(p=>
+    !q||
+    (p.nombre||'').toLowerCase().includes(q)||
+    String(p.codigo||'').includes(q)
+  ).slice(0,20);
+  lista.innerHTML=res.length?res.map(p=>`
+    <div onmousedown="selProDesdeBuscador('${pfx}',${p.id})"
+      style="padding:8px 10px;border-bottom:0.5px solid var(--brd);cursor:pointer;border-radius:6px"
+      onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
+      <div style="font-weight:600">${p.nombre} <span style="color:var(--txt2);font-size:11px">Cód: ${p.codigo||p.id}</span></div>
+      <div style="font-size:11px;color:var(--txt2)">${fmt(p.precio)} · ${p.unidad||''} · Stock: ${p.stock||0}</div>
+    </div>`).join(''):'<div style="padding:12px;color:var(--txt2);font-size:12px">Sin resultados</div>';
+}
+function selProDesdeBuscador(pfx,id){
+  document.getElementById('modal-busq-pro')?.remove();
+  const m=_modalMap[pfx];if(!m)return;
+  m.selPro(id);
+  setTimeout(()=>{const f=document.getElementById(m.focoProTras);if(f)f.focus();},50);
+}
 // ─── BÚSQUEDA GENÉRICA POR CÓDIGO ───
 // Mapeo: prefijo modal → {selCli, selPro, campoNombre, campoCodPro, campoNomPro, foco siguiente}
 const _modalMap = {
