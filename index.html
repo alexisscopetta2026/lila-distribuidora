@@ -869,7 +869,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="mb" id="m-ver-body"></div>
   <div class="mf">
     <button class="btn" onclick="cerrar('m-ver')">Cerrar</button>
-    <button class="btn A" id="m-ver-print" style="display:none" onclick="_verTipo==='carga'?imprimirHojaRuta():imprimirRemito()">🖨️ Imprimir</button>
+    <button class="btn" id="m-ver-print2" style="display:none" onclick="imprimirHojaCarga()">🖨️ Hoja de carga</button>
+    <button class="btn A" id="m-ver-print" style="display:none" onclick="_verTipo==='carga'?imprimirHojaRuta():imprimirRemito()">🖨️ Hoja de ruta</button>
   </div>
 </div>
 </div>
@@ -1252,6 +1253,7 @@ function resumenCarga(id){
   const totalGeneral=peds.reduce((a,p)=>a+p.total,0);
   document.getElementById('m-ver-title').textContent='Carga #'+cg.id+' — '+cg.vendedor;
   document.getElementById('m-ver-print').style.display='inline-flex';
+  document.getElementById('m-ver-print2').style.display='inline-flex';
   document.getElementById('m-ver-body').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
       <div style="font-size:12px;color:var(--txt2)">${cg.fecha} · ${peds.length} paradas · Vendedor: <b>${cg.vendedor||'—'}</b></div>
@@ -1357,12 +1359,78 @@ function verRemito(id){
   const r=_remitos.find(x=>x.id===id);if(!r)return;
   _remActual=r;_verTipo='remito';
   document.getElementById('m-ver-title').textContent='Remito R-'+String(r.id).padStart(4,'0')+' — '+r.cliente;
+  const _p2=document.getElementById('m-ver-print2');if(_p2)_p2.style.display='none';
   document.getElementById('m-ver-body').innerHTML=detalleHTML(r,true);
   document.getElementById('m-ver-print').style.display='inline-flex';
   document.getElementById('m-ver').classList.add('on');
 }
 function impRem(id){verRemito(id);setTimeout(imprimirRemito,200);}
 
+
+function imprimirHojaCarga(){
+  const cg=_cargaActual;
+  if(!cg){alert('No hay carga activa');return;}
+  const peds=_pedidos.filter(p=>(cg.pedidos||[]).includes(p.id));
+  const fecha=cg.fecha||new Date().toISOString().split('T')[0];
+  const vendedor=cg.vendedor||'—';
+
+  const bloques=peds.map((p,i)=>{
+    const c=_clientes.find(x=>x.id==p.cliente_id)||{};
+    const filasProd=(p.items||[]).map((it,j)=>{
+      const esPeso=(it.un||'').toLowerCase()==='kg';
+      return '<tr>'
+        +'<td style="padding:5px 8px;border:1px solid #ccc;text-align:center;color:#777;font-size:11px">'+(j+1)+'</td>'
+        +'<td style="padding:5px 8px;border:1px solid #ccc;font-weight:500">'+it.nom+'</td>'
+        +'<td style="padding:5px 8px;border:1px solid #ccc;text-align:center">'+it.cant+'</td>'
+        +'<td style="padding:5px 8px;border:1px solid #ccc;text-align:center;color:#555">'+( it.un||'')+'</td>'
+        +'<td style="padding:5px 8px;border:1px solid #ccc;text-align:center">'+(esPeso?'___________':'—')+'</td>'
+        +'</tr>';
+    }).join('');
+
+    return '<div style="margin-bottom:16px;page-break-inside:avoid">'
+      +'<div style="background:#1a7a52;color:#fff;padding:6px 10px;font-weight:700;font-size:13px;border-radius:4px 4px 0 0">'
+        +(i+1)+'. '+(c.codigo||p.cliente_id||'')+' — '+p.cliente
+        +'<span style="float:right;font-size:11px;font-weight:400">'+(c.direccion||'')+' '+(p.localidad||'')+'</span>'
+      +'</div>'
+      +'<table style="width:100%;border-collapse:collapse">'
+        +'<thead><tr style="background:#e8f5e9">'
+          +'<th style="padding:4px 8px;border:1px solid #ccc;width:30px;text-align:center">#</th>'
+          +'<th style="padding:4px 8px;border:1px solid #ccc;text-align:left">Producto</th>'
+          +'<th style="padding:4px 8px;border:1px solid #ccc;width:60px;text-align:center">Cant.</th>'
+          +'<th style="padding:4px 8px;border:1px solid #ccc;width:50px;text-align:center">Unid.</th>'
+          +'<th style="padding:4px 8px;border:1px solid #ccc;width:110px;text-align:center">Peso real (kg)</th>'
+        +'</tr></thead>'
+        +'<tbody>'+filasProd+'</tbody>'
+      +'</table>'
+      +'<div style="text-align:right;padding:4px 8px;border:1px solid #ccc;border-top:none;font-size:12px;background:#fafafa">'
+        +'Vendedor: <b>'+vendedor+'</b> &nbsp;&nbsp; Total estimado: <b>'+fmt(p.total)+'</b>'
+      +'</div>'
+    +'</div>';
+  }).join('');
+
+  const w=window.open('','_blank');
+  w.document.write('<!DOCTYPE html><html><head><title>Hoja de Carga #'+cg.id+'</title>'
+    +'<style>'
+    +'body{font-family:Arial,sans-serif;padding:15px;color:#000;font-size:12px;margin:0}'
+    +'@page{size:A4 portrait;margin:10mm}'
+    +'@media print{.no-print{display:none}}'
+    +'</style></head><body>'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1a7a52;padding-bottom:8px;margin-bottom:14px">'
+      +'<div>'
+        +'<div style="font-size:16px;font-weight:700;color:#1a7a52">🌸 DISTRIBUIDORA LILA — Hoja de Carga</div>'
+        +'<div style="font-size:12px;margin-top:3px"><b>Repartidor:</b> '+vendedor+' &nbsp;&nbsp; <b>Fecha:</b> '+fecha+' &nbsp;&nbsp; <b>Carga #:</b> '+cg.id+'</div>'
+      +'</div>'
+      +'<div style="text-align:right;font-size:11px;color:#777">'
+        +'<div>'+peds.length+' paradas</div>'
+      +'</div>'
+    +'</div>'
+    +bloques
+    +'<div class="no-print" style="text-align:center;margin-top:16px">'
+      +'<button onclick="window.print()" style="padding:8px 24px;background:#1a7a52;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨️ Imprimir</button>'
+    +'</div>'
+    +'</body></html>');
+  w.document.close();
+}
 function imprimirHojaRuta(){
   const cg=_cargaActual;
   if(!cg){alert('No hay carga activa');return;}
