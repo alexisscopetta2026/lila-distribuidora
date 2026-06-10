@@ -277,18 +277,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </div>
       <div class="fg drop-wrap" style="flex:2;min-width:140px">
         <label style="font-size:10px">O NOMBRE</label>
-        <input id="cob-cli-q" placeholder="Buscar..." oninput="dropCliCob()" autocomplete="off">
+        <input id="cob-cli-q" placeholder="Buscar..." oninput="dropCliCob()" autocomplete="off"
+          onkeydown="if(event.key==='Tab'||event.key==='Enter'){event.preventDefault();document.getElementById('cob-fecha').focus();}">
         <div class="drop" id="cob-cli-drop"></div>
         <input type="hidden" id="cob-cli-id">
       </div>
-      <div class="fg" style="width:115px"><label style="font-size:10px">FECHA</label><input type="date" id="cob-fecha"></div>
+      <div class="fg" style="width:115px"><label style="font-size:10px">FECHA</label>
+        <input type="date" id="cob-fecha"
+          onkeydown="if(event.key==='Tab'||event.key==='Enter'){event.preventDefault();document.getElementById('cob-ven-nom').focus();}">
+      </div>
       <div class="fg" style="width:120px">
         <label style="font-size:10px">VENDEDOR</label>
         <input id="cob-ven-nom" placeholder="Nombre" onkeydown="if(event.key==='Tab'||event.key==='Enter'){event.preventDefault();document.getElementById('cob-reparto').focus();}">
       </div>
       <div class="fg" style="width:75px">
-        <label style="font-size:10px">REPARTO</label>
-        <input id="cob-reparto" placeholder="Ej: 1" onkeydown="if(event.key==='Tab'||event.key==='Enter'){event.preventDefault();document.getElementById('cob-forma-ef').focus();}">
+        <label style="font-size:10px">RENDICIÓN</label>
+        <input id="cob-reparto" placeholder="—" onkeydown="if(event.key==='Tab'||event.key==='Enter'){event.preventDefault();document.getElementById('cob-forma-ef').focus();}">
       </div>
     </div>
     <!-- Info cliente -->
@@ -1958,9 +1962,15 @@ function selForma(forma){
   setTimeout(()=>{const el=document.getElementById(ids[key]);if(el){el.focus();el.select();}},50);
 }
 function focusImprimerInput(){
-  const first=document.querySelector('[id^="imp-rem-"]');
-  if(first){first.focus();first.select();}
-  else{document.getElementById('cob-obs2')?.focus();}
+  const inputs=document.querySelectorAll('[id^="imp-rem-"]');
+  if(inputs.length){
+    // Pone foco en el primer campo de imputación que esté en 0
+    const zero=[...inputs].find(i=>!parseFloat(i.value));
+    const target=zero||inputs[0];
+    target.focus();target.select();
+  } else {
+    document.getElementById('cob-obs2')?.focus();
+  }
 }
 function calcTotalCobro(){
   const ef=parseFloat(document.getElementById('cob-efectivo')?.value)||0;
@@ -2052,7 +2062,8 @@ function selCliCob(id){
         </div>
         <input type="number" id="imp-rem-${r.id}" value="0" min="0" max="${r.saldo_pendiente||r.total}" step="0.01"
           style="width:110px;padding:4px 7px;border:1px solid var(--brd);border-radius:6px;text-align:right;font-size:13px"
-          placeholder="0" oninput="calcTotalDesdeImputacion()">
+          placeholder="0" oninput="calcTotalDesdeImputacion()"
+          onkeydown="if(event.key==='Tab'||event.key==='Enter'){event.preventDefault();const inputs=[...document.querySelectorAll('[id^=imp-rem-]')];const idx=inputs.indexOf(this);if(idx<inputs.length-1){inputs[idx+1].focus();inputs[idx+1].select();}else{document.getElementById('cob-obs2')?.focus();}}">
         <button class="btn sm" style="background:var(--P);color:#fff;border-color:var(--P)" onclick="imputarTotal(${r.id},${r.saldo_pendiente||r.total})" title="Imputar total">✓ Todo</button>
       </div>`).join('');
   } else {
@@ -2062,8 +2073,12 @@ function selCliCob(id){
   // Sugerir saldo en efectivo
   const ef=document.getElementById('cob-efectivo');
   if(ef&&(c.saldo||0)>0){ef.value=Math.round(c.saldo);calcTotalCobro();}
-  // Foco al campo efectivo
-  setTimeout(()=>{if(ef)ef.focus();},80);
+  // Foco al vendedor para continuar con Tab
+  setTimeout(()=>{
+    const ven=document.getElementById('cob-ven-nom');
+    if(ven&&!ven.value)ven.focus();
+    else document.getElementById('cob-forma-ef')?.focus();
+  },80);
 }
 function imputarTotal(remId, total){
   const input=document.getElementById(`imp-rem-${remId}`);
