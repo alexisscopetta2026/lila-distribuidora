@@ -882,7 +882,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <input type="hidden" id="cli-edit-id">
     <div class="fr">
       <div class="fg"><label>Nombre *</label><input id="cli-nom"></div>
-      <div class="fg"><label>CUIT</label><input id="cli-cuit"></div>
+      <div class="fg"><label>CUIT</label><input id="cli-cuit" placeholder="20-12345678-9"></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label>Razón social <span style="font-size:10px;color:var(--txt2)">(AFIP — si difiere del nombre)</span></label><input id="cli-razon" placeholder="Igual al nombre si es el mismo"></div>
+      <div class="fg"><label>Categoría IVA</label><select id="cli-cat"><option>Cons. Final</option><option>Resp. Inscr.</option><option>Monotributista</option><option>Exento</option></select></div>
     </div>
     <div class="fr">
       <div class="fg"><label>Dirección</label><input id="cli-dir"></div>
@@ -890,7 +894,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div class="fr x3">
       <div class="fg"><label>Teléfono</label><input id="cli-tel"></div>
-      <div class="fg"><label>Categoría</label><select id="cli-cat"><option>Cons. Final</option><option>Resp. Inscr.</option><option>Monotributista</option><option>Exento</option></select></div>
       <div class="fg"><label>Zona</label><input id="cli-zona" placeholder="Ej: 1"></div>
     </div>
     <div class="fr x3">
@@ -1316,6 +1319,7 @@ function imprimirRemitosCarga(cargaId){
   const bloques=rems.map((r,i)=>{
     const cli=_clientes.find(x=>String(x.id)===String(r.cliente_id))||{};
     const dir=r.lugar_entrega||r.direccion||cli.direccion||cli.domicilio||'';
+    const tel=r.telefono||cli.telefono||cli.celular||'';
     let tot=0;
     const filas=(r.items||[]).map(it=>{
       const neto=it.precio*it.cant*(1-(it.dto||0)/100);tot+=neto;
@@ -1330,7 +1334,7 @@ function imprimirRemitosCarga(cargaId){
     return '<div style="margin-bottom:16px;page-break-inside:avoid;border:1px solid #ccc;border-radius:4px;overflow:hidden">'
       +'<div style="background:#1a7a52;color:#fff;padding:6px 10px;display:flex;justify-content:space-between;align-items:center">'
         +'<span style="font-weight:700;font-size:13px">'+(i+1)+'. R-'+String(r.id).padStart(4,'0')+' — '+r.cliente+'</span>'
-        +'<span style="font-size:11px;font-weight:400">'+(dir?dir+' · ':'')+r.localidad+'</span>'
+        +'<span style="font-size:11px;font-weight:400">'+(dir?dir+' · ':'')+r.localidad+(tel?' · 📞 '+tel:'')+'</span>'
       +'</div>'
       +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
         +'<thead><tr style="background:#e8f5e9">'
@@ -1800,6 +1804,7 @@ function imprimirHojaRutaGrupal(){
   const bloques=rems.map((r,i)=>{
     const cli=_clientes.find(x=>String(x.id)===String(r.cliente_id))||{};
     const dir=r.lugar_entrega||r.direccion||cli.direccion||cli.domicilio||'';
+    const tel=r.telefono||cli.telefono||cli.celular||'';
     let tot=0;
     const filas=(r.items||[]).map(it=>{
       const neto=it.precio*it.cant*(1-(it.dto||0)/100);tot+=neto;
@@ -1814,7 +1819,7 @@ function imprimirHojaRutaGrupal(){
     return '<div style="margin-bottom:18px;page-break-inside:avoid;border:1px solid #ccc;border-radius:4px;overflow:hidden">'
       +'<div style="background:#1a7a52;color:#fff;padding:6px 10px;display:flex;justify-content:space-between;align-items:center">'
         +'<span style="font-weight:700;font-size:13px">'+(i+1)+'. R-'+String(r.id).padStart(4,'0')+' — '+r.cliente+'</span>'
-        +'<span style="font-size:11px;font-weight:400">'+(dir?dir+' · ':'')+r.localidad+'</span>'
+        +'<span style="font-size:11px;font-weight:400">'+(dir?dir+' · ':'')+r.localidad+(tel?' · 📞 '+tel:'')+'</span>'
       +'</div>'
       +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
         +'<thead><tr style="background:#e8f5e9">'
@@ -2423,7 +2428,7 @@ function renderClientes(){
 function abrirCliente(){
   document.getElementById('cli-edit-id').value='';
   document.getElementById('m-cli-title').textContent='Nuevo cliente';
-  ['cli-nom','cli-cuit','cli-dir','cli-loc','cli-tel','cli-zona','cli-ven'].forEach(id=>document.getElementById(id).value='');
+  ['cli-nom','cli-cuit','cli-razon','cli-dir','cli-loc','cli-tel','cli-zona','cli-ven'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('cli-dto').value='0';document.getElementById('cli-saldo').value='0';
   document.getElementById('cli-cpg').value='0';document.getElementById('cli-lista').value='1';
   document.getElementById('m-cliente').classList.add('on');
@@ -2434,6 +2439,8 @@ function editarCliente(id){
   document.getElementById('m-cli-title').textContent='Editar cliente';
   document.getElementById('cli-nom').value=c.nombre||'';
   document.getElementById('cli-cuit').value=c.cuit||'';
+  const razon=document.getElementById('cli-razon');if(razon)razon.value=c.razon_social||'';
+  const cat=document.getElementById('cli-cat');if(cat)cat.value=c.categoria||'Cons. Final';
   document.getElementById('cli-dir').value=c.direccion||'';
   document.getElementById('cli-loc').value=c.localidad||'';
   document.getElementById('cli-tel').value=c.telefono||'';
@@ -2449,7 +2456,11 @@ async function guardarCliente(){
   const nom=(document.getElementById('cli-nom').value||'').trim().toUpperCase();
   if(!nom){alert('Ingresá el nombre');return;}
   const editId=document.getElementById('cli-edit-id').value;
+  const razonEl=document.getElementById('cli-razon');
+  const catEl=document.getElementById('cli-cat');
   const obj={nombre:nom,cuit:document.getElementById('cli-cuit').value.trim(),
+    razon_social:(razonEl?.value||'').trim()||nom,
+    categoria:catEl?.value||'Cons. Final',
     direccion:document.getElementById('cli-dir').value.trim(),
     localidad:document.getElementById('cli-loc').value.trim().toUpperCase(),
     telefono:document.getElementById('cli-tel').value.trim(),
