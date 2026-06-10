@@ -2055,8 +2055,8 @@ function selCliCob(id){
   const seccion=document.getElementById('cob-imputacion-section');
   const lista=document.getElementById('cob-remitos-pendientes');
   if(remsPend.length){
-    seccion.style.display='block';
-    lista.innerHTML=remsPend.map(r=>`
+    if(seccion)seccion.style.display='block';
+    if(lista)lista.innerHTML=remsPend.map(r=>`
       <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:0.5px solid var(--brd);font-size:13px">
         <div style="flex:1">
           <span style="font-weight:500">R-${String(r.id).padStart(4,'0')}</span>
@@ -2070,8 +2070,8 @@ function selCliCob(id){
         <button class="btn sm" style="background:var(--P);color:#fff;border-color:var(--P)" onclick="imputarTotal(${r.id},${r.saldo_pendiente||r.total})" title="Imputar total">✓ Todo</button>
       </div>`).join('');
   } else {
-    seccion.style.display='none';
-    lista.innerHTML='';
+    if(seccion)seccion.style.display='none';
+    if(lista)lista.innerHTML='<span style="font-size:12px;color:var(--txt2);font-style:italic">Sin facturas pendientes</span>';
   }
   // Sugerir saldo en efectivo
   const ef=document.getElementById('cob-efectivo');
