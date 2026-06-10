@@ -776,7 +776,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div class="fr">
       <div class="fg"><label>Fecha pedido</label><input type="date" id="np-fecha"></div>
-      <div class="fg"><label>Observaciones</label><input id="np-obs"></div>
+      <div class="fg"><label>Observaciones del pedido</label><input id="np-obs" placeholder="Opcional"></div>
+      <div class="fg" style="min-width:180px">
+        <label>Visita <span style="font-size:10px;color:var(--txt2)">(resultado)</span></label>
+        <select id="np-visita">
+          <option value="">— Sin registrar —</option>
+          <option value="pedido tomado">✅ Pedido tomado</option>
+          <option value="no estaba">🚪 No estaba</option>
+          <option value="no compró">❌ No compró</option>
+          <option value="dejó mensaje">📝 Dejó mensaje</option>
+          <option value="visita próxima semana">📅 Próxima semana</option>
+        </select>
+      </div>
     </div>
     <div id="np-cli-info" style="display:none;background:var(--bg2);border-radius:8px;padding:9px 12px;font-size:12px;color:var(--txt2);margin-bottom:11px"></div>
     <div style="background:var(--bg2);border-radius:8px;padding:10px;margin-bottom:10px">
@@ -1090,7 +1101,7 @@ function renderPedidos(){
       <div>
         <div class="ccard-nm">#${p.id} — ${p.cliente}</div>
         <div class="ccard-sub">${p.localidad||''} · Zona ${p.zona||'-'} · ${p.vendedor||'—'} · ${p.fecha||''}</div>
-        <div style="font-size:11px;color:var(--txt2);margin-top:2px">${(p.items||[]).length} productos</div>
+        <div style="font-size:11px;color:var(--txt2);margin-top:2px">${(p.items||[]).length} productos${p.visita?` · <span style="color:var(--P);font-weight:500">👁 ${p.visita}</span>`:''}</div>
       </div>
       <div style="text-align:right"><div class="ccard-tot">${fmt(p.total)}</div><span class="b ${stBadge(p.estado)}">${p.estado.replace('_',' ')}</span></div>
     </div>
@@ -1117,6 +1128,7 @@ async function elimPedido(id){
 function abrirPedido(){
   _items=[];_proTemp=null;
   ['np-cli-q','np-ven','np-obs','np-pro-q'].forEach(id=>document.getElementById(id).value='');
+  const nv=document.getElementById('np-visita');if(nv)nv.value='';
   document.getElementById('np-cli-id').value='';
   ['np-cli-cod','np-cod'].forEach(id=>{const e=document.getElementById(id);if(e){e.value='';e.style.borderColor='';}});
   document.getElementById('np-cant').value='1';
@@ -1130,14 +1142,8 @@ function dropCli(){
   const q=(document.getElementById('np-cli-q').value||'').toLowerCase();
   const drop=document.getElementById('np-cli-drop');
   if(q.length<1){drop.style.display='none';return;}
-  const m=_clientes.filter(c=>(c.nombre||'').toLowerCase().includes(q)||(c.telefono||'').includes(q)||(String(c.codigo||'')).includes(q)).slice(0,8);
-  drop.innerHTML=m.map(c=>`<div onmousedown="selCli(${c.id})" style="padding:6px 10px;cursor:pointer">
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <span><span style="font-size:10px;color:var(--txt2);margin-right:5px">[${c.codigo||c.id}]</span><strong>${c.nombre}</strong></span>
-      <span style="font-size:12px;font-weight:700;color:${(c.saldo||0)>0?'var(--D)':'var(--P)'}">${fmt(c.saldo||0)}</span>
-    </div>
-    <div style="font-size:11px;color:var(--txt2);margin-top:2px">${c.localidad||''} · Z${c.zona||'-'} · ${c.telefono||'—'}</div>
-  </div>`).join('');
+  const m=_clientes.filter(c=>(c.nombre||'').toLowerCase().includes(q)||(c.telefono||'').includes(q)).slice(0,8);
+  drop.innerHTML=m.map(c=>`<div onmousedown="selCli(${c.id})"><strong>${c.nombre}</strong> <span style="color:var(--txt2);font-size:11px">${c.localidad} · Z${c.zona}</span></div>`).join('');
   drop.style.display=m.length?'block':'none';
 }
 function selCli(id){
@@ -1208,7 +1214,7 @@ async function guardarPedido(){
   const {error}=await sb.from('pedidos').insert({
     cliente_id:parseInt(cid),cliente:c?.nombre||'?',localidad:c?.localidad||'',
     zona:c?.zona||'',vendedor:document.getElementById('np-ven').value||c?.vendedor||'',
-    fecha:document.getElementById('np-fecha').value,observaciones:document.getElementById('np-obs').value,
+    fecha:document.getElementById('np-fecha').value,observaciones:document.getElementById('np-obs').value,visita:document.getElementById('np-visita').value||null,
     items:_items,total:Math.round(tot*100)/100,estado:'pendiente'
   });
   if(error){alert('Error: '+error.message);return;}
@@ -1914,28 +1920,20 @@ function detalleHTML(d,isRem){
 
 // ─── COBROS ───
 function selForma(forma){
-  // Ocultar todos los bloques
+  const map={efectivo:'ef',transferencia:'tr',cheque:'ch'};
+  const key=map[forma]||'ef';
   ['ef','tr','ch'].forEach(f=>{
-    const b=document.getElementById('cob-bloque-'+f);
-    if(b)b.style.display='none';
+    const b=document.getElementById('cob-bloque-'+f);if(b)b.style.display='none';
     const btn=document.getElementById('cob-forma-'+f);
     if(btn){btn.style.background='';btn.style.color='';btn.style.borderColor='';}
   });
-  // Mostrar el seleccionado
-  const bloque=document.getElementById('cob-bloque-'+forma.substring(0,2).replace('tr','tr').replace('ef','ef').replace('ch','ch'));
-  // Mapeo correcto
-  const map={efectivo:'ef',transferencia:'tr',cheque:'ch'};
-  const key=map[forma]||'ef';
-  const b=document.getElementById('cob-bloque-'+key);
-  if(b)b.style.display='block';
+  const b=document.getElementById('cob-bloque-'+key);if(b)b.style.display='block';
   const btn=document.getElementById('cob-forma-'+key);
   if(btn){btn.style.background='var(--P)';btn.style.color='#fff';btn.style.borderColor='var(--P)';}
-  // Foco al monto correspondiente
   const ids={ef:'cob-efectivo',tr:'cob-transferencia',ch:'cob-cheque3'};
   setTimeout(()=>{const el=document.getElementById(ids[key]);if(el){el.focus();el.select();}},50);
 }
 function focusImprimerInput(){
-  // Foco al primer input de imputación disponible
   const first=document.querySelector('[id^="imp-rem-"]');
   if(first){first.focus();first.select();}
   else{document.getElementById('cob-obs2')?.focus();}
@@ -1946,7 +1944,6 @@ function calcTotalCobro(){
   const ch3=parseFloat(document.getElementById('cob-cheque3')?.value)||0;
   const tot=ef+tr+ch3;
   const el=document.getElementById('cob-total-display');if(el)el.textContent=fmt(tot);
-  const rs=document.getElementById('cob-valores-resumen');if(rs)rs.textContent=fmt(tot);
   calcTotalDesdeImputacion();
 }
   const ef=parseFloat(document.getElementById('cob-efectivo')?.value)||0;
@@ -1995,11 +1992,9 @@ function limpiarModalCobro(){
   const rs2=document.getElementById('cob-resto-section');if(rs2)rs2.style.display='none';
   const av=document.getElementById('cob-saldo-favor-aviso');if(av)av.style.display='none';
   const ci=document.getElementById('cob-cli-info');if(ci)ci.style.display='none';
-  // Resetear pie
   const elImp=document.getElementById('cob-imputado-monto');if(elImp)elImp.textContent='$0';
   const elRec=document.getElementById('cob-recibido-monto');if(elRec)elRec.textContent='$0';
   const elRes=document.getElementById('cob-resto-display');if(elRes){elRes.textContent='$0';elRes.style.color='var(--W)';}
-  // Resetear botones forma
   ['ef','tr','ch'].forEach(f=>{
     const b=document.getElementById('cob-bloque-'+f);if(b)b.style.display='none';
     const btn=document.getElementById('cob-forma-'+f);if(btn){btn.style.background='';btn.style.color='';btn.style.borderColor='';}
