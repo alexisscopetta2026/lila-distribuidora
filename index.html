@@ -1940,17 +1940,6 @@ function calcTotalCobro(){
   const el=document.getElementById('cob-total-display');if(el)el.textContent=fmt(tot);
   calcTotalDesdeImputacion();
 }
-  const ef=parseFloat(document.getElementById('cob-efectivo')?.value)||0;
-  const tr=parseFloat(document.getElementById('cob-transferencia')?.value)||0;
-  const ch3=parseFloat(document.getElementById('cob-cheque3')?.value)||0;
-  const rg=parseFloat(document.getElementById('cob-ret-gan')?.value)||0;
-  const rib=parseFloat(document.getElementById('cob-ret-ib')?.value)||0;
-  const ro=parseFloat(document.getElementById('cob-ret-otras')?.value)||0;
-  const tot=ef+tr+ch3+rg+rib+ro;
-  const el=document.getElementById('cob-total-display');if(el)el.textContent=fmt(tot);
-  const rs=document.getElementById('cob-valores-resumen');if(rs)rs.textContent=fmt(tot);
-  calcTotalDesdeImputacion();
-}
 function toggleListaCobros(){
   const s=document.getElementById('cob-historial-section');
   if(!s)return;
