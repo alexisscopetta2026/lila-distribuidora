@@ -886,7 +886,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <input type="hidden" id="cli-edit-id">
     <div class="fr">
       <div class="fg"><label>Nombre *</label><input id="cli-nom"></div>
-      <div class="fg"><label>CUIT</label><input id="cli-cuit" placeholder="20-12345678-9"></div>
+      <div class="fg"><label>CUIT <span style="font-size:10px;color:var(--txt2)">[Enter = buscar en ARCA]</span></label>
+        <input id="cli-cuit" placeholder="20-12345678-9"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();const cuit=(this.value||'').replace(/\D/g,'');if(cuit.length>=10){window.open('https://www.cuitonline.com/constancia/'+cuit,'_blank');}else{alert('Ingresá el CUIT completo');}}">
+      </div>
     </div>
     <div class="fr">
       <div class="fg"><label>Razón social <span style="font-size:10px;color:var(--txt2)">(AFIP — si difiere del nombre)</span></label><input id="cli-razon" placeholder="Igual al nombre si es el mismo"></div>
