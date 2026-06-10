@@ -2076,10 +2076,7 @@ function selCliCob(id){
   // Sugerir saldo en efectivo
   const ef=document.getElementById('cob-efectivo');
   if(ef&&(c.saldo||0)>0){ef.value=Math.round(c.saldo);calcTotalCobro();}
-  // Foco manejado por buscarCodCli vía focoCliTras
-  // Si se seleccionó por dropdown, ir a vendedor
-  const fromDrop=!document.getElementById('cob-cli-cod')?.value;
-  if(fromDrop)setTimeout(()=>{document.getElementById('cob-ven-nom')?.focus();},80);
+  // foco manejado por buscarCodCli o dropdown
 }
 function imputarTotal(remId, total){
   const input=document.getElementById(`imp-rem-${remId}`);
@@ -2750,7 +2747,7 @@ function buscarCodCli(pfx){
     if(el)el.style.borderColor='var(--P)';
     // foco al siguiente campo útil
     const sig=document.getElementById(m.focoCliTras);
-    if(sig)setTimeout(()=>sig.focus(),50);
+    if(sig)setTimeout(()=>{sig.focus();if(sig.select)sig.select();},150);
   } else {
     if(el)el.style.borderColor='var(--D)';
   }
