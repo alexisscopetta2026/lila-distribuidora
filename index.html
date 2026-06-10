@@ -774,6 +774,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </div>
       <div class="fg"><label>Vendedor</label><input id="np-ven" placeholder="Nombre vendedor"></div>
     </div>
+    <!-- Info cliente — arriba y destacada -->
+    <div id="np-cli-info" style="display:none;background:var(--PL);border:1px solid var(--P);border-radius:8px;padding:10px 14px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+        <div>
+          <div id="np-cli-nombre" style="font-size:15px;font-weight:700;color:var(--PD)"></div>
+          <div id="np-cli-detalle" style="font-size:12px;color:var(--txt2);margin-top:2px"></div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:10px;color:var(--txt2);text-transform:uppercase">Saldo CC</div>
+          <div id="np-cli-saldo" style="font-size:20px;font-weight:700"></div>
+        </div>
+      </div>
+    </div>
     <div class="fr">
       <div class="fg"><label>Fecha pedido</label><input type="date" id="np-fecha"></div>
       <div class="fg"><label>Observaciones del pedido</label><input id="np-obs" placeholder="Opcional"></div>
@@ -789,7 +802,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         </select>
       </div>
     </div>
-    <div id="np-cli-info" style="display:none;background:var(--bg2);border-radius:8px;padding:9px 12px;font-size:12px;color:var(--txt2);margin-bottom:11px"></div>
     <div style="background:var(--bg2);border-radius:8px;padding:10px;margin-bottom:10px">
       <div style="font-size:11px;color:var(--txt2);font-weight:500;margin-bottom:7px;text-transform:uppercase">Agregar producto</div>
       <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:flex-end">
@@ -1150,7 +1162,15 @@ function selCli(id){
   document.getElementById('np-dto').value=c.descuento||0;
   const dias=diasDesde(c.ultimo_remito);
   const info=document.getElementById('np-cli-info');
-  info.innerHTML=`📍 ${c.localidad} · Z${c.zona} | 📞 ${c.telefono||'—'} | Dto: <b>${c.descuento||0}%</b> | Saldo CC: <b style="${(c.saldo||0)>0?'color:var(--D)':''}">${fmt(c.saldo)}</b>${dias!==null?` | Último rem: <b>${dias} días</b>`:''}`;
+  const nombre=document.getElementById('np-cli-nombre');
+  const detalle=document.getElementById('np-cli-detalle');
+  const saldoEl=document.getElementById('np-cli-saldo');
+  if(nombre)nombre.textContent=c.nombre;
+  if(detalle)detalle.textContent=`📍 ${c.localidad||''} · Z${c.zona||'-'} · 📞 ${c.telefono||'—'} · Dto: ${c.descuento||0}%${dias!==null?' · Último rem: '+dias+' días':''}`;
+  if(saldoEl){
+    saldoEl.textContent=fmt(c.saldo||0);
+    saldoEl.style.color=(c.saldo||0)>0?'var(--D)':'var(--P)';
+  }
   info.style.display='block';
 }
 function dropPro(){
