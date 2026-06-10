@@ -1648,10 +1648,11 @@ function imprimirHojaRuta(){
     const c=_clientes.find(x=>x.id==p.cliente_id)||{};
     const dir=c.direccion||p.localidad||'—';
     const loc=p.localidad||c.localidad||'';
+    const tel=c.telefono||c.celular||'';
     return '<tr style="'+(i%2===0?'':'background:#f9f9f9')+'">'
       +'<td style="padding:5px 7px;border:1px solid #ccc;text-align:center;font-size:11px;color:#777">'+(i+1)+'</td>'
       +'<td style="padding:5px 7px;border:1px solid #ccc;font-weight:600">'+(c.codigo||p.cliente_id||'')+'</td>'
-      +'<td style="padding:5px 7px;border:1px solid #ccc;font-weight:600">'+p.cliente+'</td>'
+      +'<td style="padding:5px 7px;border:1px solid #ccc;font-weight:600">'+p.cliente+'<div style="font-size:10px;color:#555;font-weight:400">'+(tel?'📞 '+tel:'')+'</div></td>'
       +'<td style="padding:5px 7px;border:1px solid #ccc;font-size:11px;color:#555">'+dir+'</td>'
       +'<td style="padding:5px 7px;border:1px solid #ccc;font-size:11px">'+loc+'</td>'
       +'<td style="padding:5px 7px;border:1px solid #ccc;text-align:center;font-size:11px">'+(c.zona||p.zona||'')+'</td>'
