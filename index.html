@@ -1317,7 +1317,7 @@ function imprimirRemitosCarga(cargaId){
   const titulo=(cg.nombre||'Carga #'+cg.id);
 
   const bloques=rems.map((r,i)=>{
-    const cli=_clientes.find(x=>String(x.id)===String(r.cliente_id))||_clientes.find(x=>(x.nombre||"").toLowerCase()===(r.cliente||"").toLowerCase())||{};
+    const cli=_clientes.find(x=>String(x.id)===String(r.cliente_id))||_clientes.find(x=>(x.nombre||"").toLowerCase()===(r.cliente||"").toLowerCase())||_clientes.find(x=>(r.cliente||"").toLowerCase().includes((x.nombre||"").toLowerCase().split(" ")[0]))||{};
     const dir=r.lugar_entrega||r.direccion||cli.direccion||cli.domicilio||'';
     const tel=r.telefono||cli.telefono||cli.celular||cli.tel||"";
     let tot=0;
@@ -1802,7 +1802,7 @@ function imprimirHojaRutaGrupal(){
 
   // Bloques detalle por remito
   const bloques=rems.map((r,i)=>{
-    const cli=_clientes.find(x=>String(x.id)===String(r.cliente_id))||_clientes.find(x=>(x.nombre||"").toLowerCase()===(r.cliente||"").toLowerCase())||{};
+    const cli=_clientes.find(x=>String(x.id)===String(r.cliente_id))||_clientes.find(x=>(x.nombre||"").toLowerCase()===(r.cliente||"").toLowerCase())||_clientes.find(x=>(r.cliente||"").toLowerCase().includes((x.nombre||"").toLowerCase().split(" ")[0]))||{};
     const dir=r.lugar_entrega||r.direccion||cli.direccion||cli.domicilio||'';
     const tel=r.telefono||cli.telefono||cli.celular||cli.tel||"";
     let tot=0;
