@@ -1317,9 +1317,9 @@ function imprimirRemitosCarga(cargaId){
   const titulo=(cg.nombre||'Carga #'+cg.id);
 
   const bloques=rems.map((r,i)=>{
-    const cli=_clientes.find(x=>String(x.id)===String(r.cliente_id))||{};
+    const cli=_clientes.find(x=>String(x.id)===String(r.cliente_id))||_clientes.find(x=>(x.nombre||"").toLowerCase()===(r.cliente||"").toLowerCase())||{};
     const dir=r.lugar_entrega||r.direccion||cli.direccion||cli.domicilio||'';
-    const tel=r.telefono||cli.telefono||cli.celular||'';
+    const tel=r.telefono||cli.telefono||cli.celular||cli.tel||"";
     let tot=0;
     const filas=(r.items||[]).map(it=>{
       const neto=it.precio*it.cant*(1-(it.dto||0)/100);tot+=neto;
@@ -1802,9 +1802,9 @@ function imprimirHojaRutaGrupal(){
 
   // Bloques detalle por remito
   const bloques=rems.map((r,i)=>{
-    const cli=_clientes.find(x=>String(x.id)===String(r.cliente_id))||{};
+    const cli=_clientes.find(x=>String(x.id)===String(r.cliente_id))||_clientes.find(x=>(x.nombre||"").toLowerCase()===(r.cliente||"").toLowerCase())||{};
     const dir=r.lugar_entrega||r.direccion||cli.direccion||cli.domicilio||'';
-    const tel=r.telefono||cli.telefono||cli.celular||'';
+    const tel=r.telefono||cli.telefono||cli.celular||cli.tel||"";
     let tot=0;
     const filas=(r.items||[]).map(it=>{
       const neto=it.precio*it.cant*(1-(it.dto||0)/100);tot+=neto;
@@ -2294,15 +2294,16 @@ function renderCC(){
     const dias=diasDesde(c.ultimo_remito);
     const venc=c.saldo>0&&dias!==null&&dias>(c.condicion_pago||0)+5;
     const dColor=dias===null?'':venc?'color:var(--D);font-weight:600':dias<=(c.condicion_pago||0)?'color:var(--P)':'color:var(--W)';
-    return `<tr style="${venc?'background:var(--DL)':''}">
-      <td style="font-weight:600">${c.nombre}</td><td>${c.localidad||''}</td>
+    return `<tr style="${venc?'background:var(--DL)':''};cursor:pointer" onclick="histCliente(${c.id})">
+      <td style="font-weight:600">${c.nombre}<div style="font-size:10px;color:var(--txt2)">${c.telefono||''}</div></td>
+      <td>${c.localidad||''}</td>
       <td><span class="b bA">Z${c.zona||'-'}</span></td>
       <td>${c.vendedor||'—'}</td>
       <td style="color:var(--txt2);font-size:12px">${c.ultimo_remito||'—'}</td>
       <td style="${dColor}">${dias!==null?dias+'d':'—'}</td>
       <td style="${(c.saldo||0)>0?'color:var(--D);font-weight:600':'color:var(--P)'}">${fmt(c.saldo)}</td>
       <td>${fmt(c.total_comprado||0)}</td>
-      <td style="display:flex;gap:3px">
+      <td style="display:flex;gap:3px" onclick="event.stopPropagation()">
         <button class="btn sm" onclick="histCliente(${c.id})">📋</button>
         <button class="btn P sm" onclick="cobroRapido(${c.id})">💰</button>
       </td>
