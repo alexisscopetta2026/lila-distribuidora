@@ -435,7 +435,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button class="btn P" onclick="abrirCliente()">+ Nuevo</button>
   </div>
   <div class="tb">
-    <input id="cli-q" placeholder="Nombre, teléfono, localidad..." oninput="renderClientes()">
+    <input id="cli-q" placeholder="Nombre, teléfono, localidad..." oninput="renderClientes();_cliIdx=-1;" onkeydown="navCliTabla(event)">
     <select id="cli-zon" onchange="renderClientes()">
       <option value="">Todas las zonas</option>
     </select>
@@ -888,7 +888,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="fg"><label>Nombre *</label><input id="cli-nom"></div>
       <div class="fg"><label>CUIT <span style="font-size:10px;color:var(--txt2)">[Enter = buscar en ARCA]</span></label>
         <input id="cli-cuit" placeholder="20-12345678-9"
-          onkeydown="if(event.key==='Enter'){event.preventDefault();const cuit=(this.value||'').replace(/\D/g,'');if(cuit.length>=10){window.open('https://www.cuitonline.com/constancia/'+cuit,'_blank');}else{alert('Ingresá el CUIT completo');}}">
+          onkeydown="if(event.key==='Enter'){event.preventDefault();const cuit=(this.value||'').replace(/\D/g,'');if(cuit.length>=10){window.open('https://www.afip.gob.ar/genericos/cInscripcion/intervarlo.asp?cuit='+cuit,'_blank');}else{alert('Ingresá el CUIT completo');}}">
       </div>
     </div>
     <div class="fr">
@@ -2076,12 +2076,10 @@ function selCliCob(id){
   // Sugerir saldo en efectivo
   const ef=document.getElementById('cob-efectivo');
   if(ef&&(c.saldo||0)>0){ef.value=Math.round(c.saldo);calcTotalCobro();}
-  // Foco al vendedor para continuar con Tab
-  setTimeout(()=>{
-    const ven=document.getElementById('cob-ven-nom');
-    if(ven&&!ven.value)ven.focus();
-    else document.getElementById('cob-forma-ef')?.focus();
-  },80);
+  // Foco manejado por buscarCodCli vía focoCliTras
+  // Si se seleccionó por dropdown, ir a vendedor
+  const fromDrop=!document.getElementById('cob-cli-cod')?.value;
+  if(fromDrop)setTimeout(()=>{document.getElementById('cob-ven-nom')?.focus();},80);
 }
 function imputarTotal(remId, total){
   const input=document.getElementById(`imp-rem-${remId}`);
@@ -3639,6 +3637,28 @@ function navCC(e){
     e.preventDefault();
     rows[_ccIdx]?.click();
     _ccIdx=-1;
+  }
+}
+// ─── NAVEGACIÓN CON FLECHAS EN CLIENTES ───
+let _cliIdx=-1;
+function navCliTabla(e){
+  const rows=document.querySelectorAll('#cli-tbody tr');
+  if(!rows.length)return;
+  if(e.key==='ArrowDown'){
+    e.preventDefault();
+    _cliIdx=Math.min(_cliIdx+1,rows.length-1);
+    rows.forEach((r,i)=>r.style.background=i===_cliIdx?'var(--PL)':'');
+    rows[_cliIdx]?.scrollIntoView({block:'nearest'});
+  }else if(e.key==='ArrowUp'){
+    e.preventDefault();
+    _cliIdx=Math.max(_cliIdx-1,0);
+    rows.forEach((r,i)=>r.style.background=i===_cliIdx?'var(--PL)':'');
+    rows[_cliIdx]?.scrollIntoView({block:'nearest'});
+  }else if(e.key==='Enter'&&_cliIdx>=0){
+    e.preventDefault();
+    const btn=rows[_cliIdx]?.querySelector('button.btn');
+    if(btn)btn.click();
+    _cliIdx=-1;
   }
 }
 // ─── CERRAR DROPS ───
