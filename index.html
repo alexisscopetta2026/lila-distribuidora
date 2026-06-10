@@ -1051,12 +1051,6 @@ function poblarZonas(){
 // ─── HELPERS ───
 function fmt(n){return '$'+(Math.round(n||0)).toLocaleString('es-AR');}
 function fmtN(n,d=2){return (n||0).toFixed(d);}
-function go(p){
-  document.querySelectorAll('.panel').forEach(x=>x.classList.remove('on'));
-  document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('on'));
-  document.getElementById('p-'+p).classList.add('on');
-  document.querySelector('[data-p='+p+']').classList.add('on');
-}
 function cerrar(id){document.getElementById(id).classList.remove('on');}
 function diasDesde(fecha){if(!fecha)return null;return Math.floor((new Date()-new Date(fecha))/(864e5));}
 function pag(elId,total,cur,fn){
