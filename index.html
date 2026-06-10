@@ -1432,8 +1432,8 @@ async function marcarLista(id){
 }
 async function emitirRemitos(cargaId){
   const cg=_cargas.find(x=>x.id===cargaId);if(!cg)return;
-  const peds=_pedidos.filter(p=>(cg.pedidos||[]).includes(p.id)&&p.estado!=='remitado');
-  for(const p of peds){
+  const peds=_pedidos.filter(p=>(cg.pedidos||[]).includes(p.id)&&p.estado!=='remitado'&&!p.remito_id);
+  if(!peds.length){alert('Todos los pedidos de esta carga ya tienen remito.');return;}
   for(const p of peds){
     const c=_clientes.find(x=>x.id===p.cliente_id);
     const {data:rem}=await sb.from('remitos').insert({
@@ -1444,7 +1444,6 @@ async function emitirRemitos(cargaId){
     }).select().single();
     await sb.from('pedidos').update({estado:'remitado',remito_id:rem.id}).eq('id',p.id);
     if(c){await sb.from('clientes').update({saldo:(c.saldo||0)+p.total,total_comprado:(c.total_comprado||0)+p.total,ultimo_remito:rem.fecha}).eq('id',c.id);}
-  }
   }
   await cargarTodo();renderCargas();renderRemitos();renderDash();
   alert(`${peds.length} remito(s) emitido(s).`);go('remitos');
