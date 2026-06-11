@@ -391,7 +391,92 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <!-- COBRANZA -->
 <div class="panel" id="p-cobranza">
-  <div class="card" id="cob-form-inline">
+
+  <!-- VISTA VENDEDOR (mobile, simple) -->
+  <div id="cob-movil" style="display:none;max-width:480px;margin:0 auto">
+
+    <!-- Header -->
+    <div style="background:var(--PD);color:#fff;padding:12px 14px;position:sticky;top:0;z-index:10;margin:-10px -10px 12px -10px;border-radius:8px 8px 0 0">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:11px;opacity:0.8">REGISTRAR COBRO</div>
+          <div id="cobm-cli-nombre" style="font-size:16px;font-weight:700">Seleccioná un cliente</div>
+          <div id="cobm-cli-saldo" style="font-size:13px;opacity:0.85"></div>
+        </div>
+        <button onclick="go('vendedor-home')" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">✕</button>
+      </div>
+    </div>
+
+    <!-- Paso 1: Cliente -->
+    <div id="cobm-paso-cliente">
+      <div class="fg drop-wrap">
+        <label style="font-size:10px">CÓDIGO O NOMBRE</label>
+        <input id="cobm-cli-q" placeholder="🔍 Buscar cliente..." autocomplete="off"
+          style="width:100%;padding:12px;border:2px solid var(--brd);border-radius:8px;font-size:16px;box-sizing:border-box"
+          oninput="buscarClienteCobMovil()">
+        <div id="cobm-cli-lista" style="margin-top:6px"></div>
+      </div>
+    </div>
+
+    <!-- Paso 2: Forma + Importe -->
+    <div id="cobm-paso-cobro" style="display:none">
+      <!-- Forma de cobro -->
+      <div style="margin-bottom:14px">
+        <div style="font-size:11px;font-weight:600;color:var(--txt2);text-transform:uppercase;margin-bottom:8px">Forma de cobro</div>
+        <div style="display:flex;gap:10px">
+          <button id="cobm-btn-ef" onclick="selFormaCobMovil('efectivo')"
+            style="flex:1;padding:16px;border-radius:12px;border:2px solid var(--brd);background:#fff;font-size:16px;font-weight:600;cursor:pointer">
+            💵 Efectivo
+          </button>
+          <button id="cobm-btn-ch" onclick="selFormaCobMovil('cheque')"
+            style="flex:1;padding:16px;border-radius:12px;border:2px solid var(--brd);background:#fff;font-size:16px;font-weight:600;cursor:pointer">
+            📋 Cheque
+          </button>
+        </div>
+      </div>
+
+      <!-- Importe -->
+      <div style="margin-bottom:14px">
+        <div style="font-size:11px;font-weight:600;color:var(--txt2);text-transform:uppercase;margin-bottom:8px">¿Cuánto cobró?</div>
+        <input id="cobm-importe" type="number" placeholder="0" min="0"
+          style="width:100%;padding:14px;border:2px solid var(--P);border-radius:12px;font-size:28px;font-weight:700;text-align:right;box-sizing:border-box"
+          oninput="calcCobMovil()">
+      </div>
+
+      <!-- Facturas pendientes -->
+      <div id="cobm-facturas-wrap" style="display:none;margin-bottom:14px">
+        <div style="font-size:11px;font-weight:600;color:var(--txt2);text-transform:uppercase;margin-bottom:8px">Imputar a facturas</div>
+        <div id="cobm-facturas"></div>
+      </div>
+
+      <!-- Resto -->
+      <div id="cobm-resto-wrap" style="display:none;background:var(--WL);border:2px solid var(--W);border-radius:12px;padding:12px 14px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:12px;color:var(--W);font-weight:600">Resto sin imputar</div>
+            <div style="font-size:10px;color:var(--txt2)">Quedará como saldo a favor</div>
+          </div>
+          <div style="font-size:22px;font-weight:700;color:var(--W)" id="cobm-resto">$0</div>
+        </div>
+      </div>
+
+      <!-- Obs -->
+      <div style="margin-bottom:14px">
+        <input id="cobm-obs" placeholder="Observación (opcional)"
+          style="width:100%;padding:12px;border:1px solid var(--brd);border-radius:8px;font-size:14px;box-sizing:border-box">
+      </div>
+
+      <!-- Botón guardar -->
+      <button onclick="guardarCobMovil()"
+        style="width:100%;padding:16px;background:var(--P);color:#fff;border:none;border-radius:12px;font-size:18px;font-weight:700;cursor:pointer">
+        ✓ Confirmar cobro
+      </button>
+    </div>
+
+  </div>
+
+  <!-- VISTA ADMIN (desktop) -->
+  <div id="cob-form-inline">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <h2 style="font-size:14px;font-weight:600">💰 Registrar cobro</h2>
       <button class="btn sm" onclick="toggleListaCobros()">📋 Historial</button>
@@ -555,7 +640,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </table></div>
     <div class="pg" id="cob-pg"></div>
   </div>
-</div>
+</div><!-- fin cob-form-inline admin -->
+</div><!-- fin p-cobranza -->
 
 
 <!-- CUENTAS CORRIENTES -->
@@ -3821,6 +3907,115 @@ function navStockBusq(e) {
   }
 }
 
+// ─── COBRO MÓVIL (vendedores) ───
+let _cobMovilCliId=null, _cobMovilForma=null;
+
+function limpiarCobMovil(){
+  _cobMovilCliId=null;_cobMovilForma=null;
+  const qEl=document.getElementById('cobm-cli-q');if(qEl)qEl.value='';
+  const lEl=document.getElementById('cobm-cli-lista');if(lEl)lEl.innerHTML='';
+  const nEl=document.getElementById('cobm-cli-nombre');if(nEl)nEl.textContent='Seleccioná un cliente';
+  const sEl=document.getElementById('cobm-cli-saldo');if(sEl)sEl.textContent='';
+  const pc=document.getElementById('cobm-paso-cliente');if(pc)pc.style.display='block';
+  const pp=document.getElementById('cobm-paso-cobro');if(pp)pp.style.display='none';
+  const imp=document.getElementById('cobm-importe');if(imp)imp.value='';
+  const obs=document.getElementById('cobm-obs');if(obs)obs.value='';
+  const fw=document.getElementById('cobm-facturas-wrap');if(fw)fw.style.display='none';
+  const rw=document.getElementById('cobm-resto-wrap');if(rw)rw.style.display='none';
+  ['cobm-btn-ef','cobm-btn-ch'].forEach(id=>{const b=document.getElementById(id);if(b){b.style.background='#fff';b.style.borderColor='var(--brd)';b.style.color='';}});
+  setTimeout(()=>document.getElementById('cobm-cli-q')?.focus(),100);
+}
+
+function buscarClienteCobMovil(){
+  const q=(document.getElementById('cobm-cli-q').value||'').toLowerCase();
+  const lista=document.getElementById('cobm-cli-lista');
+  if(q.length<1){lista.innerHTML='';return;}
+  const m=_clientes.filter(c=>(c.nombre||'').toLowerCase().includes(q)||String(c.codigo||c.id).includes(q)).slice(0,10);
+  lista.innerHTML=m.map(c=>`<div onclick="selClienteCobMovil(${c.id})" style="display:flex;justify-content:space-between;align-items:center;padding:14px;border-bottom:1px solid var(--brd);cursor:pointer;background:#fff">
+    <div><div style="font-size:15px;font-weight:600">[${c.codigo||c.id}] ${c.nombre.toUpperCase()}</div>
+    <div style="font-size:12px;color:var(--txt2)">${c.localidad||''} · ${c.telefono||'—'}</div></div>
+    <div style="text-align:right"><div style="font-size:16px;font-weight:700;color:${(c.saldo||0)>0?'var(--D)':'var(--P)'}">${fmt(c.saldo||0)}</div>
+    <div style="font-size:10px;color:var(--txt2)">saldo</div></div></div>`).join('');
+}
+
+function selClienteCobMovil(id){
+  const c=_clientes.find(x=>x.id===id);if(!c)return;
+  _cobMovilCliId=id;
+  const nEl=document.getElementById('cobm-cli-nombre');if(nEl)nEl.textContent=`[${c.codigo||c.id}] ${c.nombre.toUpperCase()}`;
+  const sEl=document.getElementById('cobm-cli-saldo');if(sEl)sEl.textContent=`Saldo: ${fmt(c.saldo||0)}`;
+  const pc=document.getElementById('cobm-paso-cliente');if(pc)pc.style.display='none';
+  const pp=document.getElementById('cobm-paso-cobro');if(pp)pp.style.display='block';
+  const remsPend=_remitos.filter(r=>String(r.cliente_id)===String(id)&&!r.cobrado).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const wrap=document.getElementById('cobm-facturas-wrap');
+  const lista=document.getElementById('cobm-facturas');
+  if(remsPend.length&&wrap&&lista){
+    wrap.style.display='block';
+    lista.innerHTML=remsPend.map(r=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--brd)">
+      <div style="flex:1"><div style="font-size:14px;font-weight:600">R-${String(r.id).padStart(4,'0')}</div>
+      <div style="font-size:11px;color:var(--txt2)">${r.fecha} · Saldo: ${fmt(r.saldo_pendiente||r.total)}</div></div>
+      <input type="number" id="cobm-imp-${r.id}" value="0" min="0" step="0.01"
+        style="width:120px;padding:8px;border:2px solid var(--brd);border-radius:8px;font-size:16px;font-weight:700;text-align:right"
+        oninput="calcCobMovil()" ondblclick="cobmImputarTodo(${r.id},${r.saldo_pendiente||r.total})" title="Doble toque = todo">
+    </div>`).join('');
+  }
+  setTimeout(()=>document.getElementById('cobm-importe')?.focus(),100);
+}
+
+function cobmImputarTodo(remId,monto){const inp=document.getElementById('cobm-imp-'+remId);if(inp){inp.value=monto;calcCobMovil();}}
+
+function selFormaCobMovil(forma){
+  _cobMovilForma=forma;
+  ['cobm-btn-ef','cobm-btn-ch'].forEach(id=>{const b=document.getElementById(id);if(b){b.style.background='#fff';b.style.borderColor='var(--brd)';b.style.color='';}});
+  const key=forma==='efectivo'?'cobm-btn-ef':'cobm-btn-ch';
+  const btn=document.getElementById(key);
+  if(btn){btn.style.background='var(--P)';btn.style.borderColor='var(--P)';btn.style.color='#fff';}
+}
+
+function calcCobMovil(){
+  const importe=parseFloat(document.getElementById('cobm-importe')?.value)||0;
+  const inputs=document.querySelectorAll('[id^="cobm-imp-"]');
+  let totalImp=0;inputs.forEach(i=>totalImp+=parseFloat(i.value)||0);
+  const resto=Math.round((importe-totalImp)*100)/100;
+  const wrap=document.getElementById('cobm-resto-wrap');
+  const restoEl=document.getElementById('cobm-resto');
+  if(wrap&&restoEl){
+    if(resto>0&&importe>0){wrap.style.display='block';restoEl.textContent=fmt(resto);}
+    else wrap.style.display='none';
+  }
+}
+
+async function guardarCobMovil(){
+  if(!_cobMovilCliId){alert('Seleccioná un cliente');return;}
+  if(!_cobMovilForma){alert('Elegí efectivo o cheque');return;}
+  const importe=parseFloat(document.getElementById('cobm-importe')?.value)||0;
+  if(importe<=0){alert('Ingresá el importe');return;}
+  const c=_clientes.find(x=>x.id===_cobMovilCliId);
+  const inputs=document.querySelectorAll('[id^="cobm-imp-"]');
+  const imputaciones=[];let totalImp=0;
+  for(const inp of inputs){const remId=parseInt(inp.id.replace('cobm-imp-',''));const monto=parseFloat(inp.value)||0;if(monto>0){imputaciones.push({remito_id:remId,monto});totalImp+=monto;}}
+  const resto=Math.round((importe-totalImp)*100)/100;
+  await sb.from('cobros').insert({
+    cliente_id:_cobMovilCliId,cliente:c?.nombre||'?',
+    fecha:new Date().toISOString().split('T')[0],
+    forma:_cobMovilForma,importe,
+    efectivo:_cobMovilForma==='efectivo'?importe:0,
+    cheque_terceros:_cobMovilForma==='cheque'?importe:0,
+    vendedor:usuarioActual?.nombre||'',
+    observaciones:document.getElementById('cobm-obs')?.value||'',
+    imputaciones,saldo_favor:resto>0?resto:0
+  });
+  for(const imp of imputaciones){
+    const rem=_remitos.find(r=>r.id===imp.remito_id);
+    if(rem){const nuevoSaldo=Math.max(0,(rem.saldo_pendiente||rem.total)-imp.monto);await sb.from('remitos').update({saldo_pendiente:nuevoSaldo,cobrado:nuevoSaldo<=0}).eq('id',rem.id);}
+  }
+  if(c){await sb.from('clientes').update({saldo:Math.max(0,(c.saldo||0)-importe+(resto>0?resto:0))}).eq('id',c.id);}
+  await Promise.all([cargarCobros(),cargarClientes(),cargarRemitos()]);
+  renderDash();
+  alert(`✅ Cobro confirmado\n${c?.nombre}\n${fmt(importe)}${resto>0?'\nResto a favor: '+fmt(resto):''}`);
+  limpiarCobMovil();
+}
+// ─── FIN COBRO MÓVIL ───
+
 // ─── PEDIDO MÓVIL (estilo Moviler) ───
 let _pmCliId=null, _pmCarrito=[], _pmMarcaActual=null, _pmProdActual=null;
 
@@ -4091,7 +4286,17 @@ function go(p){
   if(p==='remito-rapido')initRR();
   if(p==='informes')initInformes();
   if(p==='rendicion')initRendicion();
-  if(p==='cobranza')limpiarModalCobro();
+  if(p==='cobranza'){
+    if(usuarioActual?.rol==='vendedor'){
+      document.getElementById('cob-movil').style.display='block';
+      document.getElementById('cob-form-inline').style.display='none';
+      limpiarCobMovil();
+    } else {
+      document.getElementById('cob-movil').style.display='none';
+      document.getElementById('cob-form-inline').style.display='block';
+      limpiarModalCobro();
+    }
+  }
   if(p==='vendedor-home'){
     const s=document.getElementById('vh-saludo');
     const f=document.getElementById('vh-fecha');
