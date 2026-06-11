@@ -258,13 +258,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="panel" id="p-pedido-movil" style="padding:0;max-width:480px;margin:0 auto">
 
   <!-- Header -->
-  <div style="background:var(--PD);color:#fff;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:10">
-    <div>
-      <div style="font-size:11px;opacity:0.8">NUEVO PEDIDO</div>
-      <div id="pm-cli-nombre" style="font-size:16px;font-weight:700">Seleccioná un cliente</div>
-      <div id="pm-cli-saldo" style="font-size:12px;opacity:0.85"></div>
+  <div style="background:var(--PD);color:#fff;padding:12px 14px;position:sticky;top:0;z-index:10">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div style="flex:1">
+        <div style="font-size:11px;opacity:0.8">NUEVO PEDIDO</div>
+        <div id="pm-cli-nombre" style="font-size:16px;font-weight:700">Seleccioná un cliente</div>
+        <div id="pm-cli-detalle" style="font-size:11px;opacity:0.8;margin-top:2px"></div>
+      </div>
+      <div style="text-align:right">
+        <button onclick="go('pedidos')" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;margin-bottom:6px">✕ Salir</button>
+        <div id="pm-cli-saldo-wrap" style="display:none;cursor:pointer" onclick="verSaldoMovil()">
+          <div style="font-size:10px;opacity:0.8">SALDO CC</div>
+          <div id="pm-cli-saldo" style="font-size:24px;font-weight:700;line-height:1"></div>
+          <div style="font-size:10px;opacity:0.7">👆 ver detalle</div>
+        </div>
+      </div>
     </div>
-    <button onclick="go('pedidos')" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">✕ Salir</button>
   </div>
 
   <!-- Paso 1: Buscar cliente -->
@@ -555,7 +564,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div style="font-size:12px;color:var(--txt2)" id="cc-total-deuda"></div>
   </div>
   <div class="tb">
-    <input id="cc-q" placeholder="Buscar cliente..." oninput="renderCC();_ccIdx=-1;" onkeydown="navCC(event)">
+    <input id="cc-q" placeholder="Buscar por nombre o código..." oninput="renderCC();_ccIdx=-1;" onkeydown="navCC(event)">
     <select id="cc-f" onchange="renderCC()">
       <option value="">Todos</option>
       <option value="deuda">Con deuda</option>
@@ -2256,6 +2265,8 @@ function selCliCob(id){
         <input type="number" id="imp-rem-${r.id}" value="0" min="0" max="${r.saldo_pendiente||r.total}" step="0.01"
           style="width:110px;padding:4px 7px;border:1px solid var(--brd);border-radius:6px;text-align:right;font-size:13px"
           placeholder="0" oninput="calcTotalDesdeImputacion()"
+          ondblclick="this.value=${r.saldo_pendiente||r.total};calcTotalDesdeImputacion();this.select();"
+          title="Doble clic = imputar total"
           onkeydown="if(event.key==='Tab'||event.key==='Enter'){event.preventDefault();const inputs=[...document.querySelectorAll('[id^=imp-rem-]')];const idx=inputs.indexOf(this);if(idx<inputs.length-1){inputs[idx+1].focus();inputs[idx+1].select();}else{document.getElementById('cob-obs2')?.focus();}}">
         <button class="btn sm" style="background:var(--P);color:#fff;border-color:var(--P)" onclick="imputarTotal(${r.id},${r.saldo_pendiente||r.total})" title="Imputar total">✓ Todo</button>
       </div>`).join('');
@@ -2490,7 +2501,7 @@ function renderCC(){
   const q=(document.getElementById('cc-q').value||'').toLowerCase();
   const f=document.getElementById('cc-f').value;
   let data=_clientes.filter(c=>{
-    const okQ=!q||(c.nombre||'').toLowerCase().includes(q)||(c.localidad||'').toLowerCase().includes(q);
+    const okQ=!q||(c.nombre||'').toLowerCase().includes(q)||(c.localidad||'').toLowerCase().includes(q)||String(c.codigo||'').includes(q)||String(c.id||'').includes(q);
     const dias=diasDesde(c.ultimo_remito);
     const venc=c.saldo>0&&dias!==null&&dias>(c.condicion_pago||0)+5;
     const okF=f===''||(f==='deuda'&&c.saldo>0)||(f==='ok'&&c.saldo<=0)||(f==='vencido'&&venc);
@@ -2538,8 +2549,13 @@ function histCliente(id){
   
   // Agregar remitos como DEBE
   rems.forEach(r=>movs.push({fecha:r.fecha,tipo:'REMITO',nro:'R-'+String(r.id).padStart(4,'0'),debe:r.total,haber:0,reparto:'',obs:''}));
-  // Agregar cobros como HABER
-  cobs.forEach(r=>movs.push({fecha:r.fecha,tipo:'RECIBO',nro:'RC-'+String(r.id).padStart(4,'0'),debe:0,haber:r.importe,reparto:r.reparto||'',obs:r.observaciones||''}));
+  // Agregar cobros como HABER — con detalle de imputación
+  cobs.forEach(r=>{
+    const imp=r.imputaciones||[];
+    const obs=r.observaciones||'';
+    const detalle=imp.length?imp.map(i=>`R-${String(i.remito_id).padStart(4,'0')}: ${fmt(i.monto)}`).join(', '):'';
+    movs.push({fecha:r.fecha,tipo:'RECIBO',nro:'RC-'+String(r.id).padStart(4,'0'),debe:0,haber:r.importe,reparto:r.reparto||'',obs:detalle||obs,forma:r.forma||''});
+  });
   // Agregar NC como HABER
   ncs.forEach(r=>movs.push({fecha:r.fecha,tipo:'N.CRED',nro:'NC-'+String(r.id).padStart(4,'0'),debe:0,haber:r.importe,reparto:'',obs:r.motivo||''}));
   
@@ -3844,10 +3860,55 @@ function selClienteMovil(id){
   const c=_clientes.find(x=>x.id===id);if(!c)return;
   _pmCliId=id;
   document.getElementById('pm-cli-nombre').textContent=`[${c.codigo||c.id}] ${c.nombre.toUpperCase()}`;
-  document.getElementById('pm-cli-saldo').textContent=`Saldo: ${fmt(c.saldo||0)} · ${c.localidad||''} · ${c.telefono||''}`;
+  document.getElementById('pm-cli-detalle').textContent=`${c.localidad||''} · ${c.telefono||''}`;
+  const saldoEl=document.getElementById('pm-cli-saldo');
+  const saldoWrap=document.getElementById('pm-cli-saldo-wrap');
+  if(saldoEl){saldoEl.textContent=fmt(c.saldo||0);saldoEl.style.color=(c.saldo||0)>0?'#ffb3b3':'#b3ffcc';}
+  if(saldoWrap)saldoWrap.style.display='block';
   document.getElementById('pm-paso-cliente').style.display='none';
   document.getElementById('pm-paso-productos').style.display='block';
   cargarMarcasMovil();
+}
+
+function verSaldoMovil(){
+  const c=_clientes.find(x=>x.id===_pmCliId);if(!c)return;
+  const remsPend=_remitos.filter(r=>String(r.cliente_id)===String(_pmCliId)&&!r.cobrado).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  if(!remsPend.length){alert('Sin facturas pendientes para '+c.nombre);return;}
+  let html=`<div style="padding:14px">
+    <div style="font-size:14px;font-weight:700;color:var(--PD);margin-bottom:10px">${c.nombre} — Facturas pendientes</div>`;
+  remsPend.forEach(r=>{
+    const saldo=r.saldo_pendiente||r.total;
+    const parcial=r.saldo_pendiente&&r.saldo_pendiente<r.total;
+    html+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--brd)">
+      <div>
+        <div style="font-size:14px;font-weight:600">R-${String(r.id).padStart(4,'0')}</div>
+        <div style="font-size:12px;color:var(--txt2)">${r.fecha}${parcial?` · Total original: ${fmt(r.total)}`:''}
+        </div>
+        ${parcial?`<div style="font-size:11px;color:var(--W);font-weight:600">⚠️ Pago parcial — resta ${fmt(saldo)}</div>`:''}
+      </div>
+      <div style="font-size:16px;font-weight:700;color:${parcial?'var(--W)':'var(--D)'}">
+        ${fmt(saldo)}
+      </div>
+    </div>`;
+  });
+  const total=remsPend.reduce((a,r)=>a+(r.saldo_pendiente||r.total),0);
+  html+=`<div style="display:flex;justify-content:space-between;padding:10px 0;font-weight:700;font-size:15px"><span>TOTAL</span><span style="color:var(--D)">${fmt(total)}</span></div></div>`;
+  // Mostrar en modal simple
+  let modal=document.getElementById('pm-saldo-modal');
+  if(!modal){
+    modal=document.createElement('div');
+    modal.id='pm-saldo-modal';
+    modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:2000;display:flex;align-items:flex-end;justify-content:center';
+    modal.onclick=function(e){if(e.target===modal)modal.remove();};
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML=`<div style="background:#fff;border-radius:16px 16px 0 0;width:100%;max-width:480px;max-height:80vh;overflow-y:auto">
+    ${html}
+    <div style="padding:0 14px 16px">
+      <button onclick="document.getElementById('pm-saldo-modal').remove()" style="width:100%;padding:12px;background:var(--PD);color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">Cerrar</button>
+    </div>
+  </div>`;
+  modal.style.display='flex';
 }
 
 function cargarMarcasMovil(){
