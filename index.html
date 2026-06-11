@@ -28,10 +28,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .topbar .logo{font-size:15px;font-weight:600}
 .topbar .right{margin-left:auto;display:flex;gap:14px;align-items:center;font-size:12px;opacity:.9}
 .topbar .right button{background:rgba(255,255,255,.2);border:none;color:#fff;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit}
-.nav{display:flex;background:var(--PD);overflow-x:auto;-webkit-overflow-scrolling:touch}
+.nav{display:flex;background:var(--PD);overflow-x:auto;-webkit-overflow-scrolling:touch;position:relative;z-index:100}
 .nav button{flex:none;padding:9px 14px;background:none;border:none;color:rgba(255,255,255,.65);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;font-family:inherit;white-space:nowrap;border-bottom:2px solid transparent;transition:all .15s}
 .nav button.on{color:#fff;border-bottom-color:#fff;background:rgba(255,255,255,.1)}
 .nav button:hover:not(.on){color:#fff;background:rgba(255,255,255,.06)}
+.nav-group{position:relative;flex:none}
+.nav-group>.nav-btn{padding:9px 14px;background:none;border:none;color:rgba(255,255,255,.65);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;font-family:inherit;white-space:nowrap;border-bottom:2px solid transparent;transition:all .15s}
+.nav-group>.nav-btn:hover,.nav-group.open>.nav-btn{color:#fff;background:rgba(255,255,255,.1)}
+.nav-group.active>.nav-btn{color:#fff;border-bottom:2px solid #fff;background:rgba(255,255,255,.1)}
+.nav-dropdown{display:none;position:absolute;top:100%;left:0;background:var(--PD);min-width:180px;border-radius:0 0 8px 8px;box-shadow:0 8px 24px rgba(0,0,0,.3);z-index:200}
+.nav-group.open>.nav-dropdown{display:block}
+.nav-dropdown button{display:block;width:100%;padding:10px 16px;background:none;border:none;color:rgba(255,255,255,.8);font-size:12px;cursor:pointer;text-align:left;font-family:inherit;transition:background .1s}
+.nav-dropdown button:hover{background:rgba(255,255,255,.12);color:#fff}
+.nav-dropdown button.on{background:rgba(255,255,255,.15);color:#fff;font-weight:600}
 .body{flex:1;padding:14px}
 .panel{display:none}.panel.on{display:block}
 
@@ -170,24 +179,71 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button onclick="logout()">Salir</button>
   </div>
 </div>
-<div class="nav">
+<div class="nav" id="main-nav">
+  <!-- Dashboard siempre visible -->
   <button class="on" onclick="go('dash')" data-p="dash">📊 Dashboard</button>
-  <button onclick="go('pedidos')" data-p="pedidos">🛒 Pedidos</button>
-  <button onclick="abrirPedidoMovil()" data-p="pedido-movil">📱 Pedido móvil</button>
-  <button onclick="go('vendedor-home')" data-p="vendedor-home">🏠 Inicio</button>
-  <button onclick="go('carga')" data-p="carga">🚚 Cargas</button>
-  <button onclick="go('remitos')" data-p="remitos">📄 Remitos</button>
-  <button onclick="go('cobranza')" data-p="cobranza">💰 Cobranza</button>
-  <button onclick="go('cuentas')" data-p="cuentas">⚖️ Cuentas</button>
-  <button onclick="go('clientes')" data-p="clientes">👥 Clientes</button>
-  <button onclick="go('productos')" data-p="productos">📦 Productos</button>
-  <button onclick="go('remito-rapido')" data-p="remito-rapido">⚡ Remito rápido</button>
-  <button onclick="go('nc')" data-p="nc">📋 Notas crédito</button>
-  <button onclick="go('rendicion')" data-p="rendicion">💼 Rendición</button>
-  <button onclick="go('stock')" data-p="stock">📊 Stock</button>
-  <button onclick="go('informes')" data-p="informes">📈 Informes</button>
-  <button onclick="go('contabilidad')" data-p="contabilidad">📒 Contabilidad</button>
-  <button onclick="exportarTodo()" data-p="exportar">💾 Exportar</button>
+  <button onclick="go('vendedor-home')" data-p="vendedor-home" style="display:none">🏠 Inicio</button>
+
+  <!-- VENTAS -->
+  <div class="nav-group" id="ng-ventas">
+    <button class="nav-btn" onclick="toggleNavGroup('ventas')">🛒 Ventas ▾</button>
+    <div class="nav-dropdown">
+      <button onclick="go('pedidos')" data-p="pedidos">🛒 Pedidos</button>
+      <button onclick="abrirPedidoMovil()" data-p="pedido-movil">📱 Pedido móvil</button>
+      <button onclick="go('carga')" data-p="carga">🚚 Cargas</button>
+      <button onclick="go('remitos')" data-p="remitos">📄 Remitos</button>
+      <button onclick="go('remito-rapido')" data-p="remito-rapido">⚡ Remito rápido</button>
+      <button onclick="go('nc')" data-p="nc">📋 Notas de crédito</button>
+    </div>
+  </div>
+
+  <!-- CLIENTES -->
+  <div class="nav-group" id="ng-clientes">
+    <button class="nav-btn" onclick="toggleNavGroup('clientes')">👥 Clientes ▾</button>
+    <div class="nav-dropdown">
+      <button onclick="go('clientes')" data-p="clientes">👥 Maestro de clientes</button>
+      <button onclick="go('cuentas')" data-p="cuentas">⚖️ Cuentas corrientes</button>
+    </div>
+  </div>
+
+  <!-- PRODUCTOS -->
+  <div class="nav-group" id="ng-productos">
+    <button class="nav-btn" onclick="toggleNavGroup('productos')">📦 Productos ▾</button>
+    <div class="nav-dropdown">
+      <button onclick="go('productos')" data-p="productos">📦 Artículos</button>
+      <button onclick="go('stock')" data-p="stock">📊 Stock</button>
+    </div>
+  </div>
+
+  <!-- TESORERÍA -->
+  <div class="nav-group" id="ng-tesoreria">
+    <button class="nav-btn" onclick="toggleNavGroup('tesoreria')">💰 Tesorería ▾</button>
+    <div class="nav-dropdown">
+      <button onclick="go('cobranza')" data-p="cobranza">💰 Cobranza</button>
+      <button onclick="contTabDesde('cheques')" data-p="contabilidad">📋 Cheques en cartera</button>
+    </div>
+  </div>
+
+  <!-- CONTABILIDAD -->
+  <div class="nav-group" id="ng-contabilidad">
+    <button class="nav-btn" onclick="toggleNavGroup('contabilidad')">📒 Contabilidad ▾</button>
+    <div class="nav-dropdown">
+      <button onclick="contTabDesde('gastos')" data-p="contabilidad">📝 Gastos</button>
+      <button onclick="contTabDesde('asientos')" data-p="contabilidad">📖 Asientos</button>
+      <button onclick="contTabDesde('mayor')" data-p="contabilidad">📊 Mayor de cuentas</button>
+      <button onclick="contTabDesde('resultado')" data-p="contabilidad">💹 Estado de resultado</button>
+    </div>
+  </div>
+
+  <!-- INFORMES -->
+  <div class="nav-group" id="ng-informes">
+    <button class="nav-btn" onclick="toggleNavGroup('informes')">📈 Informes ▾</button>
+    <div class="nav-dropdown">
+      <button onclick="go('informes')" data-p="informes">📈 Informes generales</button>
+      <button onclick="go('rendicion')" data-p="rendicion">💼 Rendición</button>
+      <button onclick="exportarTodo()" data-p="exportar">💾 Exportar datos</button>
+    </div>
+  </div>
 </div>
 <div class="body">
 
@@ -1390,11 +1446,18 @@ function doLogin(){
   ['np-fecha','cob-fecha','nc-fecha'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=new Date().toISOString().split('T')[0];});
   
   // Aplicar permisos de navegación
-  const menus=found.rol==='admin'?MENUS_ADMIN:MENUS_VENDEDOR;
-  document.querySelectorAll('.nav button').forEach(btn=>{
-    const panel=btn.getAttribute('data-p');
-    btn.style.display=menus.includes(panel)?'flex':'none';
-  });
+  if(found.rol==='vendedor'){
+    // Vendedor: ocultar grupos de admin, mostrar solo inicio
+    ['ng-ventas','ng-clientes','ng-productos','ng-tesoreria','ng-contabilidad','ng-informes'].forEach(id=>{
+      const el=document.getElementById(id);if(el)el.style.display='none';
+    });
+    document.querySelector('[data-p="vendedor-home"]').style.display='flex';
+  } else {
+    // Admin: mostrar todo
+    ['ng-ventas','ng-clientes','ng-productos','ng-tesoreria','ng-contabilidad','ng-informes'].forEach(id=>{
+      const el=document.getElementById(id);if(el)el.style.display='';
+    });
+  }
   
   // Si es vendedor, ir directo a pedidos
   if(found.rol==='vendedor'){
@@ -4053,7 +4116,42 @@ function navStockBusq(e) {
   }
 }
 
-// ─── CONTABILIDAD ───
+// ─── MENÚ DESPLEGABLE ───
+function toggleNavGroup(grupo){
+  const ng=document.getElementById('ng-'+grupo);
+  if(!ng)return;
+  const open=ng.classList.contains('open');
+  // Cerrar todos
+  document.querySelectorAll('.nav-group').forEach(g=>g.classList.remove('open'));
+  if(!open)ng.classList.add('open');
+}
+// Cerrar al hacer clic fuera
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.nav-group'))document.querySelectorAll('.nav-group').forEach(g=>g.classList.remove('open'));
+});
+function contTabDesde(tab){
+  go('contabilidad');
+  setTimeout(()=>contTab(tab),50);
+}
+// Actualizar menú activo según panel
+function actualizarNavActivo(p){
+  document.querySelectorAll('.nav button[data-p],.nav-dropdown button[data-p]').forEach(b=>b.classList.remove('on'));
+  // Resaltar botón del panel activo
+  document.querySelectorAll(`[data-p="${p}"]`).forEach(b=>b.classList.add('on'));
+  // Resaltar grupo padre
+  const grupos={
+    'pedidos':'ventas','pedido-movil':'ventas','carga':'ventas','remitos':'ventas','remito-rapido':'ventas','nc':'ventas',
+    'clientes':'clientes','cuentas':'clientes',
+    'productos':'productos','stock':'productos',
+    'cobranza':'tesoreria',
+    'contabilidad':'contabilidad',
+    'informes':'informes','rendicion':'informes'
+  };
+  const grupo=grupos[p];
+  if(grupo){const ng=document.getElementById('ng-'+grupo);if(ng)ng.classList.add('active');}
+  else{document.querySelectorAll('.nav-group').forEach(g=>g.classList.remove('active'));}
+}
+// ─── FIN MENÚ DESPLEGABLE ───
 function contTab(tab){
   ['gastos','asientos','mayor','resultado','cheques'].forEach(t=>{
     const el=document.getElementById('cont-'+t);
@@ -4660,11 +4758,12 @@ document.addEventListener('click',e=>{
 
 function go(p){
   document.querySelectorAll('.panel').forEach(x=>x.classList.remove('on'));
-  document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('on'));
+  document.querySelectorAll('.nav-group').forEach(g=>g.classList.remove('active'));
   const panel=document.getElementById('p-'+p);
-  const btn=document.querySelector('[data-p='+p+']');
   if(panel)panel.classList.add('on');
-  if(btn)btn.classList.add('on');
+  actualizarNavActivo(p);
+  // Cerrar dropdowns
+  document.querySelectorAll('.nav-group').forEach(g=>g.classList.remove('open'));
   if(p==='remito-rapido')initRR();
   if(p==='informes')initInformes();
   if(p==='rendicion')initRendicion();
