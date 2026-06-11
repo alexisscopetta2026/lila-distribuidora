@@ -174,6 +174,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <button class="on" onclick="go('dash')" data-p="dash">📊 Dashboard</button>
   <button onclick="go('pedidos')" data-p="pedidos">🛒 Pedidos</button>
   <button onclick="abrirPedidoMovil()" data-p="pedido-movil">📱 Pedido móvil</button>
+  <button onclick="go('vendedor-home')" data-p="vendedor-home">🏠 Inicio</button>
   <button onclick="go('carga')" data-p="carga">🚚 Cargas</button>
   <button onclick="go('remitos')" data-p="remitos">📄 Remitos</button>
   <button onclick="go('cobranza')" data-p="cobranza">💰 Cobranza</button>
@@ -210,6 +211,29 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 
 <!-- PEDIDOS -->
+<!-- VENDEDOR HOME -->
+<div class="panel" id="p-vendedor-home">
+  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;gap:16px;padding:20px">
+    <div style="text-align:center;margin-bottom:10px">
+      <div style="font-size:32px">🌸</div>
+      <div style="font-size:20px;font-weight:700;color:var(--PD)" id="vh-saludo">Hola</div>
+      <div style="font-size:13px;color:var(--txt2)" id="vh-fecha"></div>
+    </div>
+    <button onclick="abrirPedidoMovil()" style="width:100%;max-width:320px;padding:22px;background:var(--P);color:#fff;border:none;border-radius:14px;font-size:20px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:12px;box-shadow:0 4px 12px rgba(26,122,82,0.3)">
+      📋 Nuevo Pedido
+    </button>
+    <button onclick="go('cobranza')" style="width:100%;max-width:320px;padding:22px;background:#1a6fa8;color:#fff;border:none;border-radius:14px;font-size:20px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:12px">
+      💰 Cobrar
+    </button>
+    <button onclick="go('cuentas')" style="width:100%;max-width:320px;padding:22px;background:var(--bg2);color:var(--PD);border:2px solid var(--P);border-radius:14px;font-size:20px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:12px">
+      ⚖️ Cuenta Corriente
+    </button>
+    <button onclick="go('pedidos')" style="width:100%;max-width:320px;padding:14px;background:transparent;color:var(--txt2);border:1px solid var(--brd);border-radius:10px;font-size:14px;cursor:pointer">
+      📄 Ver pedidos anteriores
+    </button>
+  </div>
+</div>
+
 <div class="panel" id="p-pedidos">
   <div class="sech">
     <h2>Pedidos</h2>
@@ -1101,7 +1125,7 @@ const USUARIOS = [
 
 // Pantallas por rol
 const MENUS_ADMIN=['dash','pedidos','pedido-movil','carga','remitos','cobranza','cuentas','clientes','productos','remito-rapido','nc','rendicion','stock','informes','exportar'];
-const MENUS_VENDEDOR=['pedidos','pedido-movil','cobranza','cuentas'];
+const MENUS_VENDEDOR=['vendedor-home','pedidos','pedido-movil','cobranza','cuentas'];
 let usuarioActual = null;
 
 // ─── ESTADO LOCAL ───
@@ -1133,7 +1157,7 @@ function doLogin(){
   
   // Si es vendedor, ir directo a pedidos
   if(found.rol==='vendedor'){
-    cargarTodo().then(()=>go('pedidos'));
+    cargarTodo().then(()=>go('vendedor-home'));
   } else {
     cargarTodo();
   }
@@ -3827,11 +3851,11 @@ function selClienteMovil(id){
 }
 
 function cargarMarcasMovil(){
-  const marcas=[...new Set(_productos.filter(p=>p.activo!==false).map(p=>p.marca||p.categoria||'OTROS').filter(Boolean))].sort();
+  const marcas=[...new Set(_productos.filter(p=>p.activo!==false).map(p=>p.proveedor||p.rubro||'OTROS').filter(Boolean))].sort();
   const lista=document.getElementById('pm-marcas-lista');
   lista.innerHTML=marcas.map(m=>{
     const key=m.replace(/[^a-zA-Z0-9]/g,'_');
-    const enCarrito=_pmCarrito.filter(x=>{const prod=_productos.find(p=>p.id===x.id);return (prod?.marca||prod?.categoria||'OTROS')===m;});
+    const enCarrito=_pmCarrito.filter(x=>{const prod=_productos.find(p=>p.id===x.id);return (prod?.proveedor||prod?.rubro||'OTROS')===m;});
     const badge=enCarrito.length>0?`<span style="background:var(--P);color:#fff;border-radius:12px;padding:2px 8px;font-size:11px;font-weight:700">${enCarrito.length} ✓</span>`:'';
     return `<div><div onclick="toggleMarcaMovil('${m.replace(/'/g,"\\'")}','${key}')" style="display:flex;justify-content:space-between;align-items:center;padding:16px 14px;border-bottom:1px solid var(--brd);cursor:pointer;background:#fff"><div style="display:flex;align-items:center;gap:10px"><span style="font-size:16px;font-weight:600">${m}</span>${badge}</div><span id="pm-chevron-${key}" style="color:var(--txt2);font-size:20px;font-weight:300">›</span></div><div id="pm-prods-${key}" style="display:none;background:var(--bg2)"></div></div>`;
   }).join('');
@@ -3843,7 +3867,7 @@ function toggleMarcaMovil(marca,key){
   const open=div.style.display!=='none';
   if(open){div.style.display='none';if(chev)chev.textContent='›';}
   else{
-    const prods=_productos.filter(p=>(p.marca||p.categoria||'OTROS')===marca&&p.activo!==false);
+    const prods=_productos.filter(p=>(p.proveedor||p.rubro||'OTROS')===marca&&p.activo!==false);
     div.innerHTML=prods.map(p=>{const enCarrito=_pmCarrito.find(x=>x.id===p.id);return `<div onclick="abrirPopupMovil(${p.id})" style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--brd);cursor:pointer;background:${enCarrito?'var(--PL)':'#fff'};border-left:${enCarrito?'4px solid var(--P)':'4px solid transparent'}"><div style="flex:1"><div style="font-size:15px;font-weight:${enCarrito?'700':'500'}">${p.nombre}</div>${enCarrito?`<div style="font-size:12px;color:var(--P);font-weight:600">✓ ${enCarrito.cant} ${p.unidad||''} en pedido</div>`:''}</div><div style="text-align:right;margin-left:12px"><div style="font-size:15px;font-weight:700;color:var(--PD)">${fmt(p.precio||0)}</div><div style="width:30px;height:30px;border-radius:50%;background:var(--P);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;margin-left:auto;margin-top:2px">+</div></div></div>`;}).join('')||`<div style="padding:14px 18px;color:var(--txt2);font-size:13px">Sin productos</div>`;
     div.style.display='block';if(chev)chev.textContent='⌄';
     div.scrollIntoView({behavior:'smooth',block:'nearest'});
@@ -4007,6 +4031,12 @@ function go(p){
   if(p==='informes')initInformes();
   if(p==='rendicion')initRendicion();
   if(p==='cobranza')limpiarModalCobro();
+  if(p==='vendedor-home'){
+    const s=document.getElementById('vh-saludo');
+    const f=document.getElementById('vh-fecha');
+    if(s&&usuarioActual)s.textContent='Hola, '+usuarioActual.nombre+'!';
+    if(f)f.textContent=new Date().toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'});
+  }
   if(p==='stock')iniciarConteo();
   if(p==='nc')renderNCs();
   if(p==='remitos'){const f=document.getElementById('rem-grupo-fecha');if(f&&!f.value)f.value=new Date().toISOString().split('T')[0];}
