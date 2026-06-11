@@ -25,24 +25,41 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 /* APP */
 #app{display:none;flex-direction:column;min-height:100vh}
 .topbar{background:var(--P);color:#fff;padding:10px 18px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:50}
+.app-layout{display:flex;flex:1;min-height:0;overflow:auto}
+.sidebar{width:200px;background:var(--PD);flex-shrink:0;overflow-y:auto;transition:width .2s}
+.sidebar.collapsed{width:0;overflow:hidden}
+.sidebar-group{border-bottom:1px solid rgba(255,255,255,.1)}
+.sidebar-group-btn{width:100%;padding:12px 16px;background:none;border:none;color:rgba(255,255,255,.8);font-size:13px;cursor:pointer;text-align:left;font-family:inherit;display:flex;justify-content:space-between;align-items:center;transition:background .15s}
+.sidebar-group-btn:hover,.sidebar-group.open .sidebar-group-btn{background:rgba(255,255,255,.1);color:#fff}
+.sidebar-group.active .sidebar-group-btn{background:rgba(255,255,255,.15);color:#fff;font-weight:600}
+.sidebar-items{display:none;background:rgba(0,0,0,.15)}
+.sidebar-group.open .sidebar-items{display:block}
+.sidebar-item{display:block;width:100%;padding:9px 16px 9px 28px;background:none;border:none;color:rgba(255,255,255,.7);font-size:12px;cursor:pointer;text-align:left;font-family:inherit;transition:background .1s}
+.sidebar-item:hover{background:rgba(255,255,255,.1);color:#fff}
+.sidebar-item.on{background:rgba(255,255,255,.15);color:#fff;font-weight:600;border-left:3px solid #fff}
+.sidebar-dash{width:100%;padding:12px 16px;background:none;border:none;color:rgba(255,255,255,.8);font-size:13px;cursor:pointer;text-align:left;font-family:inherit;display:flex;align-items:center;gap:8px;transition:background .15s}
+.sidebar-dash:hover,.sidebar-dash.on{background:rgba(255,255,255,.1);color:#fff}
+.topbar{background:var(--P);color:#fff;padding:10px 18px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:50}
 .topbar .logo{font-size:15px;font-weight:600}
 .topbar .right{margin-left:auto;display:flex;gap:14px;align-items:center;font-size:12px;opacity:.9}
 .topbar .right button{background:rgba(255,255,255,.2);border:none;color:#fff;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit}
-.nav{display:flex;background:var(--PD);overflow-x:auto;-webkit-overflow-scrolling:touch;position:relative;z-index:500;scrollbar-width:none}
+.nav{display:flex;background:var(--PD);-webkit-overflow-scrolling:touch;position:sticky;top:0;z-index:500;scrollbar-width:none}
+.nav::-webkit-scrollbar{display:none}
 .nav::-webkit-scrollbar{display:none}
 .nav button{flex:none;padding:9px 14px;background:none;border:none;color:rgba(255,255,255,.65);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;font-family:inherit;white-space:nowrap;border-bottom:2px solid transparent;transition:all .15s}
 .nav button.on{color:#fff;border-bottom-color:#fff;background:rgba(255,255,255,.1)}
 .nav button:hover:not(.on){color:#fff;background:rgba(255,255,255,.06)}
-.nav-group{position:relative;flex:none;overflow:visible}
+.nav-group{position:static;flex:none}
 .nav-group>.nav-btn{padding:9px 14px;background:none;border:none;color:rgba(255,255,255,.65);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;font-family:inherit;white-space:nowrap;border-bottom:2px solid transparent;transition:all .15s}
 .nav-group>.nav-btn:hover,.nav-group.open>.nav-btn{color:#fff;background:rgba(255,255,255,.1)}
 .nav-group.active>.nav-btn{color:#fff;border-bottom:2px solid #fff;background:rgba(255,255,255,.1)}
-.nav-dropdown{display:none;position:absolute;top:100%;left:0;background:var(--PD);min-width:200px;border-radius:0 0 8px 8px;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:9999}
+.nav-dropdown{display:none;visibility:hidden}
+.nav-group.open>.nav-dropdown{display:none;visibility:hidden}
 .nav-group.open>.nav-dropdown{display:block}
 .nav-dropdown button{display:block;width:100%;padding:11px 18px;background:none;border:none;color:rgba(255,255,255,.85);font-size:13px;cursor:pointer;text-align:left;font-family:inherit;transition:background .1s;border-bottom:1px solid rgba(255,255,255,.06)}
 .nav-dropdown button:hover{background:rgba(255,255,255,.15);color:#fff}
 .nav-dropdown button.on{background:rgba(255,255,255,.2);color:#fff;font-weight:600}
-.body{flex:1;padding:14px}
+.body{flex:1;padding:14px;overflow-y:auto;min-width:0}
 .panel{display:none}.panel.on{display:block}
 
 /* Cards */
@@ -180,67 +197,78 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button onclick="logout()">Salir</button>
   </div>
 </div>
-<div class="nav" id="main-nav">
-  <button class="on" onclick="go('dash')" data-p="dash">📊 Dashboard</button>
-  <button onclick="go('vendedor-home')" data-p="vendedor-home" style="display:none">🏠 Inicio</button>
-  <div class="nav-group" id="ng-maestros">
-    <button class="nav-btn" onclick="toggleNavGroup('maestros');event.stopPropagation()">🗂 Maestros ▾</button>
-    <div class="nav-dropdown">
-      <button onclick="go('clientes')" data-p="clientes">👥 Clientes</button>
-      <button onclick="go('cuentas')" data-p="cuentas">⚖️ Cuentas corrientes</button>
-      <button onclick="go('productos')" data-p="productos">📦 Productos</button>
-      <button onclick="go('stock')" data-p="stock">📊 Stock</button>
+<div class="nav" id="main-nav" style="display:none"></div>
+
+<div class="app-layout">
+<div class="sidebar" id="sidebar">
+
+  <button class="sidebar-dash on" onclick="go('dash')" data-p="dash">📊 Dashboard</button>
+  <button class="sidebar-dash" onclick="go('vendedor-home')" data-p="vendedor-home" style="display:none">🏠 Inicio</button>
+
+  <div class="sidebar-group" id="sg-maestros">
+    <button class="sidebar-group-btn" onclick="toggleSidebar('maestros')">🗂 Maestros <span id="sc-maestros">▶</span></button>
+    <div class="sidebar-items">
+      <button class="sidebar-item" onclick="go('clientes')" data-p="clientes">👥 Clientes</button>
+      <button class="sidebar-item" onclick="go('cuentas')" data-p="cuentas">⚖️ Cuentas corrientes</button>
+      <button class="sidebar-item" onclick="go('productos')" data-p="productos">📦 Productos</button>
+      <button class="sidebar-item" onclick="go('stock')" data-p="stock">📊 Stock</button>
     </div>
   </div>
-  <div class="nav-group" id="ng-ventas">
-    <button class="nav-btn" onclick="toggleNavGroup('ventas');event.stopPropagation()">🛒 Ventas ▾</button>
-    <div class="nav-dropdown">
-      <button onclick="go('pedidos')" data-p="pedidos">🛒 Pedidos</button>
-      <button onclick="abrirPedidoMovil()" data-p="pedido-movil">📱 Pedido móvil</button>
-      <button onclick="go('carga')" data-p="carga">🚚 Cargas</button>
-      <button onclick="go('remitos')" data-p="remitos">📄 Remitos</button>
-      <button onclick="go('remito-rapido')" data-p="remito-rapido">⚡ Remito rápido</button>
-      <button onclick="go('nc')" data-p="nc">📋 Notas de crédito</button>
+
+  <div class="sidebar-group" id="sg-ventas">
+    <button class="sidebar-group-btn" onclick="toggleSidebar('ventas')">🛒 Ventas <span id="sc-ventas">▶</span></button>
+    <div class="sidebar-items">
+      <button class="sidebar-item" onclick="go('pedidos')" data-p="pedidos">🛒 Pedidos</button>
+      <button class="sidebar-item" onclick="abrirPedidoMovil()" data-p="pedido-movil">📱 Pedido móvil</button>
+      <button class="sidebar-item" onclick="go('carga')" data-p="carga">🚚 Cargas</button>
+      <button class="sidebar-item" onclick="go('remitos')" data-p="remitos">📄 Remitos</button>
+      <button class="sidebar-item" onclick="go('remito-rapido')" data-p="remito-rapido">⚡ Remito rápido</button>
+      <button class="sidebar-item" onclick="go('nc')" data-p="nc">📋 Notas de crédito</button>
     </div>
   </div>
-  <div class="nav-group" id="ng-compras">
-    <button class="nav-btn" onclick="toggleNavGroup('compras');event.stopPropagation()">🛍 Compras ▾</button>
-    <div class="nav-dropdown">
-      <button onclick="contTabDesde('gastos')" data-p="contabilidad">📝 Gastos</button>
+
+  <div class="sidebar-group" id="sg-compras">
+    <button class="sidebar-group-btn" onclick="toggleSidebar('compras')">🛍 Compras <span id="sc-compras">▶</span></button>
+    <div class="sidebar-items">
+      <button class="sidebar-item" onclick="contTabDesde('gastos')" data-p="contabilidad">📝 Gastos</button>
     </div>
   </div>
-  <div class="nav-group" id="ng-tesoreria">
-    <button class="nav-btn" onclick="toggleNavGroup('tesoreria');event.stopPropagation()">💰 Tesorería ▾</button>
-    <div class="nav-dropdown">
-      <button onclick="go('cobranza')" data-p="cobranza">💰 Cobranza</button>
-      <button onclick="contTabDesde('cheques')" data-p="contabilidad">📋 Cheques en cartera</button>
+
+  <div class="sidebar-group" id="sg-tesoreria">
+    <button class="sidebar-group-btn" onclick="toggleSidebar('tesoreria')">💰 Tesorería <span id="sc-tesoreria">▶</span></button>
+    <div class="sidebar-items">
+      <button class="sidebar-item" onclick="go('cobranza')" data-p="cobranza">💰 Cobranza</button>
+      <button class="sidebar-item" onclick="contTabDesde('cheques')" data-p="contabilidad">📋 Cheques en cartera</button>
     </div>
   </div>
-  <div class="nav-group" id="ng-contabilidad">
-    <button class="nav-btn" onclick="toggleNavGroup('contabilidad');event.stopPropagation()">📒 Contabilidad ▾</button>
-    <div class="nav-dropdown">
-      <button onclick="contTabDesde('mayor')" data-p="contabilidad">📊 Mayor de cuentas</button>
-      <button onclick="contTabDesde('resultado')" data-p="contabilidad">💹 Estado de resultado</button>
-      <button onclick="contTabDesde('asientos')" data-p="contabilidad">📖 Asientos manuales</button>
+
+  <div class="sidebar-group" id="sg-contabilidad">
+    <button class="sidebar-group-btn" onclick="toggleSidebar('contabilidad')">📒 Contabilidad <span id="sc-contabilidad">▶</span></button>
+    <div class="sidebar-items">
+      <button class="sidebar-item" onclick="contTabDesde('mayor')" data-p="contabilidad">📊 Mayor</button>
+      <button class="sidebar-item" onclick="contTabDesde('resultado')" data-p="contabilidad">💹 Resultado</button>
+      <button class="sidebar-item" onclick="contTabDesde('asientos')" data-p="contabilidad">📖 Asientos</button>
     </div>
   </div>
-  <div class="nav-group" id="ng-informes">
-    <button class="nav-btn" onclick="toggleNavGroup('informes');event.stopPropagation()">📈 Informes ▾</button>
-    <div class="nav-dropdown">
-      <button onclick="go('informes')" data-p="informes">📈 Informes de ventas</button>
-      <button onclick="go('rendicion')" data-p="rendicion">💼 Rendición</button>
-      <button onclick="exportarTodo()" data-p="exportar">💾 Exportar datos</button>
+
+  <div class="sidebar-group" id="sg-informes">
+    <button class="sidebar-group-btn" onclick="toggleSidebar('informes')">📈 Informes <span id="sc-informes">▶</span></button>
+    <div class="sidebar-items">
+      <button class="sidebar-item" onclick="go('informes')" data-p="informes">📈 Informes</button>
+      <button class="sidebar-item" onclick="go('rendicion')" data-p="rendicion">💼 Rendición</button>
+      <button class="sidebar-item" onclick="exportarTodo()">💾 Exportar</button>
     </div>
   </div>
-  <div class="nav-group" id="ng-config">
-    <button class="nav-btn" onclick="toggleNavGroup('config');event.stopPropagation()">⚙️ Config ▾</button>
-    <div class="nav-dropdown">
-      <button onclick="alert('Próximamente')">👤 Usuarios</button>
+
+  <div class="sidebar-group" id="sg-config">
+    <button class="sidebar-group-btn" onclick="toggleSidebar('config')">⚙️ Config <span id="sc-config">▶</span></button>
+    <div class="sidebar-items">
+      <button class="sidebar-item" onclick="alert('Próximamente')">👤 Usuarios</button>
     </div>
   </div>
+
 </div>
-</div>
-<div class="body">
+<div class="body" id="main-body">
 
 <!-- DASHBOARD -->
 <div class="panel on" id="p-dash">
@@ -1399,6 +1427,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 </div>
 
+</div><!-- fin main-body -->
+</div><!-- fin app-layout -->
+
 <div id="print-area" style="display:none"></div>
 
 <script>
@@ -1441,17 +1472,12 @@ function doLogin(){
   ['np-fecha','cob-fecha','nc-fecha'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=new Date().toISOString().split('T')[0];});
   
   // Aplicar permisos de navegación
+  const sidebar=document.getElementById('sidebar');
   if(found.rol==='vendedor'){
-    // Vendedor: ocultar grupos de admin, mostrar solo inicio
-    ['ng-maestros','ng-ventas','ng-compras','ng-tesoreria','ng-contabilidad','ng-informes','ng-config'].forEach(id=>{
-      const el=document.getElementById(id);if(el)el.style.display='none';
-    });
+    if(sidebar)sidebar.style.display='none';
     document.querySelector('[data-p="vendedor-home"]').style.display='flex';
   } else {
-    // Admin: mostrar todo
-    ['ng-maestros','ng-ventas','ng-compras','ng-tesoreria','ng-contabilidad','ng-informes','ng-config'].forEach(id=>{
-      const el=document.getElementById(id);if(el)el.style.display='';
-    });
+    if(sidebar)sidebar.style.display='';
   }
   
   // Si es vendedor, ir directo a pedidos
@@ -4113,9 +4139,11 @@ function navStockBusq(e) {
 
 // ─── MENÚ DESPLEGABLE ───
 function toggleNavGroup(grupo){
+  const existing=document.getElementById('nav-floating-dropdown');
+  const wasOpen=document.querySelector('.nav-group.open')?.id==='ng-'+grupo;
   document.querySelectorAll('.nav-group').forEach(g=>g.classList.remove('open'));
-  let floating=document.getElementById('nav-floating-dropdown');
-  if(floating){floating.remove();return;}
+  if(existing)existing.remove();
+  if(wasOpen)return;
 
   const ng=document.getElementById('ng-'+grupo);
   if(!ng)return;
@@ -4123,42 +4151,86 @@ function toggleNavGroup(grupo){
   const dropdown=ng.querySelector('.nav-dropdown');
   if(!btn||!dropdown)return;
 
-  const rect=btn.getBoundingClientRect();
+  // Calcular posición real del botón en pantalla
+  const btnRect=btn.getBoundingClientRect();
+  const topPos=btnRect.bottom>0&&btnRect.bottom<200?btnRect.bottom:72;
+  const leftPos=btnRect.left>0?btnRect.left:0;
+
   const f=document.createElement('div');
   f.id='nav-floating-dropdown';
-  f.style.cssText=`position:fixed;top:${rect.bottom}px;left:${rect.left}px;background:#0f5438;min-width:200px;border-radius:0 0 8px 8px;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:99999;overflow:hidden`;
+  f.setAttribute('role','menu');
+  f.style.cssText=`position:fixed;top:${topPos}px;left:${leftPos}px;background:#0f5438;min-width:200px;border-radius:0 0 8px 8px;box-shadow:0 8px 24px rgba(0,0,0,.5);z-index:99999;overflow:hidden`;
 
-  // Construir botones con estilos inline
-  const btns=dropdown.querySelectorAll('button');
-  btns.forEach(b=>{
+  const items=[];
+  dropdown.querySelectorAll('button').forEach(b=>{
     const nb=document.createElement('button');
     nb.textContent=b.textContent;
+    nb.setAttribute('role','menuitem');
+    nb.setAttribute('tabindex','0');
     nb.onclick=()=>{
-      b.onclick&&b.onclick();
-      document.querySelectorAll('.nav-group').forEach(g=>g.classList.remove('open'));
-      const fd=document.getElementById('nav-floating-dropdown');if(fd)fd.remove();
+      if(b.onclick)b.onclick();
+      cerrarNavDropdown();
     };
-    nb.style.cssText='display:block;width:100%;padding:11px 18px;background:none;border:none;border-bottom:1px solid rgba(255,255,255,.08);color:rgba(255,255,255,.85);font-size:13px;cursor:pointer;text-align:left;font-family:inherit';
-    nb.onmouseenter=()=>nb.style.background='rgba(255,255,255,.15)';
+    nb.onkeydown=navDropdownKeydown;
+    nb.style.cssText='display:block;width:100%;padding:11px 18px;background:none;border:none;border-bottom:1px solid rgba(255,255,255,.08);color:rgba(255,255,255,.85);font-size:13px;cursor:pointer;text-align:left;font-family:inherit;outline:none';
+    nb.onmouseenter=()=>{nb.style.background='rgba(255,255,255,.15)';nb.focus();};
     nb.onmouseleave=()=>nb.style.background='none';
     f.appendChild(nb);
+    items.push(nb);
   });
 
   document.body.appendChild(f);
   ng.classList.add('open');
+  // Foco al primer item usando requestAnimationFrame
+  requestAnimationFrame(()=>{
+    requestAnimationFrame(()=>{
+      const first=document.querySelector('#nav-floating-dropdown button');
+      if(first)first.focus();
+    });
+  });
 }
-document.addEventListener('click',e=>{
-  if(!e.target.closest('.nav-group')&&!e.target.closest('#nav-floating-dropdown')){
-    document.querySelectorAll('.nav-group').forEach(g=>g.classList.remove('open'));
-    const f=document.getElementById('nav-floating-dropdown');if(f)f.remove();
-  }
-});
+
+function navDropdownKeydown(e){
+  const f=document.getElementById('nav-floating-dropdown');
+  if(!f)return;
+  const items=[...f.querySelectorAll('button')];
+  const idx=items.indexOf(document.activeElement);
+  if(e.key==='ArrowDown'){e.preventDefault();items[(idx+1)%items.length].focus();}
+  else if(e.key==='ArrowUp'){e.preventDefault();items[(idx-1+items.length)%items.length].focus();}
+  else if(e.key==='Enter'){e.preventDefault();document.activeElement.click();}
+  else if(e.key==='Escape'||e.key==='Tab'){e.preventDefault();cerrarNavDropdown();focusNavBtn();}
+}
+
+function cerrarNavDropdown(){
+  document.querySelectorAll('.nav-group').forEach(g=>g.classList.remove('open'));
+  const f=document.getElementById('nav-floating-dropdown');if(f)f.remove();
+}
+
+function focusNavBtn(){
+  const active=document.querySelector('.nav-group.active .nav-btn')||document.querySelector('.nav-btn');
+  if(active)active.focus();
+}
+
+// Navegación horizontal por los botones del nav con flechas
 document.addEventListener('keydown',e=>{
-  // Bloquear flechas cuando el foco está en el nav
-  if((e.key==='ArrowLeft'||e.key==='ArrowRight')&&e.target.closest('.nav')){
-    e.preventDefault();
+  const navBtns=[...document.querySelectorAll('.nav-btn, .nav button[data-p]')].filter(b=>b.offsetParent!==null);
+  const idx=navBtns.indexOf(document.activeElement);
+  if(idx>=0){
+    if(e.key==='ArrowRight'){e.preventDefault();navBtns[(idx+1)%navBtns.length].focus();}
+    else if(e.key==='ArrowLeft'){e.preventDefault();navBtns[(idx-1+navBtns.length)%navBtns.length].focus();}
+    else if(e.key==='ArrowDown'){
+      e.preventDefault();
+      const grupo=navBtns[idx].closest('.nav-group')?.id?.replace('ng-','');
+      if(grupo)toggleNavGroup(grupo);
+      else navBtns[idx].click();
+    }
+    // Enter lo maneja el onclick del botón directamente — no interceptar
   }
-  if(e.key==='Escape')document.querySelectorAll('.nav-group').forEach(g=>g.classList.remove('open'));
+  if(e.key==='Escape')cerrarNavDropdown();
+});
+
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.nav-group')&&!e.target.closest('#nav-floating-dropdown'))cerrarNavDropdown();
 });
 function contTabDesde(tab){
   go('contabilidad');
@@ -4817,7 +4889,84 @@ function go(p){
   if(p==='contabilidad')contTab('gastos');
   if(p==='nc')renderNCs();
   if(p==='remitos'){const f=document.getElementById('rem-grupo-fecha');if(f&&!f.value)f.value=new Date().toISOString().split('T')[0];}
+  // Actualizar sidebar activo
+  document.querySelectorAll('.sidebar-item,.sidebar-dash').forEach(b=>b.classList.remove('on'));
+  document.querySelectorAll(`[data-p="${p}"]`).forEach(b=>b.classList.add('on'));
+  document.querySelectorAll('.sidebar-group').forEach(g=>g.classList.remove('active'));
+  const grupoMap={
+    'clientes':'maestros','cuentas':'maestros','productos':'maestros','stock':'maestros',
+    'pedidos':'ventas','pedido-movil':'ventas','carga':'ventas','remitos':'ventas','remito-rapido':'ventas','nc':'ventas',
+    'cobranza':'tesoreria','contabilidad':'tesoreria',
+    'informes':'informes','rendicion':'informes'
+  };
+  const g=grupoMap[p];
+  if(g){const sg=document.getElementById('sg-'+g);if(sg)sg.classList.add('active');}
 }
+
+function toggleSidebar(grupo){
+  const sg=document.getElementById('sg-'+grupo);
+  if(!sg)return;
+  const open=sg.classList.contains('open');
+  // Cerrar todos
+  document.querySelectorAll('.sidebar-group').forEach(g=>{
+    g.classList.remove('open');
+    const chev=g.querySelector('.sidebar-group-btn span');
+    if(chev)chev.textContent='▶';
+  });
+  if(!open){
+    sg.classList.add('open');
+    const chev=document.getElementById('sc-'+grupo);
+    if(chev)chev.textContent='▼';
+    // Foco al primer item
+    const first=sg.querySelector('.sidebar-item');
+    if(first)setTimeout(()=>first.focus(),50);
+  }
+}
+
+// Navegación teclado en sidebar
+document.addEventListener('keydown',e=>{
+  const active=document.activeElement;
+  if(active?.classList.contains('sidebar-group-btn')){
+    if(e.key==='ArrowDown'||e.key==='Enter'){
+      e.preventDefault();
+      const grupo=active.closest('.sidebar-group')?.id?.replace('sg-','');
+      if(grupo){
+        const sg=document.getElementById('sg-'+grupo);
+        if(!sg.classList.contains('open'))toggleSidebar(grupo);
+        else{const first=sg.querySelector('.sidebar-item');if(first)first.focus();}
+      }
+    }
+    if(e.key==='ArrowUp'){
+      e.preventDefault();
+      const all=[...document.querySelectorAll('.sidebar-group-btn,.sidebar-dash')].filter(b=>b.offsetParent);
+      const idx=all.indexOf(active);
+      if(idx>0)all[idx-1].focus();
+    }
+  }
+  if(active?.classList.contains('sidebar-item')){
+    const items=[...active.closest('.sidebar-items').querySelectorAll('.sidebar-item')];
+    const idx=items.indexOf(active);
+    if(e.key==='ArrowDown'){e.preventDefault();if(idx<items.length-1)items[idx+1].focus();}
+    if(e.key==='ArrowUp'){
+      e.preventDefault();
+      if(idx>0)items[idx-1].focus();
+      else{const btn=active.closest('.sidebar-group')?.querySelector('.sidebar-group-btn');if(btn)btn.focus();}
+    }
+    if(e.key==='Enter'){e.preventDefault();active.click();}
+    if(e.key==='Escape'){
+      const grupo=active.closest('.sidebar-group')?.id?.replace('sg-','');
+      if(grupo)toggleSidebar(grupo);
+    }
+  }
+  if(active?.classList.contains('sidebar-dash')){
+    if(e.key==='ArrowDown'){
+      e.preventDefault();
+      const all=[...document.querySelectorAll('.sidebar-group-btn,.sidebar-dash')].filter(b=>b.offsetParent);
+      const idx=all.indexOf(active);
+      if(idx<all.length-1)all[idx+1].focus();
+    }
+  }
+});
 </script>
 </body>
 </html>
