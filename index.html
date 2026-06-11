@@ -255,13 +255,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <!-- Paso 2: Productos (oculto hasta elegir cliente) -->
   <div id="pm-paso-productos" style="display:none">
 
-    <!-- Tabs de marcas -->
-    <div style="overflow-x:auto;white-space:nowrap;background:var(--bg2);border-bottom:2px solid var(--brd);padding:0 8px">
-      <div id="pm-marcas-tabs" style="display:inline-flex;gap:4px;padding:8px 0"></div>
-    </div>
-
-    <!-- Lista de productos -->
-    <div id="pm-productos-lista" style="padding:8px"></div>
+    <!-- Lista de marcas -->
+    <div id="pm-marcas-lista" style="padding:8px"></div>
 
     <!-- Carrito flotante -->
     <div id="pm-carrito-bar" style="display:none;position:sticky;bottom:0;background:var(--PD);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center">
@@ -3832,44 +3827,27 @@ function selClienteMovil(id){
 }
 
 function cargarMarcasMovil(){
-  // Obtener marcas únicas de productos activos
-  const marcas=[...new Set(_productos.map(p=>p.marca||p.categoria||'OTROS').filter(Boolean))].sort();
-  const tabs=document.getElementById('pm-marcas-tabs');
-  tabs.innerHTML=marcas.map((m,i)=>`
-    <button id="pm-tab-${i}" onclick="selMarcaMovil('${m}',${i})"
-      style="padding:8px 14px;border-radius:20px;border:1.5px solid var(--brd);background:#fff;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap">
-      ${m}
-    </button>`).join('');
-  // Seleccionar primera marca
-  if(marcas.length){selMarcaMovil(marcas[0],0);}
+  const marcas=[...new Set(_productos.filter(p=>p.activo!==false).map(p=>p.marca||p.categoria||'OTROS').filter(Boolean))].sort();
+  const lista=document.getElementById('pm-marcas-lista');
+  lista.innerHTML=marcas.map(m=>{
+    const key=m.replace(/[^a-zA-Z0-9]/g,'_');
+    const enCarrito=_pmCarrito.filter(x=>{const prod=_productos.find(p=>p.id===x.id);return (prod?.marca||prod?.categoria||'OTROS')===m;});
+    const badge=enCarrito.length>0?`<span style="background:var(--P);color:#fff;border-radius:12px;padding:2px 8px;font-size:11px;font-weight:700">${enCarrito.length} ✓</span>`:'';
+    return `<div><div onclick="toggleMarcaMovil('${m.replace(/'/g,"\\'")}','${key}')" style="display:flex;justify-content:space-between;align-items:center;padding:16px 14px;border-bottom:1px solid var(--brd);cursor:pointer;background:#fff"><div style="display:flex;align-items:center;gap:10px"><span style="font-size:16px;font-weight:600">${m}</span>${badge}</div><span id="pm-chevron-${key}" style="color:var(--txt2);font-size:20px;font-weight:300">›</span></div><div id="pm-prods-${key}" style="display:none;background:var(--bg2)"></div></div>`;
+  }).join('');
 }
-
-function selMarcaMovil(marca,idx){
-  _pmMarcaActual=marca;
-  // Resaltar tab activo
-  document.querySelectorAll('[id^="pm-tab-"]').forEach(b=>{
-    b.style.background='#fff';b.style.color='';b.style.borderColor='var(--brd)';
-  });
-  const tab=document.getElementById('pm-tab-'+idx);
-  if(tab){tab.style.background='var(--PD)';tab.style.color='#fff';tab.style.borderColor='var(--PD)';}
-  // Filtrar productos de esta marca
-  const prods=_productos.filter(p=>(p.marca||p.categoria||'OTROS')===marca&&p.activo!==false);
-  const lista=document.getElementById('pm-productos-lista');
-  lista.innerHTML=prods.map(p=>{
-    const enCarrito=_pmCarrito.find(x=>x.id===p.id);
-    const precio=p.precio||0;
-    return `<div onclick="abrirPopupMovil(${p.id})"
-      style="display:flex;justify-content:space-between;align-items:center;padding:14px 12px;border-bottom:1px solid var(--brd);cursor:pointer;background:${enCarrito?'var(--PL)':'#fff'};border-left:${enCarrito?'4px solid var(--P)':'4px solid transparent'}">
-      <div style="flex:1">
-        <div style="font-size:15px;font-weight:${enCarrito?'700':'500'}">${p.nombre}</div>
-        ${enCarrito?`<div style="font-size:12px;color:var(--P);font-weight:600">✓ ${enCarrito.cant} ${p.unidad||''} en pedido</div>`:''}
-      </div>
-      <div style="text-align:right">
-        <div style="font-size:15px;font-weight:700;color:var(--PD)">${fmt(precio)}</div>
-        <div style="width:32px;height:32px;border-radius:50%;background:var(--P);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;margin-left:auto;margin-top:4px">+</div>
-      </div>
-    </div>`;
-  }).join('')||`<div style="padding:20px;text-align:center;color:var(--txt2)">Sin productos en esta categoría</div>`;
+function toggleMarcaMovil(marca,key){
+  const div=document.getElementById('pm-prods-'+key);
+  const chev=document.getElementById('pm-chevron-'+key);
+  if(!div)return;
+  const open=div.style.display!=='none';
+  if(open){div.style.display='none';if(chev)chev.textContent='›';}
+  else{
+    const prods=_productos.filter(p=>(p.marca||p.categoria||'OTROS')===marca&&p.activo!==false);
+    div.innerHTML=prods.map(p=>{const enCarrito=_pmCarrito.find(x=>x.id===p.id);return `<div onclick="abrirPopupMovil(${p.id})" style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--brd);cursor:pointer;background:${enCarrito?'var(--PL)':'#fff'};border-left:${enCarrito?'4px solid var(--P)':'4px solid transparent'}"><div style="flex:1"><div style="font-size:15px;font-weight:${enCarrito?'700':'500'}">${p.nombre}</div>${enCarrito?`<div style="font-size:12px;color:var(--P);font-weight:600">✓ ${enCarrito.cant} ${p.unidad||''} en pedido</div>`:''}</div><div style="text-align:right;margin-left:12px"><div style="font-size:15px;font-weight:700;color:var(--PD)">${fmt(p.precio||0)}</div><div style="width:30px;height:30px;border-radius:50%;background:var(--P);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;margin-left:auto;margin-top:2px">+</div></div></div>`;}).join('')||`<div style="padding:14px 18px;color:var(--txt2);font-size:13px">Sin productos</div>`;
+    div.style.display='block';if(chev)chev.textContent='⌄';
+    div.scrollIntoView({behavior:'smooth',block:'nearest'});
+  }
 }
 
 function abrirPopupMovil(prodId){
@@ -3912,9 +3890,7 @@ function agregarAlCarrito(){
   }
   cerrarPopupMovil();
   actualizarCarritoBar();
-  // Refrescar lista de productos
-  selMarcaMovil(_pmMarcaActual,
-    [...document.querySelectorAll('[id^="pm-tab-"]')].findIndex(b=>b.style.background&&b.style.background!=='rgb(255, 255, 255)'));
+  cargarMarcasMovil(); // refrescar badges y productos
 }
 
 function actualizarCarritoBar(){
