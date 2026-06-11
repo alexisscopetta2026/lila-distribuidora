@@ -173,6 +173,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="nav">
   <button class="on" onclick="go('dash')" data-p="dash">📊 Dashboard</button>
   <button onclick="go('pedidos')" data-p="pedidos">🛒 Pedidos</button>
+  <button onclick="abrirPedidoMovil()" data-p="pedido-movil">📱 Pedido móvil</button>
   <button onclick="go('carga')" data-p="carga">🚚 Cargas</button>
   <button onclick="go('remitos')" data-p="remitos">📄 Remitos</button>
   <button onclick="go('cobranza')" data-p="cobranza">💰 Cobranza</button>
@@ -212,7 +213,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="panel" id="p-pedidos">
   <div class="sech">
     <h2>Pedidos</h2>
-    <button class="btn P" onclick="abrirPedido()">+ Nuevo pedido</button>
+    <div style="display:flex;gap:6px">
+      <button class="btn P" onclick="abrirPedidoMovil()">📱 Pedido móvil</button>
+      <button class="btn" onclick="abrirPedido()">+ Nuevo pedido</button>
+    </div>
   </div>
   <div class="tb">
     <input id="ped-q" placeholder="Buscar cliente..." oninput="renderPedidos()">
@@ -224,6 +228,103 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </select>
   </div>
   <div id="ped-lista"><div class="loading">Cargando...</div></div>
+</div>
+
+<!-- PEDIDO MÓVIL estilo Moviler -->
+<div class="panel" id="p-pedido-movil" style="padding:0;max-width:480px;margin:0 auto">
+
+  <!-- Header -->
+  <div style="background:var(--PD);color:#fff;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:10">
+    <div>
+      <div style="font-size:11px;opacity:0.8">NUEVO PEDIDO</div>
+      <div id="pm-cli-nombre" style="font-size:16px;font-weight:700">Seleccioná un cliente</div>
+      <div id="pm-cli-saldo" style="font-size:12px;opacity:0.85"></div>
+    </div>
+    <button onclick="go('pedidos')" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">✕ Salir</button>
+  </div>
+
+  <!-- Paso 1: Buscar cliente -->
+  <div id="pm-paso-cliente" style="padding:12px">
+    <div style="font-size:12px;color:var(--txt2);font-weight:600;text-transform:uppercase;margin-bottom:8px">Cliente</div>
+    <input id="pm-cli-q" placeholder="🔍 Buscar por nombre o código..." autocomplete="off"
+      style="width:100%;padding:12px;border:2px solid var(--brd);border-radius:8px;font-size:16px;box-sizing:border-box"
+      oninput="buscarClienteMovil()">
+    <div id="pm-cli-lista" style="margin-top:6px"></div>
+  </div>
+
+  <!-- Paso 2: Productos (oculto hasta elegir cliente) -->
+  <div id="pm-paso-productos" style="display:none">
+
+    <!-- Tabs de marcas -->
+    <div style="overflow-x:auto;white-space:nowrap;background:var(--bg2);border-bottom:2px solid var(--brd);padding:0 8px">
+      <div id="pm-marcas-tabs" style="display:inline-flex;gap:4px;padding:8px 0"></div>
+    </div>
+
+    <!-- Lista de productos -->
+    <div id="pm-productos-lista" style="padding:8px"></div>
+
+    <!-- Carrito flotante -->
+    <div id="pm-carrito-bar" style="display:none;position:sticky;bottom:0;background:var(--PD);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:11px;opacity:0.8" id="pm-carrito-items">0 productos</div>
+        <div style="font-size:18px;font-weight:700" id="pm-carrito-total">$0</div>
+      </div>
+      <button onclick="mostrarResumenMovil()" style="background:#fff;color:var(--PD);border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer">Ver pedido →</button>
+    </div>
+  </div>
+
+  <!-- Paso 3: Resumen (oculto) -->
+  <div id="pm-paso-resumen" style="display:none;padding:12px">
+    <div style="font-size:13px;font-weight:600;color:var(--PD);margin-bottom:10px">📋 Resumen del pedido</div>
+    <div id="pm-resumen-items"></div>
+    <div style="background:var(--PL);border-radius:8px;padding:10px 14px;margin:10px 0">
+      <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;color:var(--PD)">
+        <span>TOTAL</span><span id="pm-resumen-total">$0</span>
+      </div>
+    </div>
+    <div style="margin-bottom:10px">
+      <label style="font-size:11px;color:var(--txt2);text-transform:uppercase">Tipo de visita</label>
+      <select id="pm-visita" style="width:100%;padding:10px;border:1px solid var(--brd);border-radius:8px;font-size:14px;margin-top:4px">
+        <option value="pedido tomado">✅ Pedido tomado</option>
+        <option value="no estaba">🚪 No estaba</option>
+        <option value="no compró">❌ No compró</option>
+        <option value="dejó mensaje">📝 Dejó mensaje</option>
+        <option value="visita próxima semana">📅 Próxima semana</option>
+      </select>
+    </div>
+    <div style="margin-bottom:10px">
+      <label style="font-size:11px;color:var(--txt2);text-transform:uppercase">Observaciones</label>
+      <input id="pm-obs" placeholder="Opcional" style="width:100%;padding:10px;border:1px solid var(--brd);border-radius:8px;font-size:14px;margin-top:4px;box-sizing:border-box">
+    </div>
+    <div style="display:flex;gap:8px">
+      <button onclick="volverProductosMovil()" style="flex:1;padding:12px;background:var(--bg2);border:1px solid var(--brd);border-radius:8px;font-size:14px;cursor:pointer">← Agregar más</button>
+      <button onclick="confirmarPedidoMovil()" style="flex:2;padding:12px;background:var(--P);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer">✓ Confirmar pedido</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- POPUP cantidad producto móvil -->
+<div id="pm-popup-bg" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:flex-end;justify-content:center">
+  <div style="background:#fff;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;box-sizing:border-box">
+    <div id="pm-popup-nombre" style="font-size:15px;font-weight:700;color:var(--PD);margin-bottom:4px"></div>
+    <div id="pm-popup-precio" style="font-size:13px;color:var(--txt2);margin-bottom:16px"></div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+      <button onclick="pmCantidad(-1)" style="width:44px;height:44px;border-radius:50%;background:var(--bg2);border:1px solid var(--brd);font-size:22px;cursor:pointer;font-weight:300">−</button>
+      <input id="pm-cant" type="number" value="1" min="0.1" step="0.5"
+        style="flex:1;text-align:center;font-size:28px;font-weight:700;border:2px solid var(--P);border-radius:8px;padding:8px">
+      <button onclick="pmCantidad(1)" style="width:44px;height:44px;border-radius:50%;background:var(--P);border:none;color:#fff;font-size:22px;cursor:pointer;font-weight:300">+</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+      <label style="font-size:13px;color:var(--txt2);width:80px">Descuento %</label>
+      <input id="pm-dto" type="number" value="0" min="0" max="100"
+        style="flex:1;padding:8px;border:1px solid var(--brd);border-radius:6px;font-size:16px;text-align:right">
+    </div>
+    <div style="display:flex;gap:8px">
+      <button onclick="cerrarPopupMovil()" style="flex:1;padding:12px;background:var(--bg2);border:1px solid var(--brd);border-radius:8px;font-size:14px;cursor:pointer">Cancelar</button>
+      <button onclick="agregarAlCarrito()" style="flex:2;padding:12px;background:var(--P);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer">✓ Agregar</button>
+    </div>
+  </div>
 </div>
 
 <!-- CARGAS -->
@@ -1004,8 +1105,8 @@ const USUARIOS = [
 ];
 
 // Pantallas por rol
-const MENUS_ADMIN=['dash','pedidos','carga','remitos','cobranza','cuentas','clientes','productos','remito-rapido','nc','rendicion','stock','informes','exportar'];
-const MENUS_VENDEDOR=['pedidos','cobranza','cuentas'];
+const MENUS_ADMIN=['dash','pedidos','pedido-movil','carga','remitos','cobranza','cuentas','clientes','productos','remito-rapido','nc','rendicion','stock','informes','exportar'];
+const MENUS_VENDEDOR=['pedidos','pedido-movil','cobranza','cuentas'];
 let usuarioActual = null;
 
 // ─── ESTADO LOCAL ───
@@ -3685,7 +3786,187 @@ function navStockBusq(e) {
   }
 }
 
-// ─── NAVEGACIÓN CON FLECHAS EN CUENTAS CORRIENTES ───
+// ─── PEDIDO MÓVIL (estilo Moviler) ───
+let _pmCliId=null, _pmCarrito=[], _pmMarcaActual=null, _pmProdActual=null;
+
+function abrirPedidoMovil(){
+  _pmCliId=null;_pmCarrito=[];_pmMarcaActual=null;_pmProdActual=null;
+  go('pedido-movil');
+  document.getElementById('pm-cli-nombre').textContent='Seleccioná un cliente';
+  document.getElementById('pm-cli-saldo').textContent='';
+  document.getElementById('pm-cli-q').value='';
+  document.getElementById('pm-cli-lista').innerHTML='';
+  document.getElementById('pm-paso-cliente').style.display='block';
+  document.getElementById('pm-paso-productos').style.display='none';
+  document.getElementById('pm-paso-resumen').style.display='none';
+  actualizarCarritoBar();
+  setTimeout(()=>document.getElementById('pm-cli-q').focus(),100);
+}
+
+function buscarClienteMovil(){
+  const q=(document.getElementById('pm-cli-q').value||'').toLowerCase();
+  const lista=document.getElementById('pm-cli-lista');
+  if(q.length<1){lista.innerHTML='';return;}
+  const m=_clientes.filter(c=>(c.nombre||'').toLowerCase().includes(q)||String(c.codigo||c.id).includes(q)).slice(0,12);
+  lista.innerHTML=m.map(c=>`
+    <div onclick="selClienteMovil(${c.id})" style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--brd);cursor:pointer;background:#fff;active:background:var(--PL)">
+      <div>
+        <div style="font-size:15px;font-weight:600">[${c.codigo||c.id}] ${c.nombre.toUpperCase()}</div>
+        <div style="font-size:12px;color:var(--txt2)">${c.direccion||''} ${c.localidad||''} · Tel: ${c.telefono||'—'}</div>
+      </div>
+      <div style="text-align:right;min-width:80px">
+        <div style="font-size:14px;font-weight:700;color:${(c.saldo||0)>0?'var(--D)':'var(--P)'}">${fmt(c.saldo||0)}</div>
+        <div style="font-size:10px;color:var(--txt2)">saldo</div>
+      </div>
+    </div>`).join('');
+}
+
+function selClienteMovil(id){
+  const c=_clientes.find(x=>x.id===id);if(!c)return;
+  _pmCliId=id;
+  document.getElementById('pm-cli-nombre').textContent=`[${c.codigo||c.id}] ${c.nombre.toUpperCase()}`;
+  document.getElementById('pm-cli-saldo').textContent=`Saldo: ${fmt(c.saldo||0)} · ${c.localidad||''} · ${c.telefono||''}`;
+  document.getElementById('pm-paso-cliente').style.display='none';
+  document.getElementById('pm-paso-productos').style.display='block';
+  cargarMarcasMovil();
+}
+
+function cargarMarcasMovil(){
+  // Obtener marcas únicas de productos activos
+  const marcas=[...new Set(_productos.map(p=>p.marca||p.categoria||'OTROS').filter(Boolean))].sort();
+  const tabs=document.getElementById('pm-marcas-tabs');
+  tabs.innerHTML=marcas.map((m,i)=>`
+    <button id="pm-tab-${i}" onclick="selMarcaMovil('${m}',${i})"
+      style="padding:8px 14px;border-radius:20px;border:1.5px solid var(--brd);background:#fff;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap">
+      ${m}
+    </button>`).join('');
+  // Seleccionar primera marca
+  if(marcas.length){selMarcaMovil(marcas[0],0);}
+}
+
+function selMarcaMovil(marca,idx){
+  _pmMarcaActual=marca;
+  // Resaltar tab activo
+  document.querySelectorAll('[id^="pm-tab-"]').forEach(b=>{
+    b.style.background='#fff';b.style.color='';b.style.borderColor='var(--brd)';
+  });
+  const tab=document.getElementById('pm-tab-'+idx);
+  if(tab){tab.style.background='var(--PD)';tab.style.color='#fff';tab.style.borderColor='var(--PD)';}
+  // Filtrar productos de esta marca
+  const prods=_productos.filter(p=>(p.marca||p.categoria||'OTROS')===marca&&p.activo!==false);
+  const lista=document.getElementById('pm-productos-lista');
+  lista.innerHTML=prods.map(p=>{
+    const enCarrito=_pmCarrito.find(x=>x.id===p.id);
+    const precio=p.precio||0;
+    return `<div onclick="abrirPopupMovil(${p.id})"
+      style="display:flex;justify-content:space-between;align-items:center;padding:14px 12px;border-bottom:1px solid var(--brd);cursor:pointer;background:${enCarrito?'var(--PL)':'#fff'};border-left:${enCarrito?'4px solid var(--P)':'4px solid transparent'}">
+      <div style="flex:1">
+        <div style="font-size:15px;font-weight:${enCarrito?'700':'500'}">${p.nombre}</div>
+        ${enCarrito?`<div style="font-size:12px;color:var(--P);font-weight:600">✓ ${enCarrito.cant} ${p.unidad||''} en pedido</div>`:''}
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:15px;font-weight:700;color:var(--PD)">${fmt(precio)}</div>
+        <div style="width:32px;height:32px;border-radius:50%;background:var(--P);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;margin-left:auto;margin-top:4px">+</div>
+      </div>
+    </div>`;
+  }).join('')||`<div style="padding:20px;text-align:center;color:var(--txt2)">Sin productos en esta categoría</div>`;
+}
+
+function abrirPopupMovil(prodId){
+  const p=_productos.find(x=>x.id===prodId);if(!p)return;
+  _pmProdActual=p;
+  const enCarrito=_pmCarrito.find(x=>x.id===prodId);
+  document.getElementById('pm-popup-nombre').textContent=p.nombre;
+  document.getElementById('pm-popup-precio').textContent=fmt(p.precio||0)+' '+(p.unidad||'');
+  document.getElementById('pm-cant').value=enCarrito?enCarrito.cant:1;
+  document.getElementById('pm-dto').value=enCarrito?enCarrito.dto:(p.descuento||0);
+  const bg=document.getElementById('pm-popup-bg');
+  bg.style.display='flex';
+  setTimeout(()=>document.getElementById('pm-cant').select(),50);
+}
+
+function cerrarPopupMovil(){
+  document.getElementById('pm-popup-bg').style.display='none';
+  _pmProdActual=null;
+}
+
+function pmCantidad(delta){
+  const inp=document.getElementById('pm-cant');
+  const v=Math.max(0,parseFloat(inp.value||0)+delta*0.5);
+  inp.value=Math.round(v*10)/10;
+}
+
+function agregarAlCarrito(){
+  if(!_pmProdActual)return;
+  const cant=parseFloat(document.getElementById('pm-cant').value)||0;
+  const dto=parseFloat(document.getElementById('pm-dto').value)||0;
+  if(cant<=0){
+    // Quitar del carrito
+    _pmCarrito=_pmCarrito.filter(x=>x.id!==_pmProdActual.id);
+  } else {
+    const precio=_pmProdActual.precio||0;
+    const neto=precio*cant*(1-dto/100);
+    const idx=_pmCarrito.findIndex(x=>x.id===_pmProdActual.id);
+    const item={id:_pmProdActual.id,nom:_pmProdActual.nombre,precio,cant,dto,un:_pmProdActual.unidad||'',neto};
+    if(idx>=0)_pmCarrito[idx]=item;else _pmCarrito.push(item);
+  }
+  cerrarPopupMovil();
+  actualizarCarritoBar();
+  // Refrescar lista de productos
+  selMarcaMovil(_pmMarcaActual,
+    [...document.querySelectorAll('[id^="pm-tab-"]')].findIndex(b=>b.style.background&&b.style.background!=='rgb(255, 255, 255)'));
+}
+
+function actualizarCarritoBar(){
+  const bar=document.getElementById('pm-carrito-bar');
+  const tot=_pmCarrito.reduce((a,x)=>a+x.neto,0);
+  const n=_pmCarrito.length;
+  document.getElementById('pm-carrito-items').textContent=n+' producto'+(n!==1?'s':'');
+  document.getElementById('pm-carrito-total').textContent=fmt(tot);
+  if(bar)bar.style.display=n>0?'flex':'none';
+}
+
+function mostrarResumenMovil(){
+  document.getElementById('pm-paso-productos').style.display='none';
+  document.getElementById('pm-paso-resumen').style.display='block';
+  const tot=_pmCarrito.reduce((a,x)=>a+x.neto,0);
+  document.getElementById('pm-resumen-total').textContent=fmt(tot);
+  document.getElementById('pm-resumen-items').innerHTML=_pmCarrito.map(x=>`
+    <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--brd);font-size:14px">
+      <div>
+        <div style="font-weight:600">${x.nom}</div>
+        <div style="color:var(--txt2);font-size:12px">${x.cant} ${x.un} × ${fmt(x.precio)}${x.dto>0?' − '+x.dto+'%':''}</div>
+      </div>
+      <div style="font-weight:700;color:var(--PD)">${fmt(x.neto)}</div>
+    </div>`).join('');
+}
+
+function volverProductosMovil(){
+  document.getElementById('pm-paso-resumen').style.display='none';
+  document.getElementById('pm-paso-productos').style.display='block';
+}
+
+async function confirmarPedidoMovil(){
+  if(!_pmCliId){alert('Seleccioná un cliente');return;}
+  if(!_pmCarrito.length){alert('Agregá al menos un producto');return;}
+  const c=_clientes.find(x=>x.id===_pmCliId);
+  const tot=_pmCarrito.reduce((a,x)=>a+x.neto,0);
+  const items=_pmCarrito.map(x=>({id:x.id,nom:x.nom,precio:x.precio,cant:x.cant,dto:x.dto,un:x.un}));
+  const {error}=await sb.from('pedidos').insert({
+    cliente_id:_pmCliId,cliente:c?.nombre||'?',
+    localidad:c?.localidad||'',zona:c?.zona||'',
+    vendedor:usuarioActual?.nombre||'',
+    fecha:new Date().toISOString().split('T')[0],
+    items,total:tot,estado:'pendiente',
+    visita:document.getElementById('pm-visita').value||null,
+    observaciones:document.getElementById('pm-obs').value||null
+  });
+  if(error){alert('Error: '+error.message);return;}
+  await cargarPedidos();renderPedidos();renderDash();
+  alert(`✅ Pedido confirmado\n${c?.nombre}\n${_pmCarrito.length} productos · ${fmt(tot)}`);
+  abrirPedidoMovil(); // limpiar para el siguiente
+}
+// ─── FIN PEDIDO MÓVIL ───
 let _ccIdx=-1;
 function navCC(e){
   const rows=document.querySelectorAll('#cc-tbody tr');
