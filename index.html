@@ -186,6 +186,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <button onclick="go('rendicion')" data-p="rendicion">💼 Rendición</button>
   <button onclick="go('stock')" data-p="stock">📊 Stock</button>
   <button onclick="go('informes')" data-p="informes">📈 Informes</button>
+  <button onclick="go('contabilidad')" data-p="contabilidad">📒 Contabilidad</button>
   <button onclick="exportarTodo()" data-p="exportar">💾 Exportar</button>
 </div>
 <div class="body">
@@ -855,6 +856,151 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div id="stock-informe" style="display:none"></div>
 </div>
 
+<!-- CONTABILIDAD -->
+<div class="panel" id="p-contabilidad">
+  <!-- Submenú interno -->
+  <div style="background:var(--bg2);border-radius:8px;padding:8px;margin-bottom:14px;display:flex;gap:6px;flex-wrap:wrap">
+    <button id="cont-tab-gastos" class="btn P sm" onclick="contTab('gastos')" style="font-size:13px">📝 Gastos</button>
+    <button id="cont-tab-asientos" class="btn sm" onclick="contTab('asientos')" style="font-size:13px">📖 Asientos</button>
+    <button id="cont-tab-mayor" class="btn sm" onclick="contTab('mayor')" style="font-size:13px">📊 Mayor</button>
+    <button id="cont-tab-resultado" class="btn sm" onclick="contTab('resultado')" style="font-size:13px">💹 Resultado</button>
+    <button id="cont-tab-cheques" class="btn sm" onclick="contTab('cheques')" style="font-size:13px">📋 Cheques en cartera</button>
+  </div>
+
+  <!-- SECCIÓN GASTOS -->
+  <div id="cont-gastos">
+    <div class="sech" style="margin-bottom:10px">
+      <h2>📝 Gastos</h2>
+      <button class="btn P" onclick="abrirGasto()">+ Nuevo gasto</button>
+    </div>
+    <div class="tb">
+      <input id="gas-q" placeholder="Buscar..." oninput="renderGastos()">
+      <select id="gas-mes" onchange="renderGastos()">
+        <option value="">Todos los meses</option>
+      </select>
+    </div>
+    <div id="gas-totales" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px"></div>
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Contrapartida</th><th>Comprobante</th><th>Importe</th><th></th></tr></thead>
+      <tbody id="gas-tbody"></tbody>
+    </table></div>
+    <div class="pg" id="gas-pg"></div>
+  </div>
+
+  <!-- SECCIÓN ASIENTOS (próximamente) -->
+  <div id="cont-asientos" style="display:none">
+    <h2 style="margin-bottom:14px">📖 Asientos manuales</h2>
+    <div style="color:var(--txt2);font-style:italic;padding:20px">Próximamente — asientos manuales para ajustes contables.</div>
+  </div>
+
+  <!-- SECCIÓN MAYOR -->
+  <div id="cont-mayor" style="display:none">
+    <div class="sech" style="margin-bottom:10px"><h2>📊 Mayor de cuentas</h2></div>
+    <div class="fr" style="margin-bottom:10px">
+      <div class="fg">
+        <label>Cuenta</label>
+        <select id="may-cuenta" onchange="renderMayor()">
+          <option value="">— Elegir cuenta —</option>
+          <option value="11101|Caja">11101 — Caja</option>
+          <option value="11102|Banco Macro">11102 — Banco Macro</option>
+          <option value="11105|Banco Santander">11105 — Banco Santander</option>
+          <option value="11104|Valores a Depositar">11104 — Valores a Depositar</option>
+          <option value="11201|Deudores por Ventas">11201 — Deudores por Ventas</option>
+          <option value="40100|Ventas">40100 — Ventas</option>
+          <option value="50101|Costo Mercadería Vendida">50101 — Costo Mercadería Vendida</option>
+          <option value="50201|Sueldos y Jornales">50201 — Sueldos y Jornales</option>
+          <option value="50203|Combustible">50203 — Combustible</option>
+          <option value="50208|Gastos Varios">50208 — Gastos Varios</option>
+        </select>
+      </div>
+      <div class="fg"><label>Desde</label><input type="date" id="may-desde" onchange="renderMayor()"></div>
+      <div class="fg"><label>Hasta</label><input type="date" id="may-hasta" onchange="renderMayor()"></div>
+    </div>
+    <div id="may-resultado"></div>
+  </div>
+
+  <!-- SECCIÓN ESTADO DE RESULTADO -->
+  <div id="cont-resultado" style="display:none">
+    <div class="sech" style="margin-bottom:10px"><h2>💹 Estado de Resultado</h2></div>
+    <div class="fr" style="margin-bottom:10px">
+      <div class="fg"><label>Desde</label><input type="date" id="res-desde"></div>
+      <div class="fg"><label>Hasta</label><input type="date" id="res-hasta"></div>
+      <div class="fg" style="align-self:flex-end">
+        <button class="btn P" onclick="renderResultado()">Calcular</button>
+      </div>
+    </div>
+    <div id="res-cuerpo"></div>
+  </div>
+
+  <!-- SECCIÓN CHEQUES EN CARTERA -->
+  <div id="cont-cheques" style="display:none">
+    <div class="sech" style="margin-bottom:10px">
+      <h2>📋 Cheques en cartera</h2>
+      <button class="btn P" onclick="abrirCheque()">+ Agregar cheque</button>
+    </div>
+    <div id="chq-lista"></div>
+  </div>
+
+</div>
+
+<!-- MODAL GASTO -->
+<div class="mbg" id="m-gasto">
+<div class="mdl" style="width:520px">
+  <div class="mh"><h3 id="m-gas-title">Nuevo gasto</h3><button class="btn sm" onclick="cerrar('m-gasto')">✕</button></div>
+  <div class="mb">
+    <div class="fr">
+      <div class="fg"><label>Fecha</label><input type="date" id="gas-fecha"></div>
+      <div class="fg"><label>Tipo de gasto</label>
+        <select id="gas-tipo" onchange="selTipoGasto()">
+          <option value="">— Elegir —</option>
+          <option value="50201|Sueldos y Jornales">Sueldos y Jornales</option>
+          <option value="50202|Cargas Sociales">Cargas Sociales</option>
+          <option value="50203|Combustible y Lubricante">Combustible</option>
+          <option value="50204|Seguros">Seguros</option>
+          <option value="50205|Repuestos Varios">Repuestos / Mantenimiento</option>
+          <option value="50206|Alquileres">Alquileres</option>
+          <option value="50207|Agua - Luz - Impuestos">Agua / Luz / Impuestos</option>
+          <option value="50208|Gastos Varios">Gastos Varios</option>
+          <option value="50209|Gastos Informáticos">Gastos Informáticos</option>
+          <option value="50210|Honorarios Profesionales">Honorarios Profesionales</option>
+          <option value="50221|Librería y Papelería">Librería / Papelería</option>
+          <option value="50222|Peaje">Peaje</option>
+          <option value="50223|Reparaciones">Reparaciones</option>
+          <option value="50229|Marketing y Publicidad">Marketing / Publicidad</option>
+          <option value="50231|Fletes">Fletes</option>
+          <option value="50233|Neumáticos">Neumáticos</option>
+          <option value="50235|IVA">IVA (pago)</option>
+          <option value="50236|Autónomo">Autónomo</option>
+          <option value="25107|Scopetta Cta. Particular">Cta. Particular Scopetta</option>
+        </select>
+      </div>
+    </div>
+    <div class="fr">
+      <div class="fg" style="flex:2"><label>Descripción / Detalle</label><input id="gas-desc" placeholder="Ej: YPF - carga combustible camión"></div>
+      <div class="fg"><label>Nro. comprobante</label><input id="gas-comp" placeholder="Opcional"></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label>Importe ($)</label><input type="number" id="gas-imp" min="0" placeholder="0"></div>
+      <div class="fg"><label>Contrapartida (pago con)</label>
+        <select id="gas-contra">
+          <option value="11101|Caja">Caja</option>
+          <option value="11102|Banco Macro">Banco Macro</option>
+          <option value="11105|Banco Santander">Banco Santander</option>
+          <option value="11104|Valores a Depositar">Cheque de Terceros</option>
+        </select>
+      </div>
+    </div>
+    <div class="fg"><label>Cuenta contable</label>
+      <div id="gas-cuenta-display" style="padding:8px 10px;background:var(--bg2);border-radius:6px;font-size:13px;color:var(--txt2)">Seleccioná el tipo de gasto</div>
+    </div>
+  </div>
+  <div class="mf">
+    <button class="btn" onclick="cerrar('m-gasto')">Cancelar</button>
+    <button class="btn P" onclick="guardarGasto()">✓ Guardar gasto</button>
+  </div>
+</div>
+</div>
+
 <!-- INFORMES -->
 <div class="panel" id="p-informes">
   <div class="sech"><h2>📊 Informes</h2></div>
@@ -1219,7 +1365,7 @@ const USUARIOS = [
 ];
 
 // Pantallas por rol
-const MENUS_ADMIN=['dash','pedidos','pedido-movil','carga','remitos','cobranza','cuentas','clientes','productos','remito-rapido','nc','rendicion','stock','informes','exportar'];
+const MENUS_ADMIN=['dash','pedidos','pedido-movil','carga','remitos','cobranza','cuentas','clientes','productos','remito-rapido','nc','rendicion','stock','informes','contabilidad','exportar'];
 const MENUS_VENDEDOR=['vendedor-home','pedidos','pedido-movil','cobranza','cuentas'];
 let usuarioActual = null;
 
@@ -1265,8 +1411,8 @@ function logout(){
 
 // ─── CARGA INICIAL ───
 async function cargarTodo(){
-  await Promise.all([cargarClientes(),cargarProductos(),cargarPedidos(),cargarRemitos(),cargarCobros(),cargarCargas()]);
-  renderDash();renderPedidos();renderClientes();renderProductos();renderRemitos();renderCobros();renderCC();renderCargas();
+  await Promise.all([cargarClientes(),cargarProductos(),cargarPedidos(),cargarRemitos(),cargarCobros(),cargarCargas(),cargarGastos()]);
+  renderDash();renderPedidos();renderClientes();renderProductos();renderRemitos();renderCobros();renderCC();renderCargas();renderGastos();
   poblarZonas();
 }
 async function cargarClientes(){
@@ -3907,7 +4053,243 @@ function navStockBusq(e) {
   }
 }
 
-// ─── COBRO MÓVIL (vendedores) ───
+// ─── CONTABILIDAD ───
+function contTab(tab){
+  ['gastos','asientos','mayor','resultado','cheques'].forEach(t=>{
+    const el=document.getElementById('cont-'+t);
+    if(el)el.style.display=t===tab?'block':'none';
+    const btn=document.getElementById('cont-tab-'+t);
+    if(btn){btn.style.background=t===tab?'var(--P)':'';btn.style.color=t===tab?'#fff':'';}
+  });
+  if(tab==='gastos')renderGastos();
+  if(tab==='mayor'){
+    const hoy=new Date().toISOString().split('T')[0];
+    const desde=document.getElementById('may-desde');
+    const hasta=document.getElementById('may-hasta');
+    if(desde&&!desde.value)desde.value=hoy.substring(0,7)+'-01';
+    if(hasta&&!hasta.value)hasta.value=hoy;
+  }
+  if(tab==='resultado'){
+    const hoy=new Date();
+    const desde=document.getElementById('res-desde');
+    const hasta=document.getElementById('res-hasta');
+    if(desde&&!desde.value)desde.value=hoy.getFullYear()+'-01-01';
+    if(hasta&&!hasta.value)hasta.value=hoy.toISOString().split('T')[0];
+  }
+  if(tab==='cheques')renderChequesCartera();
+}
+
+function renderMayor(){
+  const cuentaVal=document.getElementById('may-cuenta')?.value;
+  const desde=document.getElementById('may-desde')?.value;
+  const hasta=document.getElementById('may-hasta')?.value;
+  const res=document.getElementById('may-resultado');
+  if(!cuentaVal||!res){return;}
+  const [cod,nom]=cuentaVal.split('|');
+  // Buscar movimientos de esta cuenta en asientos_detalle (async)
+  sb.from('asientos_detalle')
+    .select('*, asientos(fecha,descripcion,tipo)')
+    .eq('cuenta_cod',cod)
+    .then(({data})=>{
+      let movs=(data||[]).filter(d=>{
+        const f=d.asientos?.fecha;
+        return (!desde||f>=desde)&&(!hasta||f<=hasta);
+      }).sort((a,b)=>a.asientos?.fecha.localeCompare(b.asientos?.fecha));
+      let saldo=0;
+      const rows=movs.map(m=>{
+        saldo+=m.debe-m.haber;
+        return `<tr>
+          <td>${m.asientos?.fecha||''}</td>
+          <td style="font-size:12px;color:var(--txt2)">${m.asientos?.descripcion||''}</td>
+          <td style="color:var(--D);text-align:right">${m.debe>0?fmt(m.debe):'—'}</td>
+          <td style="color:var(--P);text-align:right">${m.haber>0?fmt(m.haber):'—'}</td>
+          <td style="font-weight:600;text-align:right;color:${saldo>=0?'var(--D)':'var(--P)'}">${fmt(saldo)}</td>
+        </tr>`;
+      }).join('');
+      const totDebe=movs.reduce((a,m)=>a+m.debe,0);
+      const totHaber=movs.reduce((a,m)=>a+m.haber,0);
+      res.innerHTML=`
+        <div style="font-size:14px;font-weight:700;color:var(--PD);margin-bottom:10px">${cod} — ${nom}</div>
+        <div class="tbl-wrap"><table class="tbl">
+          <thead><tr><th>Fecha</th><th>Descripción</th><th style="text-align:right;color:var(--D)">Debe</th><th style="text-align:right;color:var(--P)">Haber</th><th style="text-align:right">Saldo</th></tr></thead>
+          <tbody>${rows||'<tr><td colspan="5" style="text-align:center;color:var(--txt2)">Sin movimientos</td></tr>'}</tbody>
+          <tfoot><tr style="background:var(--bg2);font-weight:700">
+            <td colspan="2">TOTALES</td>
+            <td style="text-align:right;color:var(--D)">${fmt(totDebe)}</td>
+            <td style="text-align:right;color:var(--P)">${fmt(totHaber)}</td>
+            <td style="text-align:right">${fmt(saldo)}</td>
+          </tr></tfoot>
+        </table></div>`;
+    });
+}
+
+function renderResultado(){
+  const desde=document.getElementById('res-desde')?.value;
+  const hasta=document.getElementById('res-hasta')?.value;
+  const cuerpo=document.getElementById('res-cuerpo');
+  if(!cuerpo)return;
+  // Ventas del período
+  const ventas=_remitos.filter(r=>r.fecha>=desde&&r.fecha<=hasta).reduce((a,r)=>a+(r.total||0),0);
+  // NC del período
+  const ncs=(_ncs||[]).filter(r=>r.fecha>=desde&&r.fecha<=hasta).reduce((a,r)=>a+(r.importe||0),0);
+  const ventasNetas=ventas-ncs;
+  // Gastos del período por tipo
+  const gastosPeriodo=_gastos.filter(g=>g.fecha>=desde&&g.fecha<=hasta);
+  const totalGastos=gastosPeriodo.reduce((a,g)=>a+(g.importe||0),0);
+  const porTipo={};
+  gastosPeriodo.forEach(g=>{porTipo[g.tipo]=(porTipo[g.tipo]||0)+g.importe;});
+  const resultado=ventasNetas-totalGastos;
+  cuerpo.innerHTML=`
+    <div style="max-width:600px">
+      <div style="background:var(--PL);border-radius:8px;padding:12px 16px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;font-size:13px"><span>Ventas brutas</span><span style="font-weight:600">${fmt(ventas)}</span></div>
+        ${ncs>0?`<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--txt2)"><span>Notas de crédito</span><span>- ${fmt(ncs)}</span></div>`:''}
+        <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;border-top:1px solid var(--brd);margin-top:6px;padding-top:6px"><span>Ventas netas</span><span style="color:var(--P)">${fmt(ventasNetas)}</span></div>
+      </div>
+      <div style="background:var(--bg2);border-radius:8px;padding:12px 16px;margin-bottom:8px">
+        <div style="font-size:12px;font-weight:600;color:var(--txt2);text-transform:uppercase;margin-bottom:8px">Gastos</div>
+        ${Object.entries(porTipo).sort((a,b)=>b[1]-a[1]).map(([tipo,tot])=>`
+          <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;border-bottom:0.5px solid var(--brd)"><span>${tipo}</span><span style="color:var(--D)">${fmt(tot)}</span></div>`).join('')}
+        <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;border-top:2px solid var(--brd);margin-top:6px;padding-top:6px"><span>Total gastos</span><span style="color:var(--D)">${fmt(totalGastos)}</span></div>
+      </div>
+      <div style="background:${resultado>=0?'var(--PL)':'var(--DL)'};border-radius:8px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:16px;font-weight:700">RESULTADO DEL PERÍODO</span>
+        <span style="font-size:24px;font-weight:700;color:${resultado>=0?'var(--P)':'var(--D)'}">${fmt(resultado)}</span>
+      </div>
+      <div style="font-size:11px;color:var(--txt2);margin-top:8px;text-align:right">Período: ${desde} al ${hasta}</div>
+    </div>`;
+}
+
+function renderChequesCartera(){
+  const el=document.getElementById('chq-lista');
+  if(!el)return;
+  el.innerHTML='<div style="color:var(--txt2);font-style:italic;padding:20px">Módulo de cheques en cartera — próximamente.</div>';
+}
+
+function abrirCheque(){alert('Próximamente');}
+// ─── FIN CONTABILIDAD ───
+let _gastos=[], _gasPg=1;
+
+async function cargarGastos(){
+  const {data}=await sb.from('gastos').select('*').order('fecha',{ascending:false});
+  _gastos=data||[];
+}
+
+function abrirGasto(){
+  document.getElementById('gas-fecha').value=new Date().toISOString().split('T')[0];
+  document.getElementById('gas-tipo').value='';
+  document.getElementById('gas-desc').value='';
+  document.getElementById('gas-comp').value='';
+  document.getElementById('gas-imp').value='';
+  document.getElementById('gas-contra').value='11101|Caja';
+  document.getElementById('gas-cuenta-display').textContent='Seleccioná el tipo de gasto';
+  document.getElementById('m-gas-title').textContent='Nuevo gasto';
+  document.getElementById('m-gasto').classList.add('on');
+  setTimeout(()=>document.getElementById('gas-tipo').focus(),100);
+}
+
+function selTipoGasto(){
+  const val=document.getElementById('gas-tipo').value;
+  const display=document.getElementById('gas-cuenta-display');
+  if(val){
+    const [cod,nom]=val.split('|');
+    display.innerHTML=`<b>${cod}</b> — ${nom}`;
+    display.style.color='var(--PD)';
+  } else {
+    display.textContent='Seleccioná el tipo de gasto';
+    display.style.color='var(--txt2)';
+  }
+}
+
+async function guardarGasto(){
+  const tipo=document.getElementById('gas-tipo').value;
+  if(!tipo){alert('Seleccioná el tipo de gasto');return;}
+  const imp=parseFloat(document.getElementById('gas-imp').value)||0;
+  if(imp<=0){alert('Ingresá el importe');return;}
+  const [cuentaCod,cuentaNom]=tipo.split('|');
+  const contra=document.getElementById('gas-contra').value;
+  const [contraCod,contraNom]=contra.split('|');
+  const fecha=document.getElementById('gas-fecha').value;
+  const desc=document.getElementById('gas-desc').value.trim();
+  const comp=document.getElementById('gas-comp').value.trim();
+
+  // Guardar gasto
+  const {data:gasto}=await sb.from('gastos').insert({
+    fecha,tipo:cuentaNom,cuenta_cod:cuentaCod,cuenta_nom:cuentaNom,
+    importe:imp,contrapartida:contraNom,descripcion:desc,comprobante:comp,
+    vendedor:usuarioActual?.nombre||''
+  }).select().single();
+
+  // Generar asiento contable
+  if(gasto){
+    const {data:asiento}=await sb.from('asientos').insert({
+      fecha,descripcion:desc||cuentaNom,tipo:'GASTO',
+      referencia_id:gasto.id,referencia_tipo:'gasto'
+    }).select().single();
+    if(asiento){
+      await sb.from('asientos_detalle').insert([
+        {asiento_id:asiento.id,cuenta_cod:cuentaCod,cuenta_nom:cuentaNom,debe:imp,haber:0},
+        {asiento_id:asiento.id,cuenta_cod:contraCod,cuenta_nom:contraNom,debe:0,haber:imp}
+      ]);
+    }
+  }
+
+  cerrar('m-gasto');
+  await cargarGastos();
+  renderGastos();
+}
+
+function renderGastos(){
+  const q=(document.getElementById('gas-q')?.value||'').toLowerCase();
+  const mes=document.getElementById('gas-mes')?.value||'';
+  let data=_gastos.filter(g=>{
+    const okQ=!q||(g.tipo||'').toLowerCase().includes(q)||(g.descripcion||'').toLowerCase().includes(q);
+    const okM=!mes||g.fecha?.startsWith(mes);
+    return okQ&&okM;
+  });
+  // Poblar meses
+  const meses=[...new Set(_gastos.map(g=>g.fecha?.substring(0,7)).filter(Boolean))].sort().reverse();
+  const selMes=document.getElementById('gas-mes');
+  if(selMes&&selMes.options.length<=1){
+    meses.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=m;selMes.appendChild(o);});
+  }
+  // Totales por tipo
+  const totPorTipo={};
+  data.forEach(g=>{totPorTipo[g.tipo]=(totPorTipo[g.tipo]||0)+g.importe;});
+  const totalDiv=document.getElementById('gas-totales');
+  if(totalDiv){
+    const total=data.reduce((a,g)=>a+g.importe,0);
+    totalDiv.innerHTML=`<div class="card" style="padding:8px 14px;flex:0">
+      <div style="font-size:10px;color:var(--txt2);text-transform:uppercase">Total gastos</div>
+      <div style="font-size:18px;font-weight:700;color:var(--D)">${fmt(total)}</div>
+    </div>`+
+    Object.entries(totPorTipo).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([tipo,tot])=>`
+      <div style="background:var(--bg2);border-radius:8px;padding:8px 12px;font-size:12px">
+        <div style="color:var(--txt2)">${tipo}</div>
+        <div style="font-weight:700;color:var(--D)">${fmt(tot)}</div>
+      </div>`).join('');
+  }
+  // Tabla
+  const sl=data.slice((_gasPg-1)*PP,_gasPg*PP);
+  const tbody=document.getElementById('gas-tbody');
+  tbody.innerHTML=sl.map(g=>`<tr>
+    <td>${g.fecha}</td>
+    <td><span class="b bA" style="font-size:11px">${g.tipo}</span></td>
+    <td style="color:var(--txt2);font-size:12px">${g.descripcion||'—'}</td>
+    <td style="font-size:12px">${g.contrapartida}</td>
+    <td style="font-size:11px;color:var(--txt2)">${g.comprobante||'—'}</td>
+    <td style="font-weight:700;color:var(--D)">${fmt(g.importe)}</td>
+    <td><button class="btn D sm" onclick="elimGasto(${g.id})">🗑</button></td>
+  </tr>`).join('');
+  pag('gas-pg',data.length,_gasPg,p=>{_gasPg=p;renderGastos();});
+}
+
+async function elimGasto(id){
+  if(!confirm('¿Eliminar este gasto?'))return;
+  await sb.from('gastos').delete().eq('id',id);
+  await cargarGastos();renderGastos();
+}
+// ─── FIN GASTOS ───
 let _cobMovilCliId=null, _cobMovilForma=null;
 
 function limpiarCobMovil(){
@@ -4303,7 +4685,7 @@ function go(p){
     if(s&&usuarioActual)s.textContent='Hola, '+usuarioActual.nombre+'!';
     if(f)f.textContent=new Date().toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'});
   }
-  if(p==='stock')iniciarConteo();
+  if(p==='contabilidad')contTab('gastos');
   if(p==='nc')renderNCs();
   if(p==='remitos'){const f=document.getElementById('rem-grupo-fecha');if(f&&!f.value)f.value=new Date().toISOString().split('T')[0];}
 }
