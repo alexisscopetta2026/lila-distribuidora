@@ -3851,11 +3851,11 @@ function selClienteMovil(id){
 }
 
 function cargarMarcasMovil(){
-  const marcas=[...new Set(_productos.filter(p=>p.activo!==false).map(p=>p.proveedor||p.rubro||'OTROS').filter(Boolean))].sort();
+  const marcas=[...new Set(_productos.filter(p=>p.activo!==false).map(p=>p.proveedor_nom||p.rubro||'OTROS').filter(Boolean))].sort();
   const lista=document.getElementById('pm-marcas-lista');
   lista.innerHTML=marcas.map(m=>{
     const key=m.replace(/[^a-zA-Z0-9]/g,'_');
-    const enCarrito=_pmCarrito.filter(x=>{const prod=_productos.find(p=>p.id===x.id);return (prod?.proveedor||prod?.rubro||'OTROS')===m;});
+    const enCarrito=_pmCarrito.filter(x=>{const prod=_productos.find(p=>p.id===x.id);return (prod?.proveedor_nom||prod?.rubro||'OTROS')===m;});
     const badge=enCarrito.length>0?`<span style="background:var(--P);color:#fff;border-radius:12px;padding:2px 8px;font-size:11px;font-weight:700">${enCarrito.length} ✓</span>`:'';
     return `<div><div onclick="toggleMarcaMovil('${m.replace(/'/g,"\\'")}','${key}')" style="display:flex;justify-content:space-between;align-items:center;padding:16px 14px;border-bottom:1px solid var(--brd);cursor:pointer;background:#fff"><div style="display:flex;align-items:center;gap:10px"><span style="font-size:16px;font-weight:600">${m}</span>${badge}</div><span id="pm-chevron-${key}" style="color:var(--txt2);font-size:20px;font-weight:300">›</span></div><div id="pm-prods-${key}" style="display:none;background:var(--bg2)"></div></div>`;
   }).join('');
@@ -3867,7 +3867,7 @@ function toggleMarcaMovil(marca,key){
   const open=div.style.display!=='none';
   if(open){div.style.display='none';if(chev)chev.textContent='›';}
   else{
-    const prods=_productos.filter(p=>(p.proveedor||p.rubro||'OTROS')===marca&&p.activo!==false);
+    const prods=_productos.filter(p=>(p.proveedor_nom||p.rubro||'OTROS')===marca&&p.activo!==false);
     div.innerHTML=prods.map(p=>{const enCarrito=_pmCarrito.find(x=>x.id===p.id);return `<div onclick="abrirPopupMovil(${p.id})" style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--brd);cursor:pointer;background:${enCarrito?'var(--PL)':'#fff'};border-left:${enCarrito?'4px solid var(--P)':'4px solid transparent'}"><div style="flex:1"><div style="font-size:15px;font-weight:${enCarrito?'700':'500'}">${p.nombre}</div>${enCarrito?`<div style="font-size:12px;color:var(--P);font-weight:600">✓ ${enCarrito.cant} ${p.unidad||''} en pedido</div>`:''}</div><div style="text-align:right;margin-left:12px"><div style="font-size:15px;font-weight:700;color:var(--PD)">${fmt(p.precio||0)}</div><div style="width:30px;height:30px;border-radius:50%;background:var(--P);color:#fff;display:flex;align-items:center;justify-content:center;font-size:20px;margin-left:auto;margin-top:2px">+</div></div></div>`;}).join('')||`<div style="padding:14px 18px;color:var(--txt2);font-size:13px">Sin productos</div>`;
     div.style.display='block';if(chev)chev.textContent='⌄';
     div.scrollIntoView({behavior:'smooth',block:'nearest'});
