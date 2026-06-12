@@ -23,10 +23,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .login-error{color:var(--D);font-size:12px;margin-top:8px}
 
 /* APP */
-#app{display:none;flex-direction:column;min-height:100vh}
+#app{display:none;flex-direction:column;height:100vh;overflow:hidden}
 .topbar{background:var(--P);color:#fff;padding:10px 18px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:50}
-.app-layout{display:flex;flex:1;min-height:0;overflow:auto}
-.sidebar{width:200px;background:var(--PD);flex-shrink:0;overflow-y:auto;transition:width .2s}
+.app-layout{display:flex;flex:1;height:calc(100vh - 42px);overflow:hidden;gap:0}
+.sidebar{width:200px;min-width:200px;background:var(--PD);flex-shrink:0;overflow-y:auto;min-height:100%}
 .sidebar.collapsed{width:0;overflow:hidden}
 .sidebar-group{border-bottom:1px solid rgba(255,255,255,.1)}
 .sidebar-group-btn{width:100%;padding:12px 16px;background:none;border:none;color:rgba(255,255,255,.8);font-size:13px;cursor:pointer;text-align:left;font-family:inherit;display:flex;justify-content:space-between;align-items:center;transition:background .15s}
@@ -60,7 +60,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .nav-dropdown button:hover{background:rgba(255,255,255,.15);color:#fff}
 .nav-dropdown button.on{background:rgba(255,255,255,.2);color:#fff;font-weight:600}
 .body{flex:1;padding:14px;overflow-y:auto;min-width:0}
-.panel{display:none}.panel.on{display:block}
+.panel{display:none;width:100%;box-sizing:border-box}.panel.on{display:block;width:100%}
 
 /* Cards */
 .card{background:var(--bg);border:1px solid var(--brd);border-radius:10px;padding:14px;margin-bottom:12px}
@@ -208,9 +208,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="sidebar-group" id="sg-maestros">
     <button class="sidebar-group-btn" onclick="toggleSidebar('maestros')">🗂 Maestros <span id="sc-maestros">▶</span></button>
     <div class="sidebar-items">
-      <button class="sidebar-item" onclick="go('clientes')" data-p="clientes">👥 Clientes</button>
-      <button class="sidebar-item" onclick="go('cuentas')" data-p="cuentas">⚖️ Cuentas corrientes</button>
-      <button class="sidebar-item" onclick="go('productos')" data-p="productos">📦 Productos</button>
+      <button class="sidebar-item" onclick="go('clientes');renderClientes()" data-p="clientes">👥 Clientes</button>
+      <button class="sidebar-item" onclick="go('productos');renderProductos()" data-p="productos">📦 Productos</button>
       <button class="sidebar-item" onclick="go('stock')" data-p="stock">📊 Stock</button>
     </div>
   </div>
@@ -224,6 +223,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="sidebar-item" onclick="go('remitos')" data-p="remitos">📄 Remitos</button>
       <button class="sidebar-item" onclick="go('remito-rapido')" data-p="remito-rapido">⚡ Remito rápido</button>
       <button class="sidebar-item" onclick="go('nc')" data-p="nc">📋 Notas de crédito</button>
+      <button class="sidebar-item" onclick="go('cuentas')" data-p="cuentas">⚖️ Cuentas corrientes</button>
     </div>
   </div>
 
@@ -335,7 +335,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 
 <!-- PEDIDO MÓVIL estilo Moviler -->
-<div class="panel" id="p-pedido-movil" style="padding:0;max-width:480px;margin:0 auto">
+<div class="panel" id="p-pedido-movil" style="padding:0;max-width:520px">
 
   <!-- Header -->
   <div style="background:var(--PD);color:#fff;padding:12px 14px;position:sticky;top:0;z-index:10">
@@ -473,7 +473,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="panel" id="p-cobranza">
 
   <!-- VISTA VENDEDOR (mobile, simple) -->
-  <div id="cob-movil" style="display:none;max-width:480px;margin:0 auto">
+  <div id="cob-movil" style="display:none;max-width:520px">
 
     <!-- Header -->
     <div style="background:var(--PD);color:#fff;padding:12px 14px;position:sticky;top:0;z-index:10;margin:-10px -10px 12px -10px;border-radius:8px 8px 0 0">
@@ -897,7 +897,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <h2>📊 Control de stock y merma</h2>
     <button class="btn P" onclick="iniciarConteo()">+ Nuevo conteo</button>
   </div>
-  <div class="card" id="stock-conteo-section" style="display:none">
+  <div id="stock-conteo-section" style="display:none">
     <div style="font-weight:600;font-size:13px;margin-bottom:10px;color:var(--PD)">Conteo físico — ingresá lo que hay en la heladera/depósito</div>
     <div class="tb">
       <input id="stock-q" placeholder="Buscar producto..." oninput="filtrarConteo()" onkeydown="navStockBusq(event)">
