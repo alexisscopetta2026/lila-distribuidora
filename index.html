@@ -1098,364 +1098,127 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <!-- INFORMES -->
 <div class="panel" id="p-informes">
-  <div class="sech"><h2>📊 Informes</h2></div>
-  <div class="g2" style="margin-bottom:12px">
-    <div class="card">
-      <div style="font-weight:600;margin-bottom:10px">📅 Ventas por período</div>
+  <div class="sech"><h2>📈 Informes</h2></div>
+
+  <!-- Tabs internos -->
+  <div style="background:var(--bg2);border-radius:8px;padding:8px;margin-bottom:14px;display:flex;gap:6px;flex-wrap:wrap" onkeydown="navInfTabs(event)">
+    <button id="inf-tab-ventas" class="btn P sm" onclick="infTab('ventas')" tabindex="0">📅 Ventas</button>
+    <button id="inf-tab-descuentos" class="btn sm" onclick="infTab('descuentos')" tabindex="-1">🏷️ Descuentos</button>
+    <button id="inf-tab-clientes" class="btn sm" onclick="infTab('clientes')" tabindex="-1">👥 Clientes</button>
+    <button id="inf-tab-productos" class="btn sm" onclick="infTab('productos')" tabindex="-1">📦 Productos</button>
+    <button id="inf-tab-comisiones" class="btn sm" onclick="infTab('comisiones')" tabindex="-1">💰 Comisiones</button>
+  </div>
+
+  <!-- VENTAS -->
+  <div id="inf-sec-ventas">
+    <div class="g2" style="margin-bottom:12px">
+      <div class="card">
+        <div style="font-weight:600;margin-bottom:10px">📅 Ventas por período</div>
+        <div class="fr">
+          <div class="fg"><label>Desde</label><input type="date" id="inf-desde"></div>
+          <div class="fg"><label>Hasta</label><input type="date" id="inf-hasta"></div>
+        </div>
+        <button class="btn P" onclick="informeVentas()" style="width:100%">Ver informe</button>
+        <div id="inf-ventas-res" style="margin-top:10px"></div>
+      </div>
+      <div class="card">
+        <div style="font-weight:600;margin-bottom:10px">👤 Ventas por vendedor</div>
+        <div class="fr">
+          <div class="fg"><label>Desde</label><input type="date" id="inf-vd-desde"></div>
+          <div class="fg"><label>Hasta</label><input type="date" id="inf-vd-hasta"></div>
+        </div>
+        <button class="btn P" onclick="informeVendedor()" style="width:100%">Ver informe</button>
+        <div id="inf-vd-res" style="margin-top:10px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DESCUENTOS -->
+  <div id="inf-sec-descuentos" style="display:none">
+    <div class="g2" style="margin-bottom:12px">
+      <div class="card">
+        <div style="font-weight:600;margin-bottom:10px">🏷️ Descuentos por cliente</div>
+        <div class="fr">
+          <div class="fg"><label>Desde</label><input type="date" id="desc-cli-desde"></div>
+          <div class="fg"><label>Hasta</label><input type="date" id="desc-cli-hasta"></div>
+        </div>
+        <button class="btn P" onclick="informeDescuentosPor('cliente','desc-cli-desde','desc-cli-hasta','desc-cli-res')" style="width:100%">Ver informe</button>
+        <div id="desc-cli-res" style="margin-top:10px"></div>
+      </div>
+      <div class="card">
+        <div style="font-weight:600;margin-bottom:10px">📦 Descuentos por producto</div>
+        <div class="fr">
+          <div class="fg"><label>Desde</label><input type="date" id="desc-pro-desde"></div>
+          <div class="fg"><label>Hasta</label><input type="date" id="desc-pro-hasta"></div>
+        </div>
+        <button class="btn P" onclick="informeDescuentosPor('producto','desc-pro-desde','desc-pro-hasta','desc-pro-res')" style="width:100%">Ver informe</button>
+        <div id="desc-pro-res" style="margin-top:10px"></div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-weight:600;margin-bottom:10px">💵 Descuentos por pago contado</div>
+      <div style="font-size:13px;color:var(--txt2);margin-bottom:10px">Remitos donde la condición de pago es contado</div>
       <div class="fr">
-        <div class="fg"><label>Desde</label><input type="date" id="inf-desde"></div>
-        <div class="fg"><label>Hasta</label><input type="date" id="inf-hasta"></div>
+        <div class="fg"><label>Desde</label><input type="date" id="desc-ctdo-desde"></div>
+        <div class="fg"><label>Hasta</label><input type="date" id="desc-ctdo-hasta"></div>
       </div>
-      <button class="btn P" onclick="informeVentas()" style="width:100%">Ver informe</button>
-      <div id="inf-ventas-res" style="margin-top:10px"></div>
+      <button class="btn P" onclick="informeDescuentosContado()" style="width:100%">Ver informe</button>
+      <div id="desc-ctdo-res" style="margin-top:10px"></div>
     </div>
-    <div class="card">
-      <div style="font-weight:600;margin-bottom:10px">🏷️ Descuentos concedidos</div>
+  </div>
+
+  <!-- CLIENTES -->
+  <div id="inf-sec-clientes" style="display:none">
+    <div class="g2" style="margin-bottom:12px">
+      <div class="card">
+        <div style="font-weight:600;margin-bottom:10px">⚠️ Deuda por cliente</div>
+        <div class="fr">
+          <div class="fg"><label>Días mínimos de deuda</label><input type="number" id="inf-dias" value="0" min="0"></div>
+          <div class="fg" style="justify-content:flex-end"><label>&nbsp;</label><button class="btn P" onclick="informeDeuda()" style="width:100%">Ver informe</button></div>
+        </div>
+        <div id="inf-deuda-res" style="margin-top:10px"></div>
+      </div>
+      <div class="card">
+        <div style="font-weight:600;margin-bottom:10px">😴 Clientes sin compras</div>
+        <div class="fr">
+          <div class="fg"><label>Sin compras hace más de (días)</label><input type="number" id="inf-sin" value="30" min="1"></div>
+          <div class="fg" style="justify-content:flex-end"><label>&nbsp;</label><button class="btn P" onclick="informeSinCompras()" style="width:100%">Ver informe</button></div>
+        </div>
+        <div id="inf-sin-res" style="margin-top:10px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRODUCTOS -->
+  <div id="inf-sec-productos" style="display:none">
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-weight:600;margin-bottom:10px">📦 Productos más vendidos</div>
       <div class="fr">
-        <div class="fg"><label>Desde</label><input type="date" id="desc-desde"></div>
-        <div class="fg"><label>Hasta</label><input type="date" id="desc-hasta"></div>
-        <div class="fg"><label>Agrupar por</label>
-          <select id="desc-grupo">
-            <option value="cliente">Cliente</option>
-            <option value="vendedor">Vendedor</option>
-            <option value="producto">Producto</option>
-          </select>
-        </div>
+        <div class="fg"><label>Desde</label><input type="date" id="inf-pv-desde"></div>
+        <div class="fg"><label>Hasta</label><input type="date" id="inf-pv-hasta"></div>
+        <div class="fg" style="justify-content:flex-end"><label>&nbsp;</label><button class="btn P" onclick="informeProductos()" style="width:100%">Ver informe</button></div>
       </div>
-      <button class="btn P" onclick="informeDescuentos()" style="width:100%">Ver informe</button>
-      <div id="desc-res" style="margin-top:10px"></div>
+      <div id="inf-prod-res" style="margin-top:10px"></div>
     </div>
+  </div>
+
+  <!-- COMISIONES -->
+  <div id="inf-sec-comisiones" style="display:none">
     <div class="card">
-      <div style="font-weight:600;margin-bottom:10px">👤 Ventas por vendedor</div>
+      <div style="font-weight:600;margin-bottom:10px">💰 Comisiones vendedores</div>
       <div class="fr">
-        <div class="fg"><label>Desde</label><input type="date" id="inf-vd-desde"></div>
-        <div class="fg"><label>Hasta</label><input type="date" id="inf-vd-hasta"></div>
+        <div class="fg"><label>Desde</label><input type="date" id="inf-com-desde"></div>
+        <div class="fg"><label>Hasta</label><input type="date" id="inf-com-hasta"></div>
+        <div class="fg"><label>% Comisión ventas</label><input type="number" id="inf-com-pct" value="3" min="0" max="100" step="0.1"></div>
+        <div class="fg"><label>% Comisión cobranza</label><input type="number" id="inf-com-pct-cob" value="1" min="0" max="100" step="0.1"></div>
+        <div class="fg" style="justify-content:flex-end"><label>&nbsp;</label><button class="btn P" onclick="informeComisiones()" style="width:100%">Calcular comisiones</button></div>
       </div>
-      <button class="btn P" onclick="informeVendedor()" style="width:100%">Ver informe</button>
-      <div id="inf-vd-res" style="margin-top:10px"></div>
+      <div id="inf-com-res" style="margin-top:10px"></div>
     </div>
-  </div>
-  <div class="g2">
-    <div class="card">
-      <div style="font-weight:600;margin-bottom:10px">⚠️ Deuda por cliente</div>
-      <div class="fr">
-        <div class="fg"><label>Días mínimos de deuda</label><input type="number" id="inf-dias" value="0" min="0"></div>
-        <div class="fg" style="justify-content:flex-end"><label>&nbsp;</label><button class="btn P" onclick="informeDeuda()" style="width:100%">Ver informe</button></div>
-      </div>
-      <div id="inf-deuda-res" style="margin-top:10px"></div>
-    </div>
-    <div class="card">
-      <div style="font-weight:600;margin-bottom:10px">😴 Clientes sin compras</div>
-      <div class="fr">
-        <div class="fg"><label>Sin compras hace más de (días)</label><input type="number" id="inf-inact" value="30" min="1"></div>
-        <div class="fg" style="justify-content:flex-end"><label>&nbsp;</label><button class="btn P" onclick="informeInactivos()" style="width:100%">Ver informe</button></div>
-      </div>
-      <div id="inf-inact-res" style="margin-top:10px"></div>
-    </div>
-  </div>
-  <div class="card">
-    <div style="font-weight:600;margin-bottom:10px">📦 Productos más vendidos</div>
-    <button class="btn P" onclick="informeProductos()">Ver informe</button>
-    <div id="inf-pro-res" style="margin-top:10px"></div>
-  </div>
-  <div class="card">
-    <div style="font-weight:600;margin-bottom:10px">💰 Comisiones vendedores</div>
-    <div class="fr x3">
-      <div class="fg"><label>Desde</label><input type="date" id="inf-com-desde"></div>
-      <div class="fg"><label>Hasta</label><input type="date" id="inf-com-hasta"></div>
-      <div class="fg"><label>% Comisión ventas</label><input type="number" id="inf-com-pct-ven" value="3" min="0" max="100" step="0.1"></div>
-    </div>
-    <div class="fr">
-      <div class="fg"><label>% Comisión cobranza</label><input type="number" id="inf-com-pct-cob" value="1" min="0" max="100" step="0.1"></div>
-      <div class="fg" style="justify-content:flex-end"><label>&nbsp;</label><button class="btn P" onclick="informeComisiones()" style="width:100%">Calcular comisiones</button></div>
-    </div>
-    <div id="inf-com-res" style="margin-top:10px"></div>
   </div>
 
-<!-- MODALES -->
-
-<!-- Modal NC -->
-<div class="mbg" id="m-nc">
-<div class="mdl" style="width:640px">
-  <div class="mh"><h3>Nueva nota de crédito</h3><button class="btn sm" onclick="cerrar('m-nc')">✕</button></div>
-  <div class="mb">
-    <div class="fr">
-      <div class="fg" style="max-width:90px">
-        <label>Código *</label>
-        <input id="nc-cli-cod" placeholder="Ej: 40" onkeydown="if(event.key==='Enter'||(event.key==='Tab'&&this.value.trim())){event.preventDefault();buscarCodCli('nc');}" autocomplete="off" style="font-size:15px;font-weight:600">
-      </div>
-      <div class="fg drop-wrap" style="flex:2">
-        <label>O nombre</label>
-        <input id="nc-cli-q" placeholder="Buscar cliente..." oninput="dropCliNC()" autocomplete="off">
-        <div class="drop" id="nc-cli-drop"></div>
-        <input type="hidden" id="nc-cli-id">
-      </div>
-      <div class="fg"><label>Fecha</label><input type="date" id="nc-fecha-m"></div>
-    </div>
-    <div class="fr">
-      <div class="fg"><label>Motivo</label>
-        <select id="nc-motivo" onchange="toggleNCItems()">
-          <option value="devolucion">Devolución de mercadería</option>
-          <option value="descuento">Descuento / bonificación</option>
-          <option value="error_precio">Error de precio</option>
-          <option value="otro">Otro</option>
-        </select>
-      </div>
-      <div class="fg"><label>Observaciones</label><input id="nc-obs-m" placeholder="Detalle..."></div>
-    </div>
-
-    <!-- Items devolución -->
-    <div id="nc-items-section" style="background:var(--bg2);border-radius:8px;padding:10px;margin-bottom:10px">
-      <div style="font-size:11px;font-weight:500;color:var(--txt2);text-transform:uppercase;margin-bottom:8px">Productos devueltos</div>
-      <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:flex-end">
-        <div class="fg" style="width:80px">
-          <label>Código</label>
-          <input id="nc-cod" placeholder="Ej: 102" oninput="buscarPorCodigoNC()" autocomplete="off">
-        </div>
-        <div class="fg" style="width:80px">
-          <label>Código</label>
-          <input id="nc-cod" placeholder="Ej: 102" onkeydown="if(event.key==='Enter'||(event.key==='Tab'&&this.value.trim())){event.preventDefault();buscarCodPro('nc');}" autocomplete="off">
-        </div>
-        <div class="fg drop-wrap" style="flex:2;min-width:150px">
-          <label>Producto</label>
-          <input id="nc-pro-q" placeholder="Buscar..." oninput="dropProNC()" autocomplete="off">
-          <div class="drop" id="nc-pro-drop"></div>
-        </div>
-        <div class="fg" style="width:80px"><label>Cantidad</label><input id="nc-cant" type="number" value="1" min="0.01" step="0.01"></div>
-        <div class="fg" style="width:95px"><label>Precio ($)</label><input id="nc-precio" type="number" value="0"></div>
-        <button class="btn P" onclick="agregarItemNC()">+ Agregar</button>
-      </div>
-      <div id="nc-items-lista" style="margin-top:8px"></div>
-    </div>
-
-    <!-- Facturas pendientes para imputar -->
-    <div id="nc-facturas-section" style="display:none;background:var(--bg2);border-radius:8px;padding:10px;margin-bottom:10px">
-      <div style="font-size:11px;font-weight:500;color:var(--txt2);text-transform:uppercase;margin-bottom:8px">Imputar contra factura</div>
-      <div id="nc-facturas-lista"></div>
-    </div>
-
-    <!-- Importe manual (para descuentos) -->
-    <div id="nc-importe-section" style="display:none">
-      <div class="fg"><label>Importe a descontar ($)</label><input id="nc-importe" type="number" value="0" min="0"></div>
-    </div>
-
-    <div class="totbar" id="nc-totbar" style="display:none">
-      <span style="font-size:13px;color:var(--PD);font-weight:500">Total nota de crédito</span>
-      <span class="tv" id="nc-total">$0</span>
-    </div>
-  </div>
-  <div class="mf">
-    <button class="btn" onclick="cerrar('m-nc')">Cancelar</button>
-    <button class="btn P" onclick="guardarNC()">✓ Emitir nota de crédito</button>
-  </div>
-</div>
-</div>
-<!-- Pedido -->
-<div class="mbg" id="m-pedido">
-<div class="mdl">
-  <div class="mh"><h3>Nuevo pedido</h3><button class="btn sm" onclick="cerrar('m-pedido')">✕</button></div>
-  <div class="mb">
-    <div class="fr">
-      <div class="fg" style="max-width:90px">
-        <label>Código *</label>
-        <input id="np-cli-cod" placeholder="Ej: 40" onkeydown="if(event.key==='Enter'||(event.key==='Tab'&&this.value.trim())){event.preventDefault();buscarCodCli('np');}" autocomplete="off" style="font-size:15px;font-weight:600">
-      </div>
-      <div class="fg drop-wrap" style="flex:2">
-        <label>O nombre</label>
-        <input id="np-cli-q" placeholder="Buscar cliente..." oninput="dropCli()" autocomplete="off">
-        <div class="drop" id="np-cli-drop"></div>
-        <input type="hidden" id="np-cli-id">
-      </div>
-      <div class="fg"><label>Vendedor</label><input id="np-ven" placeholder="Nombre vendedor"></div>
-    </div>
-    <!-- Info cliente — arriba y destacada -->
-    <div id="np-cli-info" style="display:none;background:var(--PL);border:1px solid var(--P);border-radius:8px;padding:10px 14px;margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
-        <div>
-          <div id="np-cli-nombre" style="font-size:15px;font-weight:700;color:var(--PD)"></div>
-          <div id="np-cli-detalle" style="font-size:12px;color:var(--txt2);margin-top:2px"></div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-size:10px;color:var(--txt2);text-transform:uppercase">Saldo CC</div>
-          <div id="np-cli-saldo" style="font-size:20px;font-weight:700"></div>
-        </div>
-      </div>
-    </div>
-    <div class="fr">
-      <div class="fg"><label>Fecha pedido</label><input type="date" id="np-fecha"></div>
-      <div class="fg"><label>Observaciones del pedido</label><input id="np-obs" placeholder="Opcional"></div>
-      <div class="fg" style="min-width:180px">
-        <label>Visita <span style="font-size:10px;color:var(--txt2)">(resultado)</span></label>
-        <select id="np-visita">
-          <option value="">— Sin registrar —</option>
-          <option value="pedido tomado">✅ Pedido tomado</option>
-          <option value="no estaba">🚪 No estaba</option>
-          <option value="no compró">❌ No compró</option>
-          <option value="dejó mensaje">📝 Dejó mensaje</option>
-          <option value="visita próxima semana">📅 Próxima semana</option>
-        </select>
-      </div>
-    </div>
-    <div style="background:var(--bg2);border-radius:8px;padding:10px;margin-bottom:10px">
-      <div style="font-size:11px;color:var(--txt2);font-weight:500;margin-bottom:7px;text-transform:uppercase">Agregar producto</div>
-      <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:flex-end">
-        <div class="fg" style="width:80px">
-          <label>Código</label>
-          <input id="np-cod" placeholder="Ej: 102" onkeydown="if(event.key==='Enter'||(event.key==='Tab'&&this.value.trim())){event.preventDefault();buscarCodPro('np');}" autocomplete="off">
-        </div>
-        <div class="fg drop-wrap" style="flex:2;min-width:150px">
-          <label>Producto</label>
-          <input id="np-pro-q" placeholder="Buscar..." oninput="dropPro()" autocomplete="off">
-          <div class="drop" id="np-pro-drop"></div>
-        </div>
-        <div class="fg" style="width:80px"><label>Cantidad</label><input id="np-cant" type="number" value="1" min="0.01" step="0.01"></div>
-        <div class="fg" style="width:95px"><label>Precio ($)</label><input id="np-precio" type="number" value="0"></div>
-        <div class="fg" style="width:65px"><label>Dto%</label><input id="np-dto" type="number" value="0"></div>
-        <button class="btn P" onclick="agregarItem()">+ Agregar</button>
-      </div>
-    </div>
-    <div id="np-items"></div>
-    <div class="totbar" id="np-totbar" style="display:none">
-      <div style="font-size:12px;color:var(--PD)" id="np-desglose"></div>
-      <div class="tv" id="np-total">$0</div>
-    </div>
-  </div>
-  <div class="mf">
-    <button class="btn" onclick="cerrar('m-pedido')">Cancelar</button>
-    <button class="btn P" onclick="guardarPedido()">✓ Confirmar pedido</button>
-  </div>
-</div>
 </div>
 
-<!-- Carga -->
-<div class="mbg" id="m-carga">
-<div class="mdl">
-  <div class="mh"><h3>Nueva carga</h3><button class="btn sm" onclick="cerrar('m-carga')">✕</button></div>
-  <div class="mb">
-    <div class="fr">
-      <div class="fg"><label>Nombre de la carga</label><input id="nc-nombre" placeholder="Ej: Reparto lunes zona norte"></div>
-      <div class="fg"><label>Fecha</label><input type="date" id="nc-fecha"></div>
-    </div>
-    <div class="fr">
-      <div class="fg"><label>Vendedor / Repartidor</label><input id="nc-ven" placeholder="Nombre" oninput="loadPedsCarga()"></div>
-    </div>
-    <div style="font-size:12px;color:var(--txt2);margin-bottom:8px">Pedidos pendientes:</div>
-    <div id="nc-peds"></div>
-  </div>
-  <div class="mf">
-    <button class="btn" onclick="cerrar('m-carga')">Cancelar</button>
-    <button class="btn P" onclick="guardarCarga()">✓ Crear carga</button>
-  </div>
-</div>
-</div>
-
-<!-- Modal editar carga -->
-<div class="mbg" id="m-editar-carga">
-<div class="mdl">
-  <div class="mh"><h3>Editar carga</h3><button class="btn sm" onclick="cerrar('m-editar-carga')">✕</button></div>
-  <div class="mb">
-    <input type="hidden" id="ec-id">
-    <div class="fr">
-      <div class="fg"><label>Nombre de la carga</label><input id="ec-nombre" placeholder="Ej: Reparto lunes zona norte"></div>
-      <div class="fg"><label>Fecha</label><input type="date" id="ec-fecha"></div>
-    </div>
-    <div class="fg"><label>Vendedor / Repartidor</label><input id="ec-ven" placeholder="Nombre"></div>
-  </div>
-  <div class="mf">
-    <button class="btn" onclick="cerrar('m-editar-carga')">Cancelar</button>
-    <button class="btn P" onclick="guardarEditarCarga()">✓ Guardar cambios</button>
-  </div>
-</div>
-</div>
-
-<!-- Cliente -->
-<div class="mbg" id="m-cliente">
-<div class="mdl">
-  <div class="mh"><h3 id="m-cli-title">Nuevo cliente</h3><button class="btn sm" onclick="cerrar('m-cliente')">✕</button></div>
-  <div class="mb">
-    <input type="hidden" id="cli-edit-id">
-    <div class="fr">
-      <div class="fg"><label>Nombre *</label><input id="cli-nom"></div>
-      <div class="fg"><label>CUIT <span style="font-size:10px;color:var(--txt2)">[Enter = buscar en ARCA]</span></label>
-        <input id="cli-cuit" placeholder="20-12345678-9"
-          onkeydown="if(event.key==='Enter'){event.preventDefault();const cuit=(this.value||'').replace(/\D/g,'');if(cuit.length>=10){window.open('https://www.afip.gob.ar/genericos/cInscripcion/intervarlo.asp?cuit='+cuit,'_blank');}else{alert('Ingresá el CUIT completo');}}">
-      </div>
-    </div>
-    <div class="fr">
-      <div class="fg"><label>Razón social <span style="font-size:10px;color:var(--txt2)">(AFIP — si difiere del nombre)</span></label><input id="cli-razon" placeholder="Igual al nombre si es el mismo"></div>
-      <div class="fg"><label>Categoría IVA</label><select id="cli-cat"><option>Cons. Final</option><option>Resp. Inscr.</option><option>Monotributista</option><option>Exento</option></select></div>
-    </div>
-    <div class="fr">
-      <div class="fg"><label>Dirección</label><input id="cli-dir"></div>
-      <div class="fg"><label>Localidad</label><input id="cli-loc"></div>
-    </div>
-    <div class="fr x3">
-      <div class="fg"><label>Teléfono</label><input id="cli-tel"></div>
-      <div class="fg"><label>Zona</label><input id="cli-zona" placeholder="Ej: 1"></div>
-    </div>
-    <div class="fr x3">
-      <div class="fg"><label>Vendedor</label><input id="cli-ven" placeholder="Nombre"></div>
-      <div class="fg"><label>Descuento %</label><input id="cli-dto" type="number" value="0"></div>
-      <div class="fg"><label>Cond. pago (días)</label><input id="cli-cpg" type="number" value="0"></div>
-    </div>
-    <div class="fr">
-      <div class="fg"><label>Saldo actual ($)</label><input id="cli-saldo" type="number" value="0"></div>
-      <div class="fg"><label>Lista de precios</label><select id="cli-lista"><option value="1">Lista 1</option><option value="2">Lista 2</option><option value="3">Lista 3</option></select></div>
-    </div>
-  </div>
-  <div class="mf">
-    <button class="btn" onclick="cerrar('m-cliente')">Cancelar</button>
-    <button class="btn P" onclick="guardarCliente()">✓ Guardar</button>
-  </div>
-</div>
-</div>
-
-<!-- Producto -->
-<div class="mbg" id="m-producto">
-<div class="mdl">
-  <div class="mh"><h3 id="m-pro-title">Nuevo producto</h3><button class="btn sm" onclick="cerrar('m-producto')">✕</button></div>
-  <div class="mb">
-    <input type="hidden" id="pro-edit-id">
-    <div class="fr">
-      <div class="fg"><label>Código</label><input id="pro-cod"></div>
-      <div class="fg"><label>Nombre *</label><input id="pro-nom"></div>
-    </div>
-    <div class="fr x3">
-      <div class="fg"><label>Costo ($)</label><input id="pro-costo" type="number" value="0"></div>
-      <div class="fg"><label>Precio ($)</label><input id="pro-precio" type="number" value="0"></div>
-      <div class="fg"><label>IVA %</label><select id="pro-iva"><option value="21">21%</option><option value="10.5">10.5%</option><option value="0">Exento</option></select></div>
-    </div>
-    <div class="fr x3">
-      <div class="fg"><label>Unidad</label><input id="pro-unidad"></div>
-      <div class="fg"><label>Stock</label><input id="pro-stock" type="number" value="0"></div>
-      <div class="fg"><label>Dto fijo %</label><input id="pro-dto" type="number" value="0"></div>
-    </div>
-    <div class="fr">
-      <div class="fg"><label>Línea</label><input id="pro-linea"></div>
-      <div class="fg"><label>Rubro</label><input id="pro-rubro"></div>
-    </div>
-  </div>
-  <div class="mf">
-    <button class="btn" onclick="cerrar('m-producto')">Cancelar</button>
-    <button class="btn P" onclick="guardarProducto()">✓ Guardar</button>
-  </div>
-</div>
-</div>
-
-<!-- Ver remito / historial -->
-<div class="mbg" id="m-ver">
-<div class="mdl">
-  <div class="mh"><h3 id="m-ver-title">Detalle</h3><button class="btn sm" onclick="cerrar('m-ver')">✕</button></div>
-  <div class="mb" id="m-ver-body"></div>
-  <div class="mf">
-    <button class="btn" onclick="cerrar('m-ver')">Cerrar</button>
-    <button class="btn" id="m-ver-print2" style="display:none" onclick="imprimirHojaCarga()">🖨️ Hoja de carga</button>
-    <button class="btn A" id="m-ver-print" style="display:none" onclick="_verTipo==='carga'?imprimirHojaRuta():imprimirRemito()">🖨️ Hoja de ruta</button>
-  </div>
-</div>
-</div>
-
-</div><!-- fin main-body -->
 </div><!-- fin app-layout -->
 
 <div id="print-area" style="display:none"></div>
@@ -3568,11 +3331,12 @@ async function emitirRemitoRapido(){
 
 // ─── INFORMES ───
 function initInformes(){
+  infTab('ventas');
   const hoy=new Date().toISOString().split('T')[0];
   const hace30=new Date(Date.now()-30*864e5).toISOString().split('T')[0];
-  const hace7=new Date(Date.now()-7*864e5).toISOString().split('T')[0];
-  ['inf-desde','inf-vd-desde','inf-com-desde'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=hace30;});
-  ['inf-hasta','inf-vd-hasta','inf-com-hasta'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=hoy;});
+  ['inf-desde','inf-vd-desde','inf-com-desde','desc-cli-desde','desc-pro-desde','desc-ctdo-desde'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=hace30;});
+  ['inf-hasta','inf-vd-hasta','inf-com-hasta','desc-cli-hasta','desc-pro-hasta','desc-ctdo-hasta'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=hoy;});
+  setTimeout(()=>{const btn=document.getElementById('inf-tab-ventas');if(btn)btn.focus();},50);
 }
 async function informeVentas(){
   const desde=document.getElementById('inf-desde').value;
@@ -4581,11 +4345,38 @@ async function elimGasto(id){
   await sb.from('gastos').delete().eq('id',id);
   await cargarGastos();renderGastos();
 }
-function informeDescuentos(){
-  const desde=document.getElementById('desc-desde')?.value;
-  const hasta=document.getElementById('desc-hasta')?.value;
-  const grupo=document.getElementById('desc-grupo')?.value||'cliente';
-  const res=document.getElementById('desc-res');
+function navInfTabs(e){
+  const tabs=['ventas','descuentos','clientes','productos','comisiones'];
+  const btns=tabs.map(t=>document.getElementById('inf-tab-'+t));
+  const idx=btns.indexOf(document.activeElement);
+  if(idx<0)return;
+  if(e.key==='ArrowRight'){e.preventDefault();const next=btns[(idx+1)%btns.length];next.focus();next.click();}
+  if(e.key==='ArrowLeft'){e.preventDefault();const prev=btns[(idx-1+btns.length)%btns.length];prev.focus();prev.click();}
+  if(e.key==='Tab'){e.preventDefault();
+    // Ir al primer campo de la sección activa
+    const sec=document.querySelector('[id^="inf-sec-"]:not([style*="display: none"]):not([style*="display:none"])');
+    if(sec){const first=sec.querySelector('input,button,select');if(first)first.focus();}
+  }
+}
+
+function infTab(tab){
+  const tabs=['ventas','descuentos','clientes','productos','comisiones'];
+  tabs.forEach(t=>{
+    const el=document.getElementById('inf-sec-'+t);
+    if(el)el.style.display=t===tab?'block':'none';
+    const btn=document.getElementById('inf-tab-'+t);
+    if(btn){
+      btn.style.background=t===tab?'var(--P)':'';
+      btn.style.color=t===tab?'#fff':'';
+      btn.tabIndex=t===tab?0:-1;
+    }
+  });
+}
+
+function informeDescuentosPor(grupo,desdeId,hastaId,resId){
+  const desde=document.getElementById(desdeId)?.value;
+  const hasta=document.getElementById(hastaId)?.value;
+  const res=document.getElementById(resId);
   if(!res)return;
   const rems=_remitos.filter(r=>(!desde||r.fecha>=desde)&&(!hasta||r.fecha<=hasta));
   const totales={};let totalDesc=0,totalBruto=0;
@@ -4595,18 +4386,36 @@ function informeDescuentos(){
       const desc=bruto*(it.dto||0)/100;
       if(desc<=0)return;
       totalDesc+=desc;totalBruto+=bruto;
-      const key=grupo==='cliente'?r.cliente||'Sin cliente':grupo==='vendedor'?r.vendedor||'Sin vendedor':it.nom||'Sin nombre';
+      const key=grupo==='cliente'?r.cliente||'Sin cliente':it.nom||'Sin nombre';
       totales[key]=(totales[key]||0)+desc;
     });
   });
   if(!Object.keys(totales).length){res.innerHTML='<div style="color:var(--txt2);font-style:italic">Sin descuentos en el período</div>';return;}
   const filas=Object.entries(totales).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${k}</td><td style="text-align:right;color:var(--D)">${fmt(v)}</td><td style="text-align:right;color:var(--txt2)">${totalBruto>0?(v/totalBruto*100).toFixed(1)+'%':'—'}</td></tr>`).join('');
-  res.innerHTML=`<div style="margin-bottom:8px;display:flex;gap:14px;flex-wrap:wrap">
-    <div><div style="font-size:10px;color:var(--txt2)">Total descuentos</div><div style="font-size:18px;font-weight:700;color:var(--D)">${fmt(totalDesc)}</div></div>
-    <div><div style="font-size:10px;color:var(--txt2)">% sobre bruto</div><div style="font-size:18px;font-weight:700;color:var(--W)">${totalBruto>0?(totalDesc/totalBruto*100).toFixed(1)+'%':'—'}</div></div>
-  </div>
-  <div class="tbl-wrap"><table class="tbl"><thead><tr><th>${grupo.charAt(0).toUpperCase()+grupo.slice(1)}</th><th style="text-align:right">Descuento</th><th style="text-align:right">% s/bruto</th></tr></thead><tbody>${filas}</tbody></table></div>`;
+  res.innerHTML=`<div style="margin-bottom:8px;display:flex;gap:14px"><div><div style="font-size:10px;color:var(--txt2)">Total</div><div style="font-size:16px;font-weight:700;color:var(--D)">${fmt(totalDesc)}</div></div></div>
+  <div class="tbl-wrap"><table class="tbl"><thead><tr><th>${grupo==='cliente'?'Cliente':'Producto'}</th><th style="text-align:right">Descuento</th><th style="text-align:right">% s/bruto</th></tr></thead><tbody>${filas}</tbody></table></div>`;
 }
+
+function informeDescuentosContado(){
+  const desde=document.getElementById('desc-ctdo-desde')?.value;
+  const hasta=document.getElementById('desc-ctdo-hasta')?.value;
+  const res=document.getElementById('desc-ctdo-res');
+  if(!res)return;
+  const rems=_remitos.filter(r=>(!desde||r.fecha>=desde)&&(!hasta||r.fecha<=hasta));
+  let totalDesc=0,totalVentas=0;
+  const filas=rems.filter(r=>{
+    const desc=(r.items||[]).reduce((a,it)=>a+(it.precio*it.cant*(it.dto||0)/100),0);
+    return desc>0;
+  }).map(r=>{
+    const bruto=(r.items||[]).reduce((a,it)=>a+it.precio*it.cant,0);
+    const desc=bruto-r.total;
+    totalDesc+=desc;totalVentas+=bruto;
+    return `<tr><td>${r.fecha}</td><td>${r.cliente}</td><td style="text-align:right">${fmt(bruto)}</td><td style="text-align:right;color:var(--D)">${fmt(desc)}</td><td style="text-align:right;color:var(--txt2)">${bruto>0?(desc/bruto*100).toFixed(1)+'%':'—'}</td></tr>`;
+  }).join('');
+  res.innerHTML=`<div style="margin-bottom:8px;display:flex;gap:14px"><div><div style="font-size:10px;color:var(--txt2)">Total descuentos</div><div style="font-size:16px;font-weight:700;color:var(--D)">${fmt(totalDesc)}</div></div></div>
+  <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Fecha</th><th>Cliente</th><th style="text-align:right">Bruto</th><th style="text-align:right">Descuento</th><th style="text-align:right">%</th></tr></thead><tbody>${filas||'<tr><td colspan="5" style="text-align:center;color:var(--txt2)">Sin datos</td></tr>'}</tbody></table></div>`;
+}
+
 // ─── FIN GASTOS ───
 let _cobMovilCliId=null, _cobMovilForma=null;
 
