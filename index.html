@@ -596,26 +596,28 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <!-- Info cliente -->
     <div id="cob-cli-info" style="display:none;background:var(--PL);border-radius:6px;padding:6px 12px;font-size:12px;color:var(--PD);margin-bottom:8px;font-weight:500"></div>
 
-    <!-- TOTAL A IMPUTAR — campo central -->
-    <div style="background:var(--PL);border:2px solid var(--P);border-radius:8px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:14px">
-      <div style="flex:1">
-        <label style="font-size:10px;font-weight:600;color:var(--PD);text-transform:uppercase">💰 Total que cobra</label>
+    <!-- TOTAL A IMPUTAR — campo compacto -->
+    <div style="background:var(--PL);border:2px solid var(--P);border-radius:8px;padding:8px 12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:200px">
+        <label style="font-size:11px;font-weight:600;color:var(--PD);white-space:nowrap">💰 Total que cobra</label>
         <input id="cob-total-imputar" type="number" value="0" min="0" placeholder="0"
-          style="width:100%;padding:8px 10px;border:2px solid var(--P);border-radius:6px;font-size:20px;font-weight:700;text-align:right;margin-top:4px;background:#fff"
+          style="width:140px;padding:6px 10px;border:2px solid var(--P);border-radius:6px;font-size:16px;font-weight:700;text-align:right;background:#fff"
           oninput="onTotalImputarChange()"
           onkeydown="if(event.key==='Tab'||event.key==='Enter'){event.preventDefault();document.getElementById('cob-forma-ef').focus();}">
       </div>
-      <div style="text-align:center">
-        <div style="font-size:9px;color:var(--txt2);text-transform:uppercase">Imputado</div>
-        <div style="font-size:16px;font-weight:700;color:var(--P)" id="cob-imputado-monto">$0</div>
-      </div>
-      <div style="text-align:center">
-        <div style="font-size:9px;color:var(--txt2);text-transform:uppercase">RESTO</div>
-        <div style="font-size:20px;font-weight:700;color:var(--W)" id="cob-resto-display">$0</div>
-      </div>
-      <div id="cob-resto-section" style="display:none">
-        <button class="btn sm" style="background:var(--P);color:#fff;border-color:var(--P)" onclick="dejarComoSaldoFavor()">✅ Saldo a favor</button>
-        <span id="cob-resto-monto" style="display:none"></span>
+      <div style="display:flex;gap:14px;align-items:center">
+        <div style="text-align:center">
+          <div style="font-size:9px;color:var(--txt2);text-transform:uppercase">Imputado</div>
+          <div style="font-size:14px;font-weight:700;color:var(--P)" id="cob-imputado-monto">$0</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:9px;color:var(--txt2);text-transform:uppercase">Resto</div>
+          <div style="font-size:16px;font-weight:700;color:var(--W)" id="cob-resto-display">$0</div>
+        </div>
+        <div id="cob-resto-section" style="display:none">
+          <button class="btn sm" style="background:var(--P);color:#fff;border-color:var(--P)" onclick="dejarComoSaldoFavor()">✅ Saldo a favor</button>
+          <span id="cob-resto-monto" style="display:none"></span>
+        </div>
       </div>
     </div>
 
@@ -1484,7 +1486,12 @@ function doLogin(){
   if(found.rol==='vendedor'){
     cargarTodo().then(()=>go('vendedor-home'));
   } else {
-    cargarTodo();
+    cargarTodo().then(()=>{
+      setTimeout(()=>{
+        const dashBtn=document.querySelector('.sidebar-dash[data-p="dash"]');
+        if(dashBtn)dashBtn.focus();
+      },300);
+    });
   }
 }
 function logout(){
@@ -4137,7 +4144,15 @@ function navStockBusq(e) {
   }
 }
 
-// ─── MENÚ DESPLEGABLE ───
+// ─── HISTORIAL DE NAVEGACIÓN ───
+const _navHistory=[];
+const _goOriginal=go;
+function go(p){
+  const panelActual=document.querySelector('.panel.on')?.id?.replace('p-','');
+  if(panelActual&&panelActual!==p)_navHistory.push(panelActual);
+  if(_navHistory.length>20)_navHistory.shift();
+  _goOriginal(p);
+}
 function toggleNavGroup(grupo){
   const existing=document.getElementById('nav-floating-dropdown');
   const wasOpen=document.querySelector('.nav-group.open')?.id==='ng-'+grupo;
@@ -4226,7 +4241,19 @@ document.addEventListener('keydown',e=>{
     }
     // Enter lo maneja el onclick del botón directamente — no interceptar
   }
-  if(e.key==='Escape')cerrarNavDropdown();
+  if(e.key==='Escape'){
+    // Si hay modal abierto, cerrarlo
+    const modalAbierto=document.querySelector('.mbg.on');
+    if(modalAbierto){modalAbierto.classList.remove('on');return;}
+    // Si hay dropdown del sidebar abierto, cerrarlo
+    const sidebarOpen=document.querySelector('.sidebar-group.open');
+    if(sidebarOpen){toggleSidebar(sidebarOpen.id.replace('sg-',''));return;}
+    // Volver al panel anterior
+    if(_navHistory.length>0){
+      const anterior=_navHistory.pop();
+      _goOriginal(anterior);
+    }
+  }
 });
 
 document.addEventListener('click',e=>{
@@ -4593,7 +4620,7 @@ async function guardarCobMovil(){
   if(c){await sb.from('clientes').update({saldo:Math.max(0,(c.saldo||0)-importe+(resto>0?resto:0))}).eq('id',c.id);}
   await Promise.all([cargarCobros(),cargarClientes(),cargarRemitos()]);
   renderDash();
-  alert(`✅ Cobro confirmado\n${c?.nombre}\n${fmt(importe)}${resto>0?'\nResto a favor: '+fmt(resto):''}`);
+  mostrarConfirmacionMovil('cobro', c?.nombre, fmt(importe)+(resto>0?' · Resto a favor: '+fmt(resto):''));
   limpiarCobMovil();
 }
 // ─── FIN COBRO MÓVIL ───
@@ -4800,9 +4827,70 @@ async function confirmarPedidoMovil(){
     observaciones:document.getElementById('pm-obs').value||null
   });
   if(error){alert('Error: '+error.message);return;}
-  await cargarPedidos();renderPedidos();renderDash();
-  alert(`✅ Pedido confirmado\n${c?.nombre}\n${_pmCarrito.length} productos · ${fmt(tot)}`);
-  abrirPedidoMovil(); // limpiar para el siguiente
+  await cargarPedidos();renderDash();
+  // Mostrar pantalla de confirmación con opciones
+  mostrarConfirmacionMovil('pedido', c?.nombre, _pmCarrito.length+' productos · '+fmt(tot));
+}
+function mostrarConfirmacionMovil(tipo, cliente, detalle){
+  // Mostrar panel de éxito con opciones
+  const panel=document.getElementById('p-pedido-movil');
+  if(!panel)return;
+  const esCobranza=tipo==='cobro';
+  panel.innerHTML=`
+    <div style="max-width:480px;padding:20px">
+      <div style="text-align:center;padding:30px 0 20px">
+        <div style="font-size:48px">✅</div>
+        <div style="font-size:18px;font-weight:700;color:var(--P);margin-top:10px">${esCobranza?'Cobro confirmado':'Pedido confirmado'}</div>
+        <div style="font-size:15px;font-weight:600;margin-top:8px">${cliente}</div>
+        <div style="font-size:13px;color:var(--txt2);margin-top:4px">${detalle}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button onclick="${esCobranza?'go(\'cobranza\')':'abrirPedidoMovil()'}" 
+          style="width:100%;padding:14px;background:var(--P);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:600;cursor:pointer">
+          ${esCobranza?'💰 Nuevo cobro':'📋 Nuevo pedido'}
+        </button>
+        <button onclick="verMisPedidosHoy()" 
+          style="width:100%;padding:14px;background:var(--bg2);color:var(--PD);border:2px solid var(--P);border-radius:10px;font-size:15px;font-weight:600;cursor:pointer">
+          📋 Ver mis pedidos de hoy
+        </button>
+        <button onclick="go('vendedor-home')" 
+          style="width:100%;padding:12px;background:transparent;color:var(--txt2);border:1px solid var(--brd);border-radius:10px;font-size:14px;cursor:pointer">
+          🏠 Volver al inicio
+        </button>
+      </div>
+    </div>`;
+  go('pedido-movil');
+}
+
+function verMisPedidosHoy(){
+  const hoy=new Date().toISOString().split('T')[0];
+  const misPedidos=_pedidos.filter(p=>
+    p.vendedor===usuarioActual?.nombre && p.fecha===hoy
+  ).sort((a,b)=>b.id-a.id);
+  const panel=document.getElementById('p-pedido-movil');
+  if(!panel)return;
+  panel.innerHTML=`
+    <div style="max-width:480px;padding:16px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <button onclick="abrirPedidoMovil()" style="background:none;border:none;font-size:20px;cursor:pointer">←</button>
+        <h2 style="font-size:16px;font-weight:700;color:var(--PD)">Mis pedidos de hoy</h2>
+      </div>
+      ${misPedidos.length?misPedidos.map(p=>`
+        <div style="background:var(--bg2);border-radius:8px;padding:12px;margin-bottom:8px;border-left:4px solid var(--P)">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-size:14px;font-weight:700">${p.cliente}</div>
+              <div style="font-size:11px;color:var(--txt2)">${p.items?.length||0} productos · ${p.visita||'Sin visita'}</div>
+            </div>
+            <div style="font-size:16px;font-weight:700;color:var(--P)">${fmt(p.total)}</div>
+          </div>
+        </div>`).join('')
+      :'<div style="text-align:center;color:var(--txt2);padding:30px">Sin pedidos hoy</div>'}
+      <button onclick="abrirPedidoMovil()" style="width:100%;margin-top:10px;padding:14px;background:var(--P);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer">
+        + Nuevo pedido
+      </button>
+    </div>`;
+  go('pedido-movil');
 }
 // ─── FIN PEDIDO MÓVIL ───
 let _ccIdx=-1;
@@ -4946,7 +5034,19 @@ document.addEventListener('keydown',e=>{
   if(active?.classList.contains('sidebar-item')){
     const items=[...active.closest('.sidebar-items').querySelectorAll('.sidebar-item')];
     const idx=items.indexOf(active);
-    if(e.key==='ArrowDown'){e.preventDefault();if(idx<items.length-1)items[idx+1].focus();}
+    if(e.key==='ArrowDown'){
+      e.preventDefault();
+      if(idx<items.length-1){
+        items[idx+1].focus();
+      } else {
+        // Último item — ir al siguiente grupo
+        const allBtns=[...document.querySelectorAll('.sidebar-group-btn,.sidebar-dash')].filter(b=>b.offsetParent);
+        const currentGroup=active.closest('.sidebar-group');
+        const groupBtn=currentGroup?.querySelector('.sidebar-group-btn');
+        const groupIdx=allBtns.indexOf(groupBtn);
+        if(groupIdx>=0&&groupIdx<allBtns.length-1)allBtns[groupIdx+1].focus();
+      }
+    }
     if(e.key==='ArrowUp'){
       e.preventDefault();
       if(idx>0)items[idx-1].focus();
@@ -4956,14 +5056,24 @@ document.addEventListener('keydown',e=>{
     if(e.key==='Escape'){
       const grupo=active.closest('.sidebar-group')?.id?.replace('sg-','');
       if(grupo)toggleSidebar(grupo);
+      const btn=active.closest('.sidebar-group')?.querySelector('.sidebar-group-btn');
+      if(btn)btn.focus();
     }
   }
   if(active?.classList.contains('sidebar-dash')){
+    const all=[...document.querySelectorAll('.sidebar-group-btn,.sidebar-dash')].filter(b=>b.offsetParent);
+    const idx=all.indexOf(active);
     if(e.key==='ArrowDown'){
       e.preventDefault();
-      const all=[...document.querySelectorAll('.sidebar-group-btn,.sidebar-dash')].filter(b=>b.offsetParent);
-      const idx=all.indexOf(active);
       if(idx<all.length-1)all[idx+1].focus();
+    }
+    if(e.key==='ArrowUp'){
+      e.preventDefault();
+      if(idx>0)all[idx-1].focus();
+    }
+    if(e.key==='Enter'){
+      e.preventDefault();
+      active.click();
     }
   }
 });
