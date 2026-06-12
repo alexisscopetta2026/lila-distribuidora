@@ -272,19 +272,33 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <!-- DASHBOARD -->
 <div class="panel on" id="p-dash">
-  <div class="g4" style="margin-bottom:13px">
-    <div class="stat"><div class="n" id="d-ped">—</div><div class="l">🛒 Pedidos pendientes</div></div>
-    <div class="stat"><div class="n" id="d-venta">—</div><div class="l">💵 Facturado hoy</div></div>
-    <div class="stat"><div class="n" id="d-deuda">—</div><div class="l">⚖️ Deuda total CC</div></div>
-    <div class="stat"><div class="n" id="d-venc" style="color:var(--D)">—</div><div class="l">⚠️ Cuentas vencidas</div></div>
+  <!-- KPIs -->
+  <div class="g4" style="margin-bottom:16px">
+    <div class="stat" style="cursor:pointer" onclick="go('pedidos')">
+      <div class="n" id="d-ped">—</div>
+      <div class="l">🛒 Pedidos pendientes</div>
+    </div>
+    <div class="stat" style="cursor:pointer" onclick="go('remitos')">
+      <div class="n" id="d-venta">—</div>
+      <div class="l">💵 Facturado hoy</div>
+    </div>
+    <div class="stat" style="cursor:pointer" onclick="go('cuentas')">
+      <div class="n" id="d-deuda">—</div>
+      <div class="l">⚖️ Deuda total CC</div>
+    </div>
+    <div class="stat" style="cursor:pointer" onclick="go('cuentas')">
+      <div class="n" id="d-venc" style="color:var(--D)">—</div>
+      <div class="l">⚠️ Cuentas vencidas</div>
+    </div>
   </div>
+  <!-- Listas -->
   <div class="g2">
     <div class="card">
-      <div class="sech"><h2>📄 Últimos remitos</h2></div>
+      <div class="sech"><h2>📄 Últimos remitos</h2><button class="btn sm" onclick="go('remitos')">Ver todos</button></div>
       <div id="d-rem-list"><div class="loading">Cargando...</div></div>
     </div>
     <div class="card">
-      <div class="sech"><h2>⚠️ Cuentas vencidas</h2></div>
+      <div class="sech"><h2>⚠️ Cuentas vencidas</h2><button class="btn sm" onclick="go('cuentas')">Ver todas</button></div>
       <div id="d-venc-list"><div class="loading">Cargando...</div></div>
     </div>
   </div>
@@ -629,18 +643,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <div style="font-size:10px;font-weight:600;color:var(--txt2);text-transform:uppercase;margin-bottom:8px;border-bottom:1px solid var(--brd);padding-bottom:5px">💵 Forma de cobro</div>
         <div style="display:flex;gap:6px;margin-bottom:8px">
           <button id="cob-forma-ef" class="btn sm" style="flex:1;padding:8px 4px;font-size:12px" onclick="selForma('efectivo')"
-            onkeydown="if(event.key==='Enter'){selForma('efectivo');}else if(event.key==='ArrowRight'){document.getElementById('cob-forma-tr').focus();}">💵 Efectivo</button>
+            onkeydown="if(event.key==='Enter'){selForma('efectivo');}else if(event.key==='ArrowRight'||event.key==='Tab'){event.preventDefault();document.getElementById('cob-forma-tr').focus();}">💵 Efectivo</button>
           <button id="cob-forma-tr" class="btn sm" style="flex:1;padding:8px 4px;font-size:12px" onclick="selForma('transferencia')"
-            onkeydown="if(event.key==='Enter'){selForma('transferencia');}else if(event.key==='ArrowLeft'){document.getElementById('cob-forma-ef').focus();}else if(event.key==='ArrowRight'){document.getElementById('cob-forma-ch').focus();}">🏦 Transf.</button>
+            onkeydown="if(event.key==='Enter'){selForma('transferencia');}else if(event.key==='ArrowLeft'){document.getElementById('cob-forma-ef').focus();}else if(event.key==='ArrowRight'||event.key==='Tab'){event.preventDefault();document.getElementById('cob-forma-ch').focus();}">🏦 Transf.</button>
           <button id="cob-forma-ch" class="btn sm" style="flex:1;padding:8px 4px;font-size:12px" onclick="selForma('cheque')"
-            onkeydown="if(event.key==='Enter'){selForma('cheque');}else if(event.key==='ArrowLeft'){document.getElementById('cob-forma-tr').focus();}">📋 Cheque</button>
+            onkeydown="if(event.key==='Enter'){selForma('cheque');}else if(event.key==='ArrowLeft'){document.getElementById('cob-forma-tr').focus();}else if(event.key==='Tab'){event.preventDefault();focusImprimerInput();}">📋 Cheque</button>
         </div>
         <div id="cob-bloque-ef" style="display:none;margin-bottom:6px">
           <div style="display:flex;align-items:center;gap:8px">
             <label style="font-size:12px;color:var(--txt2);width:90px">Efectivo ($)</label>
             <input id="cob-efectivo" type="number" value="0" min="0" oninput="calcTotalCobro()"
               style="flex:1;padding:7px 8px;border:2px solid var(--P);border-radius:6px;font-size:16px;font-weight:700;text-align:right"
-              onkeydown="if(event.key==='Tab'||event.key==='Enter'){event.preventDefault();focusImprimerInput();}">
+              onkeydown="if(event.key==='Tab'){event.preventDefault();document.getElementById('cob-forma-tr').focus();}else if(event.key==='Enter'){event.preventDefault();focusImprimerInput();}">
           </div>
         </div>
         <div id="cob-bloque-tr" style="display:none;margin-bottom:6px">
@@ -1096,6 +1110,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div id="inf-ventas-res" style="margin-top:10px"></div>
     </div>
     <div class="card">
+      <div style="font-weight:600;margin-bottom:10px">🏷️ Descuentos concedidos</div>
+      <div class="fr">
+        <div class="fg"><label>Desde</label><input type="date" id="desc-desde"></div>
+        <div class="fg"><label>Hasta</label><input type="date" id="desc-hasta"></div>
+        <div class="fg"><label>Agrupar por</label>
+          <select id="desc-grupo">
+            <option value="cliente">Cliente</option>
+            <option value="vendedor">Vendedor</option>
+            <option value="producto">Producto</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn P" onclick="informeDescuentos()" style="width:100%">Ver informe</button>
+      <div id="desc-res" style="margin-top:10px"></div>
+    </div>
       <div style="font-weight:600;margin-bottom:10px">👤 Ventas por vendedor</div>
       <div class="fr">
         <div class="fg"><label>Desde</label><input type="date" id="inf-vd-desde"></div>
@@ -1141,10 +1170,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div id="inf-com-res" style="margin-top:10px"></div>
   </div>
-</div>
-
-</div><!-- /body -->
-</div><!-- /app -->
 
 <!-- MODALES -->
 
@@ -1487,10 +1512,18 @@ function doLogin(){
     cargarTodo().then(()=>go('vendedor-home'));
   } else {
     cargarTodo().then(()=>{
-      setTimeout(()=>{
-        const dashBtn=document.querySelector('.sidebar-dash[data-p="dash"]');
-        if(dashBtn)dashBtn.focus();
-      },300);
+      // Limpiar estado del sidebar
+      document.querySelectorAll('.sidebar-group').forEach(g=>{
+        g.classList.remove('open','active');
+        const chev=g.querySelector('.sidebar-group-btn span');
+        if(chev)chev.textContent='▶';
+        const items=g.querySelector('.sidebar-items');
+        if(items)items.style.display='';
+      });
+      document.querySelectorAll('.sidebar-item,.sidebar-dash').forEach(b=>b.classList.remove('on'));
+      const dashBtn=document.querySelector('.sidebar-dash[data-p="dash"]');
+      if(dashBtn){dashBtn.classList.add('on');dashBtn.focus();}
+      go('dash');
     });
   }
 }
@@ -1505,6 +1538,8 @@ async function cargarTodo(){
   await Promise.all([cargarClientes(),cargarProductos(),cargarPedidos(),cargarRemitos(),cargarCobros(),cargarCargas(),cargarGastos()]);
   renderDash();renderPedidos();renderClientes();renderProductos();renderRemitos();renderCobros();renderCC();renderCargas();renderGastos();
   poblarZonas();
+  // Asegurar que el panel activo sea el correcto
+  if(!document.querySelector('.panel.on'))go('dash');
 }
 async function cargarClientes(){
   const {data}=await sb.from('clientes').select('*').order('nombre');
@@ -1925,6 +1960,20 @@ async function emitirRemitos(cargaId){
     }).select().single();
     await sb.from('pedidos').update({estado:'remitado',remito_id:rem.id}).eq('id',p.id);
     if(c){await sb.from('clientes').update({saldo:(c.saldo||0)+p.total,total_comprado:(c.total_comprado||0)+p.total,ultimo_remito:rem.fecha}).eq('id',c.id);}
+    // Asiento contable
+    const totDesc=(p.items||[]).reduce((a,it)=>{const bruto=it.precio*it.cant;return a+(bruto-bruto*(1-(it.dto||0)/100));},0);
+    const {data:asiento}=await sb.from('asientos').insert({
+      fecha:rem.fecha,descripcion:`Remito R-${String(rem.id).padStart(4,'0')} - ${p.cliente}`,
+      tipo:'VENTA',referencia_id:rem.id,referencia_tipo:'remito'
+    }).select().single();
+    if(asiento){
+      const det=[
+        {asiento_id:asiento.id,cuenta_cod:'11201',cuenta_nom:'Deudores por Ventas',debe:p.total,haber:0},
+        {asiento_id:asiento.id,cuenta_cod:'40100',cuenta_nom:'Ventas',debe:0,haber:p.total+(totDesc||0)},
+      ];
+      if(totDesc>0)det.push({asiento_id:asiento.id,cuenta_cod:'50305',cuenta_nom:'Descuentos Concedidos',debe:totDesc,haber:0});
+      await sb.from('asientos_detalle').insert(det);
+    }
   }
   await cargarTodo();renderCargas();renderRemitos();renderDash();
   alert(`${peds.length} remito(s) emitido(s).`);go('remitos');
@@ -3476,12 +3525,34 @@ async function emitirRemitoRapido(){
     telefono:c?.telefono||''
   }).select().single();
   if(error){alert('Error: '+error.message);return;}
+  // Calcular total descuentos
+  const totDescuento=_rrItems.reduce((a,it)=>{
+    const bruto=it.precio*it.cant;
+    const neto=bruto*(1-(it.dto||0)/100);
+    return a+(bruto-neto);
+  },0);
   // Actualizar CC cliente
   await sb.from('clientes').update({
     saldo:(c?.saldo||0)+tot,
     total_comprado:(c?.total_comprado||0)+tot,
     ultimo_remito:rem.fecha
   }).eq('id',c.id);
+  // Asiento contable automático
+  const {data:asiento}=await sb.from('asientos').insert({
+    fecha:rem.fecha,
+    descripcion:`Remito R-${String(rem.id).padStart(4,'0')} - ${c?.nombre}`,
+    tipo:'VENTA',referencia_id:rem.id,referencia_tipo:'remito'
+  }).select().single();
+  if(asiento){
+    const detalle=[
+      {asiento_id:asiento.id,cuenta_cod:'11201',cuenta_nom:'Deudores por Ventas',debe:tot,haber:0},
+      {asiento_id:asiento.id,cuenta_cod:'40100',cuenta_nom:'Ventas',debe:0,haber:tot+(totDescuento||0)},
+    ];
+    if(totDescuento>0){
+      detalle.push({asiento_id:asiento.id,cuenta_cod:'50305',cuenta_nom:'Descuentos Concedidos',debe:totDescuento,haber:0});
+    }
+    await sb.from('asientos_detalle').insert(detalle);
+  }
   await Promise.all([cargarRemitos(),cargarClientes()]);
   limpiarRR();
   renderDash();renderCC();renderRemitos();
@@ -4146,13 +4217,6 @@ function navStockBusq(e) {
 
 // ─── HISTORIAL DE NAVEGACIÓN ───
 const _navHistory=[];
-const _goOriginal=go;
-function go(p){
-  const panelActual=document.querySelector('.panel.on')?.id?.replace('p-','');
-  if(panelActual&&panelActual!==p)_navHistory.push(panelActual);
-  if(_navHistory.length>20)_navHistory.shift();
-  _goOriginal(p);
-}
 function toggleNavGroup(grupo){
   const existing=document.getElementById('nav-floating-dropdown');
   const wasOpen=document.querySelector('.nav-group.open')?.id==='ng-'+grupo;
@@ -4251,7 +4315,7 @@ document.addEventListener('keydown',e=>{
     // Volver al panel anterior
     if(_navHistory.length>0){
       const anterior=_navHistory.pop();
-      _goOriginal(anterior);
+      go(anterior);
     }
   }
 });
@@ -4515,6 +4579,32 @@ async function elimGasto(id){
   if(!confirm('¿Eliminar este gasto?'))return;
   await sb.from('gastos').delete().eq('id',id);
   await cargarGastos();renderGastos();
+}
+function informeDescuentos(){
+  const desde=document.getElementById('desc-desde')?.value;
+  const hasta=document.getElementById('desc-hasta')?.value;
+  const grupo=document.getElementById('desc-grupo')?.value||'cliente';
+  const res=document.getElementById('desc-res');
+  if(!res)return;
+  const rems=_remitos.filter(r=>(!desde||r.fecha>=desde)&&(!hasta||r.fecha<=hasta));
+  const totales={};let totalDesc=0,totalBruto=0;
+  rems.forEach(r=>{
+    (r.items||[]).forEach(it=>{
+      const bruto=it.precio*it.cant;
+      const desc=bruto*(it.dto||0)/100;
+      if(desc<=0)return;
+      totalDesc+=desc;totalBruto+=bruto;
+      const key=grupo==='cliente'?r.cliente||'Sin cliente':grupo==='vendedor'?r.vendedor||'Sin vendedor':it.nom||'Sin nombre';
+      totales[key]=(totales[key]||0)+desc;
+    });
+  });
+  if(!Object.keys(totales).length){res.innerHTML='<div style="color:var(--txt2);font-style:italic">Sin descuentos en el período</div>';return;}
+  const filas=Object.entries(totales).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${k}</td><td style="text-align:right;color:var(--D)">${fmt(v)}</td><td style="text-align:right;color:var(--txt2)">${totalBruto>0?(v/totalBruto*100).toFixed(1)+'%':'—'}</td></tr>`).join('');
+  res.innerHTML=`<div style="margin-bottom:8px;display:flex;gap:14px;flex-wrap:wrap">
+    <div><div style="font-size:10px;color:var(--txt2)">Total descuentos</div><div style="font-size:18px;font-weight:700;color:var(--D)">${fmt(totalDesc)}</div></div>
+    <div><div style="font-size:10px;color:var(--txt2)">% sobre bruto</div><div style="font-size:18px;font-weight:700;color:var(--W)">${totalBruto>0?(totalDesc/totalBruto*100).toFixed(1)+'%':'—'}</div></div>
+  </div>
+  <div class="tbl-wrap"><table class="tbl"><thead><tr><th>${grupo.charAt(0).toUpperCase()+grupo.slice(1)}</th><th style="text-align:right">Descuento</th><th style="text-align:right">% s/bruto</th></tr></thead><tbody>${filas}</tbody></table></div>`;
 }
 // ─── FIN GASTOS ───
 let _cobMovilCliId=null, _cobMovilForma=null;
@@ -4947,6 +5037,8 @@ document.addEventListener('click',e=>{
 });
 
 function go(p){
+  const panelActual=document.querySelector('.panel.on')?.id?.replace('p-','');
+  if(panelActual&&panelActual!==p){_navHistory.push(panelActual);if(_navHistory.length>20)_navHistory.shift();}
   document.querySelectorAll('.panel').forEach(x=>x.classList.remove('on'));
   document.querySelectorAll('.nav-group').forEach(g=>g.classList.remove('active'));
   const panel=document.getElementById('p-'+p);
@@ -5014,37 +5106,53 @@ function toggleSidebar(grupo){
 // Navegación teclado en sidebar
 document.addEventListener('keydown',e=>{
   const active=document.activeElement;
-  if(active?.classList.contains('sidebar-group-btn')){
-    if(e.key==='ArrowDown'||e.key==='Enter'){
+  // Lista de todos los botones de grupo (módulos) visibles
+  const allGroups=[...document.querySelectorAll('.sidebar-group-btn,.sidebar-dash')].filter(b=>b.offsetParent);
+
+  if(active?.classList.contains('sidebar-group-btn')||active?.classList.contains('sidebar-dash')){
+    const idx=allGroups.indexOf(active);
+    if(e.key==='ArrowDown'){
       e.preventDefault();
-      const grupo=active.closest('.sidebar-group')?.id?.replace('sg-','');
-      if(grupo){
-        const sg=document.getElementById('sg-'+grupo);
-        if(!sg.classList.contains('open'))toggleSidebar(grupo);
-        else{const first=sg.querySelector('.sidebar-item');if(first)first.focus();}
-      }
+      // Saltar al siguiente módulo
+      if(idx<allGroups.length-1)allGroups[idx+1].focus();
     }
     if(e.key==='ArrowUp'){
       e.preventDefault();
-      const all=[...document.querySelectorAll('.sidebar-group-btn,.sidebar-dash')].filter(b=>b.offsetParent);
-      const idx=all.indexOf(active);
-      if(idx>0)all[idx-1].focus();
+      if(idx>0)allGroups[idx-1].focus();
+    }
+    if(e.key==='Enter'){
+      e.preventDefault();
+      const grupo=active.closest('.sidebar-group')?.id?.replace('sg-','');
+      if(grupo){
+        // Si está cerrado, abrirlo y bajar al primer item
+        const sg=document.getElementById('sg-'+grupo);
+        if(!sg.classList.contains('open')){
+          toggleSidebar(grupo);
+        } else {
+          // Si ya está abierto, bajar a items
+          const first=sg.querySelector('.sidebar-item');
+          if(first)first.focus();
+        }
+      } else {
+        // Es el Dashboard u otro botón directo
+        active.click();
+      }
     }
   }
+
   if(active?.classList.contains('sidebar-item')){
     const items=[...active.closest('.sidebar-items').querySelectorAll('.sidebar-item')];
     const idx=items.indexOf(active);
     if(e.key==='ArrowDown'){
       e.preventDefault();
-      if(idx<items.length-1){
-        items[idx+1].focus();
-      } else {
-        // Último item — ir al siguiente grupo
-        const allBtns=[...document.querySelectorAll('.sidebar-group-btn,.sidebar-dash')].filter(b=>b.offsetParent);
+      if(idx<items.length-1)items[idx+1].focus();
+      else{
+        // Último item — cerrar grupo y ir al siguiente módulo
         const currentGroup=active.closest('.sidebar-group');
         const groupBtn=currentGroup?.querySelector('.sidebar-group-btn');
-        const groupIdx=allBtns.indexOf(groupBtn);
-        if(groupIdx>=0&&groupIdx<allBtns.length-1)allBtns[groupIdx+1].focus();
+        const groupIdx=allGroups.indexOf(groupBtn);
+        toggleSidebar(currentGroup.id.replace('sg-',''));
+        if(groupIdx>=0&&groupIdx<allGroups.length-1)allGroups[groupIdx+1].focus();
       }
     }
     if(e.key==='ArrowUp'){
@@ -5058,22 +5166,6 @@ document.addEventListener('keydown',e=>{
       if(grupo)toggleSidebar(grupo);
       const btn=active.closest('.sidebar-group')?.querySelector('.sidebar-group-btn');
       if(btn)btn.focus();
-    }
-  }
-  if(active?.classList.contains('sidebar-dash')){
-    const all=[...document.querySelectorAll('.sidebar-group-btn,.sidebar-dash')].filter(b=>b.offsetParent);
-    const idx=all.indexOf(active);
-    if(e.key==='ArrowDown'){
-      e.preventDefault();
-      if(idx<all.length-1)all[idx+1].focus();
-    }
-    if(e.key==='ArrowUp'){
-      e.preventDefault();
-      if(idx>0)all[idx-1].focus();
-    }
-    if(e.key==='Enter'){
-      e.preventDefault();
-      active.click();
     }
   }
 });
