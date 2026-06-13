@@ -1107,6 +1107,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button id="inf-tab-clientes" class="btn sm" onclick="infTab('clientes')" tabindex="-1">👥 Clientes</button>
     <button id="inf-tab-productos" class="btn sm" onclick="infTab('productos')" tabindex="-1">📦 Productos</button>
     <button id="inf-tab-comisiones" class="btn sm" onclick="infTab('comisiones')" tabindex="-1">💰 Comisiones</button>
+    <button id="inf-tab-gerencial" class="btn sm" onclick="infTab('gerencial')" tabindex="-1">📊 Gerencial</button>
   </div>
 
   <!-- VENTAS -->
@@ -1217,11 +1218,405 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
   </div>
 
+
+  <!-- GERENCIAL -->
+  <div id="inf-sec-gerencial" style="display:none">
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-weight:600;margin-bottom:6px">📊 Dashboard gerencial — datos del FoxPro</div>
+      <div style="font-size:12px;color:var(--txt2);margin-bottom:12px">Cargá los archivos exportados del sistema anterior para ver el análisis de resultados, clientes y saldos.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div>
+          <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Resultados por mes (resultado_XX_2026.xlsx)</label>
+          <input type="file" id="ger-files-result" accept=".xlsx" multiple style="font-size:12px;width:100%">
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Ventas por cliente (ventas_XX_2026.xlsx)</label>
+          <input type="file" id="ger-files-ventas" accept=".xlsx" multiple style="font-size:12px;width:100%">
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Saldos de clientes (saldos_al_XX.xlsx)</label>
+          <input type="file" id="ger-files-saldos" accept=".xlsx" multiple style="font-size:12px;width:100%">
+        </div>
+        <div style="display:flex;align-items:flex-end">
+          <button class="btn P" onclick="procesarGerencial()" style="width:100%">▶ Procesar y mostrar dashboard</button>
+        </div>
+      </div>
+      <div id="ger-status" style="font-size:12px;color:var(--txt2)"></div>
+    </div>
+
+    <div id="ger-dashboard" style="display:none">
+      <!-- KPIs -->
+      <div id="ger-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px"></div>
+
+      <!-- Charts fila 1 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div class="card">
+          <div style="font-weight:600;font-size:13px;margin-bottom:8px">Venta y margen por mes</div>
+          <div style="position:relative;height:200px"><canvas id="ger-chart-meses" role="img" aria-label="Ventas y márgenes por mes"></canvas></div>
+        </div>
+        <div class="card">
+          <div style="font-weight:600;font-size:13px;margin-bottom:8px">Margen % por mes</div>
+          <div style="position:relative;height:200px"><canvas id="ger-chart-pct" role="img" aria-label="Porcentaje de margen por mes"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Top clientes -->
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-weight:600;font-size:13px;margin-bottom:8px">Top 15 clientes por venta acumulada</div>
+        <div style="position:relative;height:320px"><canvas id="ger-chart-clientes" role="img" aria-label="Top 15 clientes"></canvas></div>
+      </div>
+
+      <!-- Alertas saldos -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div class="card">
+          <div style="font-weight:600;font-size:13px;margin-bottom:8px">⚠️ Alertas saldo/venta alto</div>
+          <div id="ger-alertas" style="font-size:12px"></div>
+        </div>
+        <div class="card">
+          <div style="font-weight:600;font-size:13px;margin-bottom:8px">Top 10 por saldo actual</div>
+          <div id="ger-top-saldos" style="font-size:12px"></div>
+        </div>
+      </div>
+
+      <!-- Detalle cliente -->
+      <div class="card" style="margin-bottom:12px">
+        <div style="font-weight:600;font-size:13px;margin-bottom:8px">Detalle por cliente</div>
+        <select id="ger-sel-cliente" style="width:100%;margin-bottom:10px;font-size:13px" onchange="gerUpdateDetalle()"></select>
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <button class="btn sm" id="ger-tab-saldo" onclick="gerVista('saldo',this)" style="background:var(--P);color:#fff">Saldo</button>
+          <button class="btn sm" id="ger-tab-venta" onclick="gerVista('venta',this)">Venta</button>
+          <button class="btn sm" id="ger-tab-ambos" onclick="gerVista('ambos',this)">Ambos</button>
+        </div>
+        <div style="position:relative;height:180px"><canvas id="ger-chart-detalle" role="img" aria-label="Detalle cliente"></canvas></div>
+        <div id="ger-detalle-info" style="font-size:12px;color:var(--txt2);margin-top:6px"></div>
+      </div>
+
+      <!-- Top productos -->
+      <div class="card">
+        <div style="font-weight:600;font-size:13px;margin-bottom:8px">Top 10 productos por venta acumulada</div>
+        <div style="position:relative;height:260px"><canvas id="ger-chart-prod" role="img" aria-label="Top productos"></canvas></div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 </div><!-- fin app-layout -->
 
 <div id="print-area" style="display:none"></div>
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+// ─── MÓDULO GERENCIAL ───
+let _gerData = null;
+let _gerVista = 'saldo';
+let _gerDetalleChart = null;
+let _gerCharts = {};
+
+function procesarGerencial() {
+  const status = document.getElementById('ger-status');
+  status.textContent = 'Procesando archivos...';
+
+  const filesResult = document.getElementById('ger-files-result').files;
+  const filesVentas = document.getElementById('ger-files-ventas').files;
+  const filesSaldos = document.getElementById('ger-files-saldos').files;
+
+  if (!filesResult.length && !filesVentas.length && !filesSaldos.length) {
+    status.textContent = 'Cargá al menos un archivo.';
+    return;
+  }
+
+  const readXLSX = (file) => new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const wb = XLSX.read(e.target.result, {type:'binary'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      resolve({ name: file.name, data: XLSX.utils.sheet_to_json(ws, {header:1, defval:''}) });
+    };
+    reader.readAsBinaryString(file);
+  });
+
+  Promise.all([
+    ...Array.from(filesResult).map(readXLSX),
+    ...Array.from(filesVentas).map(readXLSX),
+    ...Array.from(filesSaldos).map(readXLSX),
+  ]).then(results => {
+    const resultFiles = results.slice(0, filesResult.length);
+    const ventasFiles = results.slice(filesResult.length, filesResult.length + filesVentas.length);
+    const saldosFiles = results.slice(filesResult.length + filesVentas.length);
+
+    _gerData = { meses: {}, clientes: {}, productos: {} };
+
+    // Procesar resultados (productos)
+    resultFiles.forEach(f => {
+      const rows = f.data;
+      const mesMatch = rows.slice(0,10).find(r => r.join('').includes('/'));
+      let mesNombre = f.name.replace(/resultado_|_2026|\.xlsx/gi,'').replace(/^0/,'');
+      const mesesMap = {'01':'Ene','02':'Feb','03':'Mar','04':'Abr','05':'May','06':'Jun','enero':'Ene','02':'Feb','03':'Mar'};
+      const mesKey = mesesMap[mesNombre.toLowerCase()] || mesNombre;
+      
+      if(!_gerData.meses[mesKey]) _gerData.meses[mesKey] = {venta:0,costo:0,margen:0};
+      
+      rows.forEach(row => {
+        if(!row[4] || isNaN(parseFloat(row[4]))) return;
+        const venta = parseFloat(row[4]) || 0;
+        const costo = parseFloat(row[5]) || 0;
+        const margen = parseFloat(row[6]) || 0;
+        const art = String(row[1]||'').trim();
+        if(!art || art.length < 3) return;
+        
+        _gerData.meses[mesKey].venta += venta;
+        _gerData.meses[mesKey].costo += costo;
+        _gerData.meses[mesKey].margen += margen;
+
+        if(!_gerData.productos[art]) _gerData.productos[art] = {venta:0,margen:0};
+        _gerData.productos[art].venta += venta;
+        _gerData.productos[art].margen += margen;
+      });
+    });
+
+    // Procesar ventas por cliente
+    ventasFiles.forEach(f => {
+      const rows = f.data;
+      let mesNombre = f.name.replace(/ventas_|_2026|al_13-06|\.xlsx/gi,'').replace(/^0/,'').replace(/_/g,'');
+      const mesesMap = {'01':'Ene','02':'Feb','03':'Mar','04':'Abr','05':'May','06':'Jun','1':'Ene','2':'Feb','3':'Mar','4':'Abr','5':'May'};
+      const mesKey = mesesMap[mesNombre] || mesNombre;
+
+      rows.forEach(row => {
+        if(!row[0] || isNaN(parseInt(row[0]))) return;
+        const cod = parseInt(row[0]);
+        const nombre = String(row[1]||'').trim();
+        const venta = parseFloat(row[2]) || 0;
+        if(!nombre || venta <= 0) return;
+        if(!_gerData.clientes[cod]) _gerData.clientes[cod] = {nombre, ventas:{}, saldos:{}};
+        _gerData.clientes[cod].ventas[mesKey] = venta;
+      });
+    });
+
+    // Procesar saldos
+    saldosFiles.forEach(f => {
+      const rows = f.data;
+      let mesNombre = f.name.replace(/saldos_al_|_2026|\.xlsx/gi,'').replace(/__/g,'');
+      const mesesMap = {'31-01':'Ene','28-02':'Feb','31-03':'Mar','30-04':'Abr','31-05':'May','13-06':'Jun','31_03':'Mar'};
+      const mesKey = Object.entries(mesesMap).find(([k])=>f.name.includes(k))?.[1] || 'Jun';
+
+      rows.forEach(row => {
+        if(!row[0] || isNaN(parseInt(row[0]))) return;
+        const cod = parseInt(row[0]);
+        const nombre = String(row[1]||'').trim();
+        const saldo = parseFloat(row[4]) || 0;
+        if(!nombre) return;
+        if(!_gerData.clientes[cod]) _gerData.clientes[cod] = {nombre, ventas:{}, saldos:{}};
+        _gerData.clientes[cod].saldos[mesKey] = saldo;
+      });
+    });
+
+    status.textContent = `✓ Procesado: ${resultFiles.length} archivos de resultados, ${ventasFiles.length} de ventas, ${saldosFiles.length} de saldos.`;
+    renderGerencial();
+  });
+}
+
+function renderGerencial() {
+  if(!_gerData) return;
+  document.getElementById('ger-dashboard').style.display = 'block';
+
+  const isDark = matchMedia('(prefers-color-scheme: dark)').matches;
+  const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+  const textColor = isDark ? '#aaa' : '#777';
+
+  // Destruir charts anteriores
+  Object.values(_gerCharts).forEach(c => { try{c.destroy()}catch(e){} });
+  _gerCharts = {};
+
+  // Ordenar meses
+  const ordenMeses = ['Ene','Feb','Mar','Abr','May','Jun'];
+  const mesesDisp = ordenMeses.filter(m => _gerData.meses[m]);
+  const ventas = mesesDisp.map(m => Math.round(_gerData.meses[m].venta/1000000*10)/10);
+  const margenes = mesesDisp.map(m => Math.round(_gerData.meses[m].margen/1000000*10)/10);
+  const pcts = mesesDisp.map(m => {
+    const v = _gerData.meses[m].venta;
+    return v > 0 ? Math.round(_gerData.meses[m].margen/v*1000)/10 : 0;
+  });
+
+  const totalVenta = ventas.reduce((a,b)=>a+b,0);
+  const totalMargen = margenes.reduce((a,b)=>a+b,0);
+  const pctProm = totalVenta > 0 ? Math.round(totalMargen/totalVenta*1000)/10 : 0;
+
+  // KPIs
+  document.getElementById('ger-kpis').innerHTML = `
+    <div style="background:var(--bg2);border-radius:8px;padding:12px">
+      <div style="font-size:11px;color:var(--txt2);margin-bottom:4px;text-transform:uppercase">Venta total</div>
+      <div style="font-size:20px;font-weight:600">\$${totalVenta.toFixed(1)}M</div>
+    </div>
+    <div style="background:var(--bg2);border-radius:8px;padding:12px">
+      <div style="font-size:11px;color:var(--txt2);margin-bottom:4px;text-transform:uppercase">Margen total</div>
+      <div style="font-size:20px;font-weight:600">\$${totalMargen.toFixed(1)}M</div>
+    </div>
+    <div style="background:var(--bg2);border-radius:8px;padding:12px">
+      <div style="font-size:11px;color:var(--txt2);margin-bottom:4px;text-transform:uppercase">Margen %</div>
+      <div style="font-size:20px;font-weight:600">${pctProm}%</div>
+    </div>
+    <div style="background:var(--bg2);border-radius:8px;padding:12px">
+      <div style="font-size:11px;color:var(--txt2);margin-bottom:4px;text-transform:uppercase">Meses cargados</div>
+      <div style="font-size:20px;font-weight:600">${mesesDisp.length}</div>
+    </div>`;
+
+  // Chart ventas y márgenes
+  if(document.getElementById('ger-chart-meses')) {
+    _gerCharts.meses = new Chart(document.getElementById('ger-chart-meses'), {
+      type:'bar',
+      data:{labels:mesesDisp,datasets:[
+        {label:'Venta',data:ventas,backgroundColor:'#378ADD',borderRadius:4},
+        {label:'Margen',data:margenes,backgroundColor:'#1D9E75',borderRadius:4}
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:true,position:'bottom',labels:{font:{size:10},color:textColor,boxWidth:10}},
+          tooltip:{callbacks:{label:c=>' $'+c.parsed.y.toFixed(1)+'M'}}},
+        scales:{x:{ticks:{color:textColor,font:{size:11}},grid:{display:false}},
+          y:{ticks:{color:textColor,font:{size:10},callback:v=>'$'+v+'M'},grid:{color:gridColor}}}}
+    });
+  }
+
+  // Chart margen %
+  if(document.getElementById('ger-chart-pct')) {
+    _gerCharts.pct = new Chart(document.getElementById('ger-chart-pct'), {
+      type:'line',
+      data:{labels:mesesDisp,datasets:[{label:'Margen %',data:pcts,
+        borderColor:'#639922',backgroundColor:'rgba(99,153,34,0.1)',
+        borderWidth:2,pointRadius:4,pointBackgroundColor:'#639922',fill:true,tension:0.3}]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.parsed.y.toFixed(1)+'%'}}},
+        scales:{x:{ticks:{color:textColor,font:{size:11}},grid:{display:false}},
+          y:{ticks:{color:textColor,font:{size:10},callback:v=>v+'%'},grid:{color:gridColor}}}}
+    });
+  }
+
+  // Top clientes
+  const clientesArr = Object.values(_gerData.clientes).map(c => {
+    const tv = Object.values(c.ventas).reduce((a,b)=>a+b,0);
+    const saldoJun = c.saldos['Jun'] || c.saldos['May'] || 0;
+    const promMes = tv / Math.max(Object.keys(c.ventas).length, 1);
+    const ratio = promMes > 0 ? saldoJun/promMes : 0;
+    return {...c, total_venta:tv, saldo_jun:saldoJun, ratio};
+  }).filter(c=>c.total_venta>0).sort((a,b)=>b.total_venta-a.total_venta);
+
+  const top15 = clientesArr.slice(0,15);
+  if(document.getElementById('ger-chart-clientes')) {
+    _gerCharts.clientes = new Chart(document.getElementById('ger-chart-clientes'), {
+      type:'bar', indexAxis:'y',
+      data:{labels:top15.map(c=>c.nombre.split(' ').slice(0,2).join(' ')),
+        datasets:[{label:'Venta total',data:top15.map(c=>Math.round(c.total_venta/1000)),
+          backgroundColor:'#534AB7',borderRadius:3,barThickness:16}]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' $'+c.parsed.x.toFixed(0)+'K'}}},
+        scales:{x:{ticks:{color:textColor,font:{size:10},callback:v=>'$'+v+'K'},grid:{color:gridColor}},
+          y:{ticks:{color:textColor,font:{size:10}},grid:{display:false}}}}
+    });
+  }
+
+  // Alertas
+  const alertas = clientesArr.filter(c=>c.ratio>=1.5 && c.total_venta>200000)
+    .sort((a,b)=>b.ratio-a.ratio).slice(0,8);
+  const fmt = n => n>=1000000?'$'+(n/1000000).toFixed(1)+'M':'$'+(n/1000).toFixed(0)+'K';
+  document.getElementById('ger-alertas').innerHTML = alertas.map(c => {
+    const col = c.ratio>=2?'#C00000':'#C55A11';
+    return `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:0.5px solid var(--brd)">
+      <span>${c.nombre.split(' ').slice(0,2).join(' ')}</span>
+      <span style="color:${col};font-weight:600">${c.ratio.toFixed(1)}x</span>
+    </div>`;
+  }).join('') || '<div style="color:var(--txt2)">Sin alertas</div>';
+
+  // Top saldos
+  const topSaldos = clientesArr.filter(c=>c.saldo_jun>0).sort((a,b)=>b.saldo_jun-a.saldo_jun).slice(0,10);
+  document.getElementById('ger-top-saldos').innerHTML = topSaldos.map(c => {
+    return `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:0.5px solid var(--brd)">
+      <span>${c.nombre.split(' ').slice(0,2).join(' ')}</span>
+      <span style="color:var(--txt2)">${fmt(c.saldo_jun)}</span>
+    </div>`;
+  }).join('');
+
+  // Select clientes
+  const sel = document.getElementById('ger-sel-cliente');
+  sel.innerHTML = clientesArr.slice(0,50).map((c,i) =>
+    `<option value="${i}">${c.nombre} — venta ${fmt(c.total_venta)} · saldo ${fmt(c.saldo_jun)} · ratio ${c.ratio.toFixed(1)}x</option>`
+  ).join('');
+  sel._data = clientesArr;
+  gerUpdateDetalle();
+
+  // Top productos
+  const topProd = Object.entries(_gerData.productos)
+    .map(([art,d])=>({art,...d}))
+    .filter(p=>p.venta>100000)
+    .sort((a,b)=>b.venta-a.venta).slice(0,10);
+  if(document.getElementById('ger-chart-prod')) {
+    _gerCharts.prod = new Chart(document.getElementById('ger-chart-prod'), {
+      type:'bar', indexAxis:'y',
+      data:{labels:topProd.map(p=>p.art.slice(0,30)),
+        datasets:[
+          {label:'Venta',data:topProd.map(p=>Math.round(p.venta/1000)),backgroundColor:'#D85A30',borderRadius:3,barThickness:14},
+          {label:'Margen',data:topProd.map(p=>Math.round(p.margen/1000)),backgroundColor:'#1D9E75',borderRadius:3,barThickness:14},
+        ]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:true,position:'bottom',labels:{font:{size:10},color:textColor,boxWidth:10}},
+          tooltip:{callbacks:{label:c=>' $'+c.parsed.x.toFixed(0)+'K'}}},
+        scales:{x:{ticks:{color:textColor,font:{size:10},callback:v=>'$'+v+'K'},grid:{color:gridColor}},
+          y:{ticks:{color:textColor,font:{size:9}},grid:{display:false}}}}
+    });
+  }
+}
+
+function gerVista(v, btn) {
+  _gerVista = v;
+  document.querySelectorAll('#inf-sec-gerencial .btn.sm').forEach(b => {
+    b.style.background=''; b.style.color='';
+  });
+  if(btn){btn.style.background='var(--P)';btn.style.color='#fff';}
+  gerUpdateDetalle();
+}
+
+function gerUpdateDetalle() {
+  const sel = document.getElementById('ger-sel-cliente');
+  if(!sel||!sel._data) return;
+  const c = sel._data[parseInt(sel.value)];
+  if(!c) return;
+  const isDark = matchMedia('(prefers-color-scheme: dark)').matches;
+  const gridColor = isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.06)';
+  const textColor = isDark?'#aaa':'#777';
+  const ordenMeses = ['Ene','Feb','Mar','Abr','May','Jun'];
+  const mesesDisp = ordenMeses.filter(m=>c.ventas[m]||c.saldos[m]);
+
+  if(_gerDetalleChart){try{_gerDetalleChart.destroy();}catch(e){}}
+
+  const datasets = [];
+  if(_gerVista==='saldo'||_gerVista==='ambos') {
+    datasets.push({label:'Saldo',data:mesesDisp.map(m=>Math.round((c.saldos[m]||0)/1000)),
+      borderColor:'#D85A30',backgroundColor:'rgba(216,90,48,0.08)',
+      borderWidth:2,pointRadius:4,pointBackgroundColor:'#D85A30',fill:_gerVista==='saldo',tension:0.3});
+  }
+  if(_gerVista==='venta'||_gerVista==='ambos') {
+    datasets.push({label:'Venta',data:mesesDisp.map(m=>Math.round((c.ventas[m]||0)/1000)),
+      borderColor:'#378ADD',backgroundColor:'rgba(55,138,221,0.08)',
+      borderWidth:2,pointRadius:4,pointBackgroundColor:'#378ADD',fill:_gerVista==='venta',tension:0.3,
+      borderDash:_gerVista==='ambos'?[5,3]:[]});
+  }
+
+  _gerDetalleChart = new Chart(document.getElementById('ger-chart-detalle'), {
+    type:'line', data:{labels:mesesDisp,datasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:datasets.length>1,position:'bottom',labels:{font:{size:10},color:textColor,boxWidth:10}},
+        tooltip:{callbacks:{label:c=>' $'+c.parsed.y.toFixed(0)+'K'}}},
+      scales:{x:{ticks:{color:textColor,font:{size:11}},grid:{display:false}},
+        y:{ticks:{color:textColor,font:{size:10},callback:v=>'$'+v+'K'},grid:{color:gridColor}}}}
+  });
+
+  const fmt = n => n>=1000000?'$'+(n/1000000).toFixed(1)+'M':'$'+(n/1000).toFixed(0)+'K';
+  document.getElementById('ger-detalle-info').textContent =
+    `Venta total: ${fmt(c.total_venta)} · Saldo actual: ${fmt(c.saldo_jun)} · Ratio: ${c.ratio.toFixed(1)}x`;
+}
+
+</script>
 
 <script>
 // ─── SUPABASE CONFIG ───
@@ -4360,7 +4755,7 @@ function navInfTabs(e){
 }
 
 function infTab(tab){
-  const tabs=['ventas','descuentos','clientes','productos','comisiones'];
+  const tabs=['ventas','descuentos','clientes','productos','comisiones','gerencial'];
   tabs.forEach(t=>{
     const el=document.getElementById('inf-sec-'+t);
     if(el)el.style.display=t===tab?'block':'none';
