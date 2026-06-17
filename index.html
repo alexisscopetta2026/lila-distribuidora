@@ -5608,13 +5608,14 @@ function navCliTabla(e){
 }
 // ─── CERRAR DROPS ───
 document.addEventListener('click',e=>{
-  if(!e.target.closest('#np-cli-q')&&!e.target.closest('#np-cli-drop'))document.getElementById('np-cli-drop').style.display='none';
-  if(!e.target.closest('#np-pro-q')&&!e.target.closest('#np-pro-drop'))document.getElementById('np-pro-drop').style.display='none';
-  if(!e.target.closest('#cob-cli-q')&&!e.target.closest('#cob-cli-drop'))document.getElementById('cob-cli-drop').style.display='none';
-  if(!e.target.closest('#rr-cli-q')&&!e.target.closest('#rr-cli-drop'))document.getElementById('rr-cli-drop').style.display='none';
-  if(!e.target.closest('#rr-pro-q')&&!e.target.closest('#rr-pro-drop'))document.getElementById('rr-pro-drop').style.display='none';
-  if(!e.target.closest('#nc-cli-q')&&!e.target.closest('#nc-cli-drop'))document.getElementById('nc-cli-drop').style.display='none';
-  if(!e.target.closest('#nc-pro-q')&&!e.target.closest('#nc-pro-drop')){const d=document.getElementById('nc-pro-drop');if(d)d.style.display='none';}
+  const hide=id=>{const el=document.getElementById(id);if(el)el.style.display='none';};
+  if(!e.target.closest('#np-cli-q')&&!e.target.closest('#np-cli-drop'))hide('np-cli-drop');
+  if(!e.target.closest('#np-pro-q')&&!e.target.closest('#np-pro-drop'))hide('np-pro-drop');
+  if(!e.target.closest('#cob-cli-q')&&!e.target.closest('#cob-cli-drop'))hide('cob-cli-drop');
+  if(!e.target.closest('#rr-cli-q')&&!e.target.closest('#rr-cli-drop'))hide('rr-cli-drop');
+  if(!e.target.closest('#rr-pro-q')&&!e.target.closest('#rr-pro-drop'))hide('rr-pro-drop');
+  if(!e.target.closest('#nc-cli-q')&&!e.target.closest('#nc-cli-drop'))hide('nc-cli-drop');
+  if(!e.target.closest('#nc-pro-q')&&!e.target.closest('#nc-pro-drop'))hide('nc-pro-drop');
 });
 
 function go(p){
@@ -5779,8 +5780,9 @@ function f3Cerrar(){
   document.getElementById('f3-modal').style.display = 'none';
 }
 
-document.getElementById('f3-modal').addEventListener('click', function(e){
-  if(e.target === this) f3Cerrar();
+document.addEventListener('DOMContentLoaded', function(){
+  const f3m = document.getElementById('f3-modal');
+  if(f3m) f3m.addEventListener('click', function(e){ if(e.target === this) f3Cerrar(); });
 });
 
 function f3SetTab(tab){
