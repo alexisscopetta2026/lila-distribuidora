@@ -4271,6 +4271,7 @@ function volverAdmin(){
 }
 
 
+function navDropProRR(e){
   const drop = document.getElementById('rr-pro-drop');
   const items = drop?.querySelectorAll('.drop-item');
   if(!items || !items.length){
@@ -4330,9 +4331,6 @@ function dropProRR(){
   }).join('');
   drop.style.display=m.length?'block':'none';
 }
-  drop.innerHTML=m.map(p=>`<div onmousedown="selProRR(${p.id})"><strong>${p.nombre}</strong> <span style="color:var(--txt2);font-size:11px">${fmt(p.precio)} · ${p.unidad||''}</span></div>`).join('');
-  drop.style.display=m.length?'block':'none';
-}
 function selProRR(id){
   _rrProTemp=_productos.find(x=>x.id===id);if(!_rrProTemp)return;
   document.getElementById('rr-pro-q').value=_rrProTemp.nombre;
@@ -4367,7 +4365,6 @@ function agregarItemRR(){
   
   // Si tiene peso real, la cantidad es el peso
   const cantFinal=peso>0?peso:cant;
-  const unFinal=peso>0?'kg':(_rrProTemp.unidad||'un');
   const unFinal=peso>0?'kg':(_rrProTemp.unidad||'un');
   const ex=_rrItems.find(i=>i.id===_rrProTemp.id);
   if(ex){ex.cant+=cantFinal;}
