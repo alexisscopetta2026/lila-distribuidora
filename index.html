@@ -2594,15 +2594,18 @@ async function guardarPedido(){
 
 // ─── CARGAS ───
 async function abrirCarga(){
-  document.getElementById('nc-ven').value='';
-  document.getElementById('nc-fecha').value=new Date().toISOString().split('T')[0];
+  const fecha=document.getElementById('car-fecha');
+  const chofer=document.getElementById('car-chofer');
+  if(fecha)fecha.value=new Date().toISOString().split('T')[0];
+  if(chofer)chofer.value='';
   await loadPedsCarga();
   document.getElementById('m-carga').classList.add('on');
 }
 async function loadPedsCarga(){
-  const ven=(document.getElementById('nc-ven').value||'').toLowerCase();
+  const ven=(document.getElementById('car-chofer')?.value||'').toLowerCase();
   const pends=_pedidos.filter(p=>p.estado==='pendiente'&&(!ven||(p.vendedor||'').toLowerCase().includes(ven)));
-  const el=document.getElementById('nc-peds');
+  const el=document.getElementById('car-items-lista');
+  if(!el)return;
   if(!pends.length){el.innerHTML='<div class="empty">Sin pedidos pendientes</div>';return;}
   el.innerHTML=pends.map(p=>`<div style="display:flex;align-items:center;gap:8px;padding:7px;border-bottom:1px solid var(--brd);font-size:13px">
     <input type="checkbox" id="chk-${p.id}" value="${p.id}" checked>
@@ -2611,14 +2614,14 @@ async function loadPedsCarga(){
   </div>`).join('');
 }
 async function guardarCarga(){
-  const chks=[...document.querySelectorAll('#nc-peds input[type=checkbox]:checked')];
+  const chks=[...document.querySelectorAll('#car-items-lista input[type=checkbox]:checked')];
   if(!chks.length){alert('Seleccioná al menos un pedido');return;}
   const pedIds=chks.map(c=>parseInt(c.value));
   const peds=_pedidos.filter(p=>pedIds.includes(p.id));
   const tot=peds.reduce((a,p)=>a+p.total,0);
-  const ven=document.getElementById('nc-ven').value;
-  const fecha=document.getElementById('nc-fecha').value;
-  const nombre=document.getElementById('nc-nombre').value||'';
+  const ven=document.getElementById('car-chofer')?.value||'';
+  const fecha=document.getElementById('car-fecha')?.value||new Date().toISOString().split('T')[0];
+  const nombre=ven||'';
   const {data:carga,error}=await sb.from('cargas').insert({fecha,vendedor:ven,pedidos:pedIds,total:tot,estado:'armando',nombre}).select().single();
   if(error){alert('Error: '+error.message);return;}
   for(const pid of pedIds){await sb.from('pedidos').update({estado:'en_carga',carga_id:carga.id}).eq('id',pid);}
