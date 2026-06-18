@@ -2259,7 +2259,7 @@ async function cargarClientes(){
   const {data}=await qCli;
   // Vendedor ve solo sus clientes
   if(usuarioActual?.rol==='vendedor'){
-    _clientes=(data||[]).filter(c=>(c.vendedor||'').toLowerCase().includes(usuarioActual.vendedor.toLowerCase()));
+    _clientes=(data||[]).filter(c=>usuarioActual.vendedor&&(c.vendedor||'').toLowerCase().includes(usuarioActual.vendedor.toLowerCase()));
   } else {
     _clientes=data||[];
   }
@@ -2269,7 +2269,7 @@ async function cargarPedidos(){
   const {data}=await sb.from('pedidos').select('*').order('created_at',{ascending:false});
   // Vendedor ve solo sus pedidos
   if(usuarioActual?.rol==='vendedor'){
-    _pedidos=(data||[]).filter(p=>(p.vendedor||'').toLowerCase().includes(usuarioActual.vendedor.toLowerCase()));
+  _pedidos=(data||[]).filter(p=>usuarioActual.vendedor&&(p.vendedor||'').toLowerCase().includes(usuarioActual.vendedor.toLowerCase())); 
   } else {
     _pedidos=data||[];
   }
