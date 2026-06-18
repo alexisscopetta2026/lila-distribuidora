@@ -2259,7 +2259,7 @@ async function cargarClientes(){
   const {data}=await qCli;
   // Vendedor ve solo sus clientes
   if(usuarioActual?.rol==='vendedor'){
-    _clientes=(data||[]).filter(c=>usuarioActual.vendedor&&(c.vendedor||'').toLowerCase().includes(usuarioActual.vendedor.toLowerCase()));
+  _clientes=usuarioActual.vendedor?(data||[]).filter(c=>(c.vendedor||'').toLowerCase().includes(usuarioActual.vendedor.toLowerCase())):data||
   } else {
     _clientes=data||[];
   }
