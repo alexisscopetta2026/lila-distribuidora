@@ -4374,7 +4374,6 @@ function agregarItemRR(){
   // Si tiene peso real, la cantidad es el peso
   const cantFinal=peso>0?peso:cant;
   const unFinal=peso>0?'kg':(_rrProTemp.unidad||'un');
-  const unFinal=peso>0?'kg':(_rrProTemp.unidad||'un');
   const ex=_rrItems.find(i=>i.id===_rrProTemp.id);
   if(ex){ex.cant+=cantFinal;}
   else{_rrItems.push({id:_rrProTemp.id,nom:_rrProTemp.nombre,un:unFinal,cant:cantFinal,precio,dto,iva:_rrProTemp.iva||21,esPeso:peso>0});}
