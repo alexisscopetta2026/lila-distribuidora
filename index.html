@@ -6102,6 +6102,11 @@ function volverProductosMovil(){
 }
 
 async function confirmarPedidoMovil(){
+  // Guardar HTML original del panel si aún no está guardado
+  if(!window._pmPanelOriginal){
+    const panel=document.getElementById('p-pedido-movil');
+    if(panel) window._pmPanelOriginal = panel.innerHTML;
+  }
   if(!_pmCliId){alert('Seleccioná un cliente');return;}
   if(!_pmCarrito.length){alert('Agregá al menos un producto');return;}
   const c=_clientes.find(x=>x.id===_pmCliId);
@@ -6135,7 +6140,7 @@ function mostrarConfirmacionMovil(tipo, cliente, detalle){
         <div style="font-size:13px;color:var(--txt2);margin-top:4px">${detalle}</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:10px">
-        <button onclick="${esCobranza?'go(\'cobranza\')':'abrirPedidoMovil()'}" 
+        <button onclick="${esCobranza?'go(\'cobranza\')':'resetYNuevoPedido()'}" 
           style="width:100%;padding:14px;background:var(--P);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:600;cursor:pointer">
           ${esCobranza?'💰 Nuevo cobro':'📋 Nuevo pedido'}
         </button>
@@ -6152,6 +6157,22 @@ function mostrarConfirmacionMovil(tipo, cliente, detalle){
   go('pedido-movil');
 }
 
+function resetYNuevoPedido(){
+  const panel=document.getElementById('p-pedido-movil');
+  if(panel && window._pmPanelOriginal){
+    panel.innerHTML = window._pmPanelOriginal;
+  }
+  _pmCliId=null;_pmCarrito=[];_pmMarcaActual=null;_pmProdActual=null;
+  const pc=document.getElementById('pm-paso-cliente');if(pc)pc.style.display='block';
+  const pp=document.getElementById('pm-paso-productos');if(pp)pp.style.display='none';
+  const pr=document.getElementById('pm-paso-resumen');if(pr)pr.style.display='none';
+  const nomEl=document.getElementById('pm-cli-nombre');if(nomEl)nomEl.textContent='Seleccioná un cliente';
+  const saldoWrap=document.getElementById('pm-cli-saldo-wrap');if(saldoWrap)saldoWrap.style.display='none';
+  const qEl=document.getElementById('pm-cli-q');if(qEl){qEl.value='';setTimeout(()=>qEl.focus(),100);}
+  const listaEl=document.getElementById('pm-cli-lista');if(listaEl)listaEl.innerHTML='';
+  actualizarCarritoBar();
+  go('pedido-movil');
+}
 function verMisPedidosHoy(){
   const hoy=new Date().toISOString().split('T')[0];
   const misPedidos=_pedidos.filter(p=>
