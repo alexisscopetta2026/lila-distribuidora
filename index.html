@@ -1988,6 +1988,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="fg"><label>Teléfono</label><input id="prov-tel" style="width:100%" placeholder="Teléfono"></div>
       <div class="fg"><label>Email</label><input id="prov-email" style="width:100%" placeholder="email@proveedor.com"></div>
       <div class="fg"><label>Condición pago</label><input id="prov-condicion" style="width:100%" placeholder="Ej: 30 días"></div>
+      <div class="fg"><label>Cuenta contable por defecto</label>
+        <select id="prov-cuenta" style="width:100%">
+          <option value="">— Sin cuenta por defecto —</option>
+          <option value="50101|Costo Mercadería Vendida">Costo Mercadería</option>
+          <option value="50201|Sueldos y Jornales">Sueldos y Jornales</option>
+          <option value="50203|Combustible y Lubricante">Combustible</option>
+          <option value="50204|Seguros">Seguros</option>
+          <option value="50205|Repuestos Varios">Repuestos / Mantenimiento</option>
+          <option value="50206|Alquileres">Alquileres</option>
+          <option value="50207|Agua - Luz - Impuestos">Agua / Luz / Impuestos</option>
+          <option value="50208|Gastos Varios">Gastos Varios</option>
+          <option value="50209|Gastos Informáticos">Gastos Informáticos</option>
+          <option value="50210|Honorarios Profesionales">Honorarios</option>
+          <option value="50221|Librería y Papelería">Librería / Papelería</option>
+          <option value="50222|Peaje">Peaje</option>
+          <option value="50223|Reparaciones">Reparaciones</option>
+          <option value="50231|Fletes">Fletes</option>
+          <option value="50233|Neumáticos">Neumáticos</option>
+        </select>
+      </div>
       <div class="fg" style="grid-column:1/-1"><label>Observaciones</label><input id="prov-obs" style="width:100%" placeholder="Opcional"></div>
     </div>
   </div>
@@ -6932,6 +6952,7 @@ function editarProveedor(id){
   document.getElementById('prov-email').value = p.email||'';
   document.getElementById('prov-condicion').value = p.condicion_pago||'';
   document.getElementById('prov-obs').value = p.observaciones||'';
+  document.getElementById('prov-cuenta').value = p.cuenta_defecto||'';
   document.getElementById('m-proveedor').classList.add('on');
 }
 async function guardarProveedor(){
@@ -6945,6 +6966,7 @@ async function guardarProveedor(){
     telefono: document.getElementById('prov-tel').value.trim(),
     email: document.getElementById('prov-email').value.trim(),
     condicion_pago: document.getElementById('prov-condicion').value.trim(),
+    cuenta_defecto: document.getElementById('prov-cuenta').value,
     observaciones: document.getElementById('prov-obs').value.trim(),
   };
   if(editId){ await sb.from('proveedores').update(obj).eq('id', editId); }
@@ -7249,7 +7271,10 @@ async function abrirComprobante(){
   // Poblar proveedores
   const sel = document.getElementById('comp-prov-id');
   sel.innerHTML = '<option value="">— Elegir proveedor —</option>' +
-    _proveedores.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
+    _proveedores.map(p => `<option value="${p.id}">${p.nombre}${p.cuenta_defecto?' — '+p.cuenta_defecto.split('|')[1]:''}</option>`).join('');
+  
+  // Resetear cuenta
+  document.getElementById('comp-cuenta').value = '50101|Costo Mercadería Vendida';
   
   document.getElementById('m-comprobante').classList.add('on');
   setTimeout(()=>document.getElementById('comp-prov-id').focus(), 100);
@@ -7258,15 +7283,21 @@ async function abrirComprobante(){
 function selProvComp(){
   const id = document.getElementById('comp-prov-id').value;
   const prov = _proveedores.find(p => String(p.id) === String(id));
-  if(prov && prov.condicion_pago){
-    // Intentar setear condición de pago del proveedor
+  if(!prov) return;
+  
+  // Auto-completar condición de pago
+  if(prov.condicion_pago){
     const dias = parseInt(prov.condicion_pago) || 0;
     const sel = document.getElementById('comp-condpago');
-    // Buscar opción más cercana
     const opciones = [0,7,15,30,45,60,90];
     const cercano = opciones.reduce((a,b) => Math.abs(b-dias) < Math.abs(a-dias) ? b : a);
     sel.value = String(cercano);
     calcVencimiento();
+  }
+  
+  // Auto-completar cuenta contable del proveedor
+  if(prov.cuenta_defecto){
+    document.getElementById('comp-cuenta').value = prov.cuenta_defecto;
   }
 }
 
