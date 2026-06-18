@@ -233,6 +233,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button class="sidebar-group-btn" onclick="toggleSidebar('compras')">🛍 Compras <span id="sc-compras">▶</span></button>
     <div class="sidebar-items">
       <button class="sidebar-item" onclick="contTabDesde('gastos')" data-p="contabilidad">📝 Gastos</button>
+      <button class="sidebar-item" onclick="go('compras')" data-p="compras">🧾 Comprobantes</button>
     </div>
   </div>
 
@@ -332,6 +333,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </button>
     <button onclick="go('pedidos')" style="width:100%;max-width:320px;padding:14px;background:transparent;color:var(--txt2);border:1px solid var(--brd);border-radius:10px;font-size:14px;cursor:pointer">
       📄 Ver pedidos anteriores
+    </button>
+    <button onclick="verCobranzaHoy()" style="width:100%;max-width:320px;padding:14px;background:transparent;color:var(--txt2);border:1px solid var(--brd);border-radius:10px;font-size:14px;cursor:pointer">
+      📊 Mi cobranza de hoy
     </button>
   </div>
 </div>
@@ -455,6 +459,149 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button onclick="agregarAlCarrito()" style="flex:2;padding:12px;background:var(--P);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer">✓ Agregar</button>
     </div>
   </div>
+</div>
+
+<!-- COMPROBANTES DE COMPRAS -->
+<div class="panel" id="p-compras">
+  <div class="sech">
+    <h2>🧾 Comprobantes de compras</h2>
+    <button class="btn P" onclick="abrirComprobante()">+ Nuevo</button>
+  </div>
+  <div class="tb">
+    <input id="comp-q" placeholder="Buscar proveedor..." oninput="renderComprobantes()">
+    <select id="comp-est" onchange="renderComprobantes()">
+      <option value="">Todos</option>
+      <option value="pendiente">Pendientes</option>
+      <option value="pagado">Pagados</option>
+      <option value="vencido">Vencidos</option>
+    </select>
+    <select id="comp-mes" onchange="renderComprobantes()">
+      <option value="">Todos los meses</option>
+    </select>
+  </div>
+  <!-- Totales -->
+  <div id="comp-totales" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px"></div>
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr>
+      <th>Fecha</th>
+      <th>Proveedor</th>
+      <th>Nro. Comprobante</th>
+      <th>Descripción</th>
+      <th>Vencimiento</th>
+      <th>Cond. Pago</th>
+      <th>Importe</th>
+      <th>Estado</th>
+      <th></th>
+    </tr></thead>
+    <tbody id="comp-tbody"></tbody>
+  </table></div>
+  <div class="pg" id="comp-pg"></div>
+</div>
+
+<!-- MODAL COMPROBANTE -->
+<div class="mbg" id="m-comprobante">
+<div class="mdl" style="width:580px">
+  <div class="mh"><h3 id="m-comp-title">Nuevo comprobante</h3><button class="btn sm" onclick="cerrar('m-comprobante')">✕</button></div>
+  <div class="mb">
+    <div class="fr">
+      <div class="fg"><label>Fecha</label><input type="date" id="comp-fecha" style="width:100%"></div>
+      <div class="fg"><label>Proveedor</label>
+        <select id="comp-prov-id" style="width:100%" onchange="selProvComp()">
+          <option value="">— Elegir proveedor —</option>
+        </select>
+      </div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label>Nro. Comprobante</label><input id="comp-nro" style="width:100%" placeholder="Ej: 0001-00012345"></div>
+      <div class="fg"><label>Tipo</label>
+        <select id="comp-tipo" style="width:100%">
+          <option value="factura">Factura</option>
+          <option value="recibo">Recibo de sueldo</option>
+          <option value="remito">Remito de compra</option>
+          <option value="ticket">Ticket</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+    </div>
+    <div class="fr">
+      <div class="fg" style="grid-column:1/-1"><label>Descripción</label><input id="comp-desc" style="width:100%" placeholder="Ej: Compra mercadería enero"></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label>Importe</label><input type="number" id="comp-importe" value="0" min="0" step="0.01" style="width:100%;font-size:16px;font-weight:600"></div>
+      <div class="fg"><label>Condición de pago</label>
+        <select id="comp-condpago" style="width:100%" onchange="calcVencimiento()">
+          <option value="0">Contado</option>
+          <option value="7">7 días</option>
+          <option value="15">15 días</option>
+          <option value="30">30 días</option>
+          <option value="45">45 días</option>
+          <option value="60">60 días</option>
+          <option value="90">90 días</option>
+        </select>
+      </div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label>Fecha de vencimiento</label><input type="date" id="comp-vencimiento" style="width:100%"></div>
+      <div class="fg"><label>Cuenta contable (gasto)</label>
+        <select id="comp-cuenta" style="width:100%">
+          <option value="50101|Costo Mercadería Vendida">Costo Mercadería</option>
+          <option value="50201|Sueldos y Jornales">Sueldos y Jornales</option>
+          <option value="50203|Combustible y Lubricante">Combustible</option>
+          <option value="50204|Seguros">Seguros</option>
+          <option value="50205|Repuestos Varios">Repuestos / Mantenimiento</option>
+          <option value="50208|Gastos Varios">Gastos Varios</option>
+          <option value="50210|Honorarios Profesionales">Honorarios</option>
+          <option value="50221|Librería y Papelería">Librería / Papelería</option>
+          <option value="50231|Fletes">Fletes</option>
+        </select>
+      </div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label>Forma de pago</label>
+        <select id="comp-formapago" style="width:100%">
+          <option value="11101|Caja">Caja (efectivo)</option>
+          <option value="11102|Banco Macro">Banco Macro</option>
+          <option value="11105|Banco Santander">Banco Santander</option>
+          <option value="cuenta_corriente|Cuenta Corriente Prov.">Cuenta Corriente Prov.</option>
+        </select>
+      </div>
+      <div class="fg"><label>Observaciones</label><input id="comp-obs" style="width:100%" placeholder="Opcional"></div>
+    </div>
+  </div>
+  <div class="mf">
+    <button class="btn" onclick="cerrar('m-comprobante')">Cancelar</button>
+    <button class="btn P" onclick="guardarComprobante()">✓ Guardar</button>
+  </div>
+  <input type="hidden" id="comp-edit-id">
+</div>
+</div>
+
+<!-- COBRANZA HOY VENDEDOR -->
+<div class="panel" id="p-cobranza-hoy">
+  <div style="background:var(--PD);color:#fff;padding:12px 14px;position:sticky;top:0;z-index:10;margin:-14px -14px 14px -14px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:11px;opacity:0.8">MI COBRANZA</div>
+        <div style="font-size:16px;font-weight:700" id="cob-hoy-titulo">Hoy</div>
+      </div>
+      <button onclick="go('vendedor-home')" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">← Volver</button>
+    </div>
+  </div>
+  <!-- KPIs -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+    <div style="background:var(--PL);border-radius:10px;padding:12px;text-align:center">
+      <div style="font-size:11px;color:var(--PD);font-weight:600;text-transform:uppercase">Total cobrado</div>
+      <div style="font-size:24px;font-weight:700;color:var(--PD)" id="cob-hoy-total">$0</div>
+    </div>
+    <div style="background:var(--bg2);border-radius:10px;padding:12px;text-align:center">
+      <div style="font-size:11px;color:var(--txt2);font-weight:600;text-transform:uppercase">Cobros</div>
+      <div style="font-size:24px;font-weight:700" id="cob-hoy-cantidad">0</div>
+    </div>
+  </div>
+  <!-- Desglose forma de pago -->
+  <div id="cob-hoy-formas" style="margin-bottom:14px"></div>
+  <!-- Lista cobros -->
+  <div id="cob-hoy-lista"></div>
 </div>
 
 <!-- CARGAS -->
@@ -1641,7 +1788,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <!-- MODAL VER REMITO -->
 <div class="mbg" id="m-ver">
-<div class="mdl" style="width:620px;max-width:98vw">
+<div class="mdl" style="width:900px;max-width:98vw">
   <div class="mh">
     <h3 id="m-ver-title">Ver remito</h3>
     <div style="display:flex;gap:6px">
@@ -1685,7 +1832,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <!-- MODAL NOTA DE CRÉDITO -->
 <div class="mbg" id="m-nc">
-<div class="mdl" style="width:620px;max-width:98vw">
+<div class="mdl" style="width:900px;max-width:98vw">
   <div class="mh">
     <h3>📋 Nueva nota de crédito</h3>
     <button class="btn sm" onclick="cerrar('m-nc')">✕</button>
@@ -2413,7 +2560,7 @@ function logout(){
 
 // ─── CARGA INICIAL ───
 async function cargarTodo(){
-  await Promise.all([cargarClientes(),cargarProductos(),cargarPedidos(),cargarRemitos(),cargarCobros(),cargarCargas(),cargarGastos(),cargarProveedores(),cargarZonas()]);
+  await Promise.all([cargarClientes(),cargarProductos(),cargarPedidos(),cargarRemitos(),cargarCobros(),cargarCargas(),cargarGastos(),cargarProveedores(),cargarZonas(),cargarComprobantes()]);
   renderDash();renderPedidos();renderClientes();renderProductos();renderRemitos();renderCobros();renderCC();renderCargas();renderGastos();
   poblarZonas();
   // Asegurar que el panel activo sea el correcto
@@ -2916,7 +3063,7 @@ function resumenCarga(id){
   const totalGeneral=peds.reduce((a,p)=>a+p.total,0);
   document.getElementById('m-ver-title').textContent='Carga #'+cg.id+' — '+cg.vendedor;
   document.getElementById('m-ver-print').style.display='inline-flex';
-const _mvp2=document.getElementById('m-ver-print2');if(_mvp2)_mvp2.style.display='inline-flex';
+  const _mvp2=document.getElementById('m-ver-print2');if(_mvp2)_mvp2.style.display='inline-flex';
   document.getElementById('m-ver-body').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
       <div style="font-size:12px;color:var(--txt2)">${cg.fecha} · ${peds.length} paradas · Vendedor: <b>${cg.vendedor||'—'}</b></div>
@@ -3089,7 +3236,7 @@ function verRemito(id){
   _remActual=r;_verTipo='remito';
   document.getElementById('m-ver-title').textContent='Remito R-'+String(r.id).padStart(4,'0')+' — '+r.cliente;
   // Ocultar ambos botones de carga, mostrar solo impresión de remito
-  const _mvp2=document.getElementById('m-ver-print2');if(_mvp2)_mvp2.style.display='inline-flex';
+  const _p2=document.getElementById('m-ver-print2');if(_p2){_p2.style.display='none';}
   const _p=document.getElementById('m-ver-print');
   if(_p){_p.textContent='🖨️ Imprimir remito';_p.onclick=imprimirRemito;_p.style.display='inline-flex';}
   document.getElementById('m-ver-body').innerHTML=detalleHTML(r,true);
@@ -6250,6 +6397,66 @@ function mostrarConfirmacionMovil(tipo, cliente, detalle){
   go('pedido-movil');
 }
 
+function verCobranzaHoy(){
+  go('cobranza-hoy');
+  const hoy = new Date().toISOString().split('T')[0];
+  const nombre = usuarioActual?.nombre||'';
+  
+  // Filtrar cobros del día del vendedor actual
+  const cobrosHoy = _cobros.filter(c => 
+    c.fecha === hoy && 
+    (c.vendedor||'').toLowerCase() === nombre.toLowerCase()
+  );
+
+  // Título
+  const tit = document.getElementById('cob-hoy-titulo');
+  if(tit) tit.textContent = new Date().toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'});
+
+  // Totales
+  const total = cobrosHoy.reduce((a,c)=>a+(c.importe||0),0);
+  const elTot = document.getElementById('cob-hoy-total');
+  const elCant = document.getElementById('cob-hoy-cantidad');
+  if(elTot) elTot.textContent = fmt(total);
+  if(elCant) elCant.textContent = cobrosHoy.length;
+
+  // Formas de pago
+  const ef = cobrosHoy.reduce((a,c)=>a+(c.efectivo||0),0);
+  const tr = cobrosHoy.reduce((a,c)=>a+(c.transferencia||0),0);
+  const ch = cobrosHoy.reduce((a,c)=>a+(c.cheque_terceros||0),0);
+  const elFormas = document.getElementById('cob-hoy-formas');
+  if(elFormas){
+    let html = '<div style="display:flex;gap:8px;flex-wrap:wrap">';
+    if(ef>0) html+=`<div style="flex:1;background:#e8f5e9;border-radius:8px;padding:8px 12px;text-align:center"><div style="font-size:11px;color:#2e7d32">💵 Efectivo</div><div style="font-size:16px;font-weight:700;color:#1a7a52">${fmt(ef)}</div></div>`;
+    if(tr>0) html+=`<div style="flex:1;background:#e3f2fd;border-radius:8px;padding:8px 12px;text-align:center"><div style="font-size:11px;color:#1565c0">🏦 Transf.</div><div style="font-size:16px;font-weight:700;color:#1a5fa8">${fmt(tr)}</div></div>`;
+    if(ch>0) html+=`<div style="flex:1;background:var(--WL);border-radius:8px;padding:8px 12px;text-align:center"><div style="font-size:11px;color:var(--W)">📋 Cheque</div><div style="font-size:16px;font-weight:700;color:var(--W)">${fmt(ch)}</div></div>`;
+    if(!ef&&!tr&&!ch) html+='<div style="color:var(--txt2);font-size:13px;padding:8px">Sin cobros registrados hoy</div>';
+    html += '</div>';
+    elFormas.innerHTML = html;
+  }
+
+  // Lista
+  const elLista = document.getElementById('cob-hoy-lista');
+  if(elLista){
+    if(!cobrosHoy.length){
+      elLista.innerHTML='<div class="empty">Sin cobros hoy</div>';
+    } else {
+      elLista.innerHTML = cobrosHoy.map(c=>{
+        const formas=[];
+        if(c.efectivo>0)formas.push('Ef:'+fmt(c.efectivo));
+        if(c.transferencia>0)formas.push('Tr:'+fmt(c.transferencia));
+        if(c.cheque_terceros>0)formas.push('Ch:'+fmt(c.cheque_terceros));
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--brd)">
+          <div>
+            <div style="font-size:14px;font-weight:600">${c.cliente}</div>
+            <div style="font-size:11px;color:var(--txt2)">${formas.join(' · ')||c.forma||'—'}</div>
+          </div>
+          <div style="font-size:16px;font-weight:700;color:var(--P)">${fmt(c.importe)}</div>
+        </div>`;
+      }).join('');
+    }
+  }
+}
+
 function resetYNuevoPedido(){
   const panel=document.getElementById('p-pedido-movil');
   if(panel && window._pmPanelOriginal){
@@ -6385,6 +6592,7 @@ function go(p){
   if(p==='nc')renderNCs();
   if(p==='maestro-proveedores')renderProveedores();
   if(p==='zonas')renderZonas();
+  if(p==='compras'){renderComprobantes();}
   if(p==='remitos'){const f=document.getElementById('rem-grupo-fecha');if(f&&!f.value)f.value=new Date().toISOString().split('T')[0];}
   // Actualizar sidebar activo
   document.querySelectorAll('.sidebar-item,.sidebar-dash').forEach(b=>b.classList.remove('on'));
@@ -7011,6 +7219,208 @@ function toggleCMGCliente(id){
   const el = document.getElementById(id);
   if(!el) return;
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+// ─── COMPROBANTES DE COMPRAS ───
+let _comprobantes = [], _compPg = 1;
+
+async function cargarComprobantes(){
+  const {data} = await sb.from('comprobantes_compras').select('*').order('fecha', {ascending:false});
+  _comprobantes = data || [];
+}
+
+function abrirComprobante(){
+  document.getElementById('comp-edit-id').value = '';
+  document.getElementById('m-comp-title').textContent = 'Nuevo comprobante';
+  document.getElementById('comp-fecha').value = new Date().toISOString().split('T')[0];
+  document.getElementById('comp-nro').value = '';
+  document.getElementById('comp-desc').value = '';
+  document.getElementById('comp-importe').value = '0';
+  document.getElementById('comp-obs').value = '';
+  document.getElementById('comp-condpago').value = '0';
+  document.getElementById('comp-tipo').value = 'factura';
+  
+  // Calcular vencimiento
+  calcVencimiento();
+  
+  // Poblar proveedores
+  const sel = document.getElementById('comp-prov-id');
+  sel.innerHTML = '<option value="">— Elegir proveedor —</option>' +
+    _proveedores.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
+  
+  document.getElementById('m-comprobante').classList.add('on');
+  setTimeout(()=>document.getElementById('comp-prov-id').focus(), 100);
+}
+
+function selProvComp(){
+  const id = document.getElementById('comp-prov-id').value;
+  const prov = _proveedores.find(p => String(p.id) === String(id));
+  if(prov && prov.condicion_pago){
+    // Intentar setear condición de pago del proveedor
+    const dias = parseInt(prov.condicion_pago) || 0;
+    const sel = document.getElementById('comp-condpago');
+    // Buscar opción más cercana
+    const opciones = [0,7,15,30,45,60,90];
+    const cercano = opciones.reduce((a,b) => Math.abs(b-dias) < Math.abs(a-dias) ? b : a);
+    sel.value = String(cercano);
+    calcVencimiento();
+  }
+}
+
+function calcVencimiento(){
+  const fecha = document.getElementById('comp-fecha').value;
+  const dias = parseInt(document.getElementById('comp-condpago').value) || 0;
+  if(!fecha) return;
+  const venc = new Date(fecha);
+  venc.setDate(venc.getDate() + dias);
+  document.getElementById('comp-vencimiento').value = venc.toISOString().split('T')[0];
+}
+
+async function guardarComprobante(){
+  const provId = document.getElementById('comp-prov-id').value;
+  if(!provId){ alert('Seleccioná un proveedor'); return; }
+  const importe = parseFloat(document.getElementById('comp-importe').value) || 0;
+  if(importe <= 0){ alert('Ingresá el importe'); return; }
+  
+  const prov = _proveedores.find(p => String(p.id) === String(provId));
+  const fecha = document.getElementById('comp-fecha').value;
+  const nro = document.getElementById('comp-nro').value.trim();
+  const desc = document.getElementById('comp-desc').value.trim();
+  const venc = document.getElementById('comp-vencimiento').value;
+  const condpago = parseInt(document.getElementById('comp-condpago').value) || 0;
+  const tipo = document.getElementById('comp-tipo').value;
+  const obs = document.getElementById('comp-obs').value.trim();
+  const cuenta = document.getElementById('comp-cuenta').value;
+  const formapago = document.getElementById('comp-formapago').value;
+  const [cuentaCod, cuentaNom] = cuenta.split('|');
+  const [pagoCod, pagoNom] = formapago.split('|');
+  
+  // Determinar estado
+  const hoy = new Date().toISOString().split('T')[0];
+  const estado = condpago === 0 ? 'pagado' : (venc < hoy ? 'vencido' : 'pendiente');
+  
+  const editId = document.getElementById('comp-edit-id').value;
+  const obj = {
+    proveedor_id: parseInt(provId),
+    proveedor_nom: prov?.nombre || '',
+    fecha, nro_comprobante: nro,
+    tipo, descripcion: desc,
+    importe, condicion_pago: condpago,
+    fecha_vencimiento: venc,
+    estado,
+    cuenta_cod: cuentaCod, cuenta_nom: cuentaNom,
+    forma_pago_cod: pagoCod, forma_pago_nom: pagoNom,
+    observaciones: obs
+  };
+  
+  let compId;
+  if(editId){
+    await sb.from('comprobantes_compras').update(obj).eq('id', editId);
+    compId = parseInt(editId);
+  } else {
+    const {data} = await sb.from('comprobantes_compras').insert(obj).select().single();
+    compId = data?.id;
+  }
+  
+  // Generar asiento contable automático
+  if(compId && !editId){
+    const {data:asiento} = await sb.from('asientos').insert({
+      fecha,
+      descripcion: `${tipo.toUpperCase()} ${nro} - ${prov?.nombre} - ${desc||tipo}`,
+      tipo: 'COMPRA',
+      referencia_id: compId,
+      referencia_tipo: 'comprobante_compra'
+    }).select().single();
+    
+    if(asiento){
+      const detalles = [
+        {asiento_id: asiento.id, cuenta_cod: cuentaCod, cuenta_nom: cuentaNom, debe: importe, haber: 0},
+        {asiento_id: asiento.id, cuenta_cod: pagoCod === 'cuenta_corriente' ? '21001' : pagoCod, cuenta_nom: pagoNom, debe: 0, haber: importe}
+      ];
+      await sb.from('asientos_detalle').insert(detalles);
+    }
+  }
+  
+  cerrar('m-comprobante');
+  await cargarComprobantes();
+  renderComprobantes();
+}
+
+async function pagarComprobante(id){
+  const comp = _comprobantes.find(x => x.id === id);
+  if(!comp) return;
+  if(!confirm(`¿Marcar como pagado el comprobante ${comp.nro_comprobante || id}?`)) return;
+  await sb.from('comprobantes_compras').update({estado: 'pagado'}).eq('id', id);
+  await cargarComprobantes();
+  renderComprobantes();
+}
+
+async function eliminarComprobante(id){
+  if(!confirm('¿Eliminar este comprobante?')) return;
+  await sb.from('comprobantes_compras').delete().eq('id', id);
+  await cargarComprobantes();
+  renderComprobantes();
+}
+
+function renderComprobantes(){
+  const q = (document.getElementById('comp-q')?.value||'').toLowerCase();
+  const est = document.getElementById('comp-est')?.value||'';
+  const mes = document.getElementById('comp-mes')?.value||'';
+  
+  // Actualizar estado vencidos
+  const hoy = new Date().toISOString().split('T')[0];
+  
+  let data = _comprobantes.filter(c => {
+    const okQ = !q || (c.proveedor_nom||'').toLowerCase().includes(q) || (c.descripcion||'').toLowerCase().includes(q) || (c.nro_comprobante||'').includes(q);
+    let estado = c.estado;
+    if(estado === 'pendiente' && c.fecha_vencimiento && c.fecha_vencimiento < hoy) estado = 'vencido';
+    const okE = !est || estado === est;
+    const okM = !mes || (c.fecha||'').startsWith(mes);
+    return okQ && okE && okM;
+  });
+  
+  // Poblar meses
+  const meses = [...new Set(_comprobantes.map(c => c.fecha?.substring(0,7)).filter(Boolean))].sort().reverse();
+  const selMes = document.getElementById('comp-mes');
+  if(selMes && selMes.options.length <= 1){
+    meses.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = m; selMes.appendChild(o); });
+  }
+  
+  // Totales
+  const totalPend = data.filter(c=>c.estado==='pendiente').reduce((a,c)=>a+c.importe,0);
+  const totalVenc = data.filter(c=>c.estado==='vencido'||( c.estado==='pendiente'&&c.fecha_vencimiento<hoy)).reduce((a,c)=>a+c.importe,0);
+  const totalPag = data.filter(c=>c.estado==='pagado').reduce((a,c)=>a+c.importe,0);
+  const elTot = document.getElementById('comp-totales');
+  if(elTot) elTot.innerHTML = `
+    <div class="stat" style="padding:8px 12px"><div class="n" style="font-size:16px;color:var(--W)">${fmt(totalPend)}</div><div class="l">Pendiente</div></div>
+    <div class="stat" style="padding:8px 12px"><div class="n" style="font-size:16px;color:var(--D)">${fmt(totalVenc)}</div><div class="l">Vencido</div></div>
+    <div class="stat" style="padding:8px 12px"><div class="n" style="font-size:16px;color:var(--P)">${fmt(totalPag)}</div><div class="l">Pagado</div></div>
+  `;
+  
+  const sl = data.slice((_compPg-1)*PP, _compPg*PP);
+  const tbody = document.getElementById('comp-tbody');
+  tbody.innerHTML = sl.length ? sl.map(c => {
+    let estado = c.estado;
+    if(estado === 'pendiente' && c.fecha_vencimiento && c.fecha_vencimiento < hoy) estado = 'vencido';
+    const badgeClass = estado==='pagado'?'bP':estado==='vencido'?'bD':'bW';
+    const diasVenc = c.fecha_vencimiento ? Math.floor((new Date(c.fecha_vencimiento)-new Date())/(864e5)) : null;
+    return `<tr style="${estado==='vencido'?'background:var(--DL)':''}">
+      <td>${c.fecha}</td>
+      <td style="font-weight:600">${c.proveedor_nom}</td>
+      <td style="color:var(--txt2);font-size:12px">${c.nro_comprobante||'—'}</td>
+      <td style="font-size:12px">${c.descripcion||c.tipo||'—'}</td>
+      <td style="font-size:12px;${estado==='vencido'?'color:var(--D);font-weight:600':''}">${c.fecha_vencimiento||'—'}${diasVenc!==null&&estado==='pendiente'?` <span style="font-size:10px;color:var(--txt2)">(${diasVenc}d)</span>`:''}</td>
+      <td style="font-size:12px">${c.condicion_pago?c.condicion_pago+'d':'Contado'}</td>
+      <td style="font-weight:600;color:var(--D)">${fmt(c.importe)}</td>
+      <td><span class="b ${badgeClass}">${estado}</span></td>
+      <td style="display:flex;gap:3px">
+        ${estado!=='pagado'?`<button class="btn P sm" onclick="pagarComprobante(${c.id})">✓ Pagar</button>`:''}
+        <button class="btn D sm" onclick="eliminarComprobante(${c.id})">🗑</button>
+      </td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="9"><div class="empty">Sin comprobantes</div></td></tr>';
+  
+  pag('comp-pg', data.length, _compPg, p => { _compPg = p; renderComprobantes(); });
 }
 
 </script>
