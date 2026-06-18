@@ -2916,7 +2916,7 @@ function resumenCarga(id){
   const totalGeneral=peds.reduce((a,p)=>a+p.total,0);
   document.getElementById('m-ver-title').textContent='Carga #'+cg.id+' — '+cg.vendedor;
   document.getElementById('m-ver-print').style.display='inline-flex';
-  document.getElementById('m-ver-print2').style.display='inline-flex';
+const _mvp2=document.getElementById('m-ver-print2');if(_mvp2)_mvp2.style.display='inline-flex';
   document.getElementById('m-ver-body').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
       <div style="font-size:12px;color:var(--txt2)">${cg.fecha} · ${peds.length} paradas · Vendedor: <b>${cg.vendedor||'—'}</b></div>
@@ -3089,7 +3089,7 @@ function verRemito(id){
   _remActual=r;_verTipo='remito';
   document.getElementById('m-ver-title').textContent='Remito R-'+String(r.id).padStart(4,'0')+' — '+r.cliente;
   // Ocultar ambos botones de carga, mostrar solo impresión de remito
-  const _p2=document.getElementById('m-ver-print2');if(_p2){_p2.style.display='none';}
+  const _mvp2=document.getElementById('m-ver-print2');if(_mvp2)_mvp2.style.display='inline-flex';
   const _p=document.getElementById('m-ver-print');
   if(_p){_p.textContent='🖨️ Imprimir remito';_p.onclick=imprimirRemito;_p.style.display='inline-flex';}
   document.getElementById('m-ver-body').innerHTML=detalleHTML(r,true);
