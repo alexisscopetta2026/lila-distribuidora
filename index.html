@@ -312,8 +312,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <!-- Botón admin solo para Mauricio -->
   <div id="btn-volver-admin" style="display:none;justify-content:flex-end;padding:8px 12px">
     <button onclick="volverAdmin()" style="font-size:12px;padding:6px 12px;background:var(--PD);color:#fff;border:none;border-radius:6px;cursor:pointer">
-      🔧 Ir al menú completo
-    </button>
+      🔧 Menú completo (Admin)</button>
   </div>
   <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;gap:16px;padding:20px">
     <div style="text-align:center;margin-bottom:10px">
@@ -2172,8 +2171,8 @@ const sb = supabase.createClient(SB_URL, SB_KEY);
 
 // ─── USUARIOS (locales, simples) ───
 const USUARIOS = [
-  {user:'mauricio', pass:'lila2024', nombre:'Mauricio', rol:'admin'},
-  {user:'alexis',   pass:'lila2024', nombre:'Alexis',   rol:'admin'},
+  {user:'mauricio', pass:'lila2024', nombre:'Mauricio', rol:'vendedor', esAdmin:true, vendedor:'Mauricio'},
+  {user:'alexis',   pass:'lila2024', nombre:'Alexis',   rol:'vendedor', vendedor:'Alexis'},
   {user:'franco',   pass:'franco2024', nombre:'Franco', rol:'vendedor', vendedor:'Franco'},
   {user:'david',    pass:'david2024',  nombre:'David',  rol:'vendedor', vendedor:'David'},
 ];
@@ -2209,7 +2208,7 @@ function doLogin(){
     if(sidebar)sidebar.style.display='none';
     document.querySelector('[data-p="vendedor-home"]').style.display='flex';
     // Si es admin en modo vendedor, mostrar botón para volver al admin
-    if(found.rol_original==='admin' || found.user==='mauricio'){
+    if(found.esAdmin){
       const btnAdmin = document.getElementById('btn-volver-admin');
       if(btnAdmin) btnAdmin.style.display='flex';
     }
