@@ -459,11 +459,59 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <!-- CARGAS -->
 <div class="panel" id="p-carga">
-  <div class="sech">
-    <h2>Armado de cargas</h2>
-    <button class="btn P" onclick="abrirCarga()">+ Nueva carga</button>
+  <!-- Vista lista de cargas -->
+  <div id="carga-vista-lista">
+    <div class="sech">
+      <h2>Armado de cargas</h2>
+      <button class="btn P" onclick="mostrarNuevaCarga()">+ Nueva carga</button>
+    </div>
+    <div id="carga-lista"><div class="loading">Cargando...</div></div>
   </div>
-  <div id="carga-lista"><div class="loading">Cargando...</div></div>
+  <!-- Vista nueva carga (pantalla completa) -->
+  <div id="carga-vista-nueva" style="display:none">
+    <div class="sech">
+      <h2>Nueva carga</h2>
+      <button class="btn" onclick="ocultarNuevaCarga()">✕ Cancelar</button>
+    </div>
+    <!-- Cabecera -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;background:var(--bg2);padding:10px;border-radius:8px;align-items:flex-end">
+      <div class="fg" style="width:140px">
+        <label>Fecha</label>
+        <input type="date" id="car-fecha" style="width:100%">
+      </div>
+      <div class="fg" style="width:160px">
+        <label>Chofer / Reparto</label>
+        <input id="car-chofer" style="width:100%" placeholder="Nombre del chofer">
+      </div>
+      <div class="fg" style="width:130px">
+        <label>Filtrar zona</label>
+        <select id="car-fil-zona" onchange="loadPedsCarga()" style="width:100%">
+          <option value="">Todas las zonas</option>
+        </select>
+      </div>
+      <div class="fg" style="width:160px">
+        <label>Filtrar localidad</label>
+        <select id="car-fil-loc" onchange="loadPedsCarga()" style="width:100%">
+          <option value="">Todas las localidades</option>
+        </select>
+      </div>
+      <div class="fg" style="width:160px">
+        <label>Filtrar vendedor</label>
+        <select id="car-fil-ven" onchange="loadPedsCarga()" style="width:100%">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <button class="btn sm" onclick="selAllPeds(true)">✓ Todos</button>
+      <button class="btn sm" onclick="selAllPeds(false)">✗ Ninguno</button>
+    </div>
+    <!-- Lista pedidos -->
+    <div id="car-items-lista" style="margin-bottom:12px"></div>
+    <!-- Totales y guardar -->
+    <div style="display:flex;justify-content:space-between;align-items:center;background:var(--PL);border-radius:8px;padding:10px 14px">
+      <div id="car-resumen" style="font-size:13px;color:var(--PD)"></div>
+      <button class="btn P" onclick="guardarCarga()" style="padding:10px 24px;font-size:14px">✓ Armar carga</button>
+    </div>
+  </div>
 </div>
 
 <!-- REMITOS -->
@@ -2593,25 +2641,66 @@ async function guardarPedido(){
 }
 
 // ─── CARGAS ───
-async function abrirCarga(){
+function mostrarNuevaCarga(){
+  document.getElementById('carga-vista-lista').style.display='none';
+  document.getElementById('carga-vista-nueva').style.display='block';
   const fecha=document.getElementById('car-fecha');
-  const chofer=document.getElementById('car-chofer');
   if(fecha)fecha.value=new Date().toISOString().split('T')[0];
-  if(chofer)chofer.value='';
-  await loadPedsCarga();
-  document.getElementById('m-carga').classList.add('on');
+  // Poblar filtros
+  const zonas=[...new Set(_pedidos.filter(p=>p.estado==='pendiente').map(p=>p.zona||'').filter(Boolean))].sort();
+  const locs=[...new Set(_pedidos.filter(p=>p.estado==='pendiente').map(p=>p.localidad||'').filter(Boolean))].sort();
+  const vens=[...new Set(_pedidos.filter(p=>p.estado==='pendiente').map(p=>p.vendedor||'').filter(Boolean))].sort();
+  const selZ=document.getElementById('car-fil-zona');
+  selZ.innerHTML='<option value="">Todas las zonas</option>'+zonas.map(z=>`<option value="${z}">Zona ${z}</option>`).join('');
+  const selL=document.getElementById('car-fil-loc');
+  selL.innerHTML='<option value="">Todas las localidades</option>'+locs.map(l=>`<option value="${l}">${l}</option>`).join('');
+  const selV=document.getElementById('car-fil-ven');
+  selV.innerHTML='<option value="">Todos</option>'+vens.map(v=>`<option value="${v}">${v}</option>`).join('');
+  loadPedsCarga();
+}
+function ocultarNuevaCarga(){
+  document.getElementById('carga-vista-lista').style.display='block';
+  document.getElementById('carga-vista-nueva').style.display='none';
+}
+async function abrirCarga(){ mostrarNuevaCarga(); }
+function selAllPeds(val){
+  document.querySelectorAll('#car-items-lista input[type=checkbox]').forEach(c=>c.checked=val);
+  actualizarResumenCarga();
+}
+function actualizarResumenCarga(){
+  const chks=[...document.querySelectorAll('#car-items-lista input[type=checkbox]:checked')];
+  const pedIds=chks.map(c=>parseInt(c.value));
+  const peds=_pedidos.filter(p=>pedIds.includes(p.id));
+  const tot=peds.reduce((a,p)=>a+(p.total||0),0);
+  const el=document.getElementById('car-resumen');
+  if(el)el.innerHTML=`<b>${peds.length}</b> pedidos seleccionados · Total: <b style="color:var(--PD)">${fmt(tot)}</b>`;
 }
 async function loadPedsCarga(){
-  const ven=(document.getElementById('car-chofer')?.value||'').toLowerCase();
-  const pends=_pedidos.filter(p=>p.estado==='pendiente'&&(!ven||(p.vendedor||'').toLowerCase().includes(ven)));
+  const zona=document.getElementById('car-fil-zona')?.value||'';
+  const loc=document.getElementById('car-fil-loc')?.value||'';
+  const ven=document.getElementById('car-fil-ven')?.value||'';
+  const pends=_pedidos.filter(p=>
+    p.estado==='pendiente'&&
+    (!zona||p.zona===zona)&&
+    (!loc||(p.localidad||'')=== loc)&&
+    (!ven||(p.vendedor||'').toLowerCase()===(ven).toLowerCase())
+  ).sort((a,b)=>(a.zona||'').localeCompare(b.zona||'')||(a.localidad||'').localeCompare(b.localidad||''));
   const el=document.getElementById('car-items-lista');
   if(!el)return;
-  if(!pends.length){el.innerHTML='<div class="empty">Sin pedidos pendientes</div>';return;}
-  el.innerHTML=pends.map(p=>`<div style="display:flex;align-items:center;gap:8px;padding:7px;border-bottom:1px solid var(--brd);font-size:13px">
-    <input type="checkbox" id="chk-${p.id}" value="${p.id}" checked>
-    <label for="chk-${p.id}" style="flex:1;cursor:pointer"><strong>${p.cliente}</strong> <span style="color:var(--txt2);font-size:11px">${p.localidad} · ${p.vendedor||''} · ${p.fecha}</span></label>
-    <span style="color:var(--P);font-weight:600">${fmt(p.total)}</span>
-  </div>`).join('');
+  if(!pends.length){el.innerHTML='<div class="empty">Sin pedidos pendientes con esos filtros</div>';actualizarResumenCarga();return;}
+  el.innerHTML=pends.map(p=>{
+    const c=_clientes.find(x=>x.id===p.cliente_id);
+    return `<div style="display:flex;align-items:center;gap:8px;padding:9px 6px;border-bottom:1px solid var(--brd);font-size:13px">
+      <input type="checkbox" id="chk-${p.id}" value="${p.id}" checked onchange="actualizarResumenCarga()">
+      <label for="chk-${p.id}" style="flex:1;cursor:pointer">
+        <span style="font-weight:600">${p.cliente}</span>
+        <span style="color:var(--txt2);font-size:11px;margin-left:8px">${p.localidad||''} · Z${p.zona||'-'} · ${p.vendedor||'—'} · ${p.fecha}</span>
+        ${c?.direccion?`<span style="color:var(--txt2);font-size:11px;margin-left:8px">📍 ${c.direccion}</span>`:''}
+      </label>
+      <span style="color:var(--P);font-weight:600;white-space:nowrap">${fmt(p.total)}</span>
+    </div>`;
+  }).join('');
+  actualizarResumenCarga();
 }
 async function guardarCarga(){
   const chks=[...document.querySelectorAll('#car-items-lista input[type=checkbox]:checked')];
@@ -2622,6 +2711,7 @@ async function guardarCarga(){
   const ven=document.getElementById('car-chofer')?.value||'';
   const fecha=document.getElementById('car-fecha')?.value||new Date().toISOString().split('T')[0];
   const nombre=ven||'';
+  ocultarNuevaCarga();
   const {data:carga,error}=await sb.from('cargas').insert({fecha,vendedor:ven,pedidos:pedIds,total:tot,estado:'armando',nombre}).select().single();
   if(error){alert('Error: '+error.message);return;}
   for(const pid of pedIds){await sb.from('pedidos').update({estado:'en_carga',carga_id:carga.id}).eq('id',pid);}
