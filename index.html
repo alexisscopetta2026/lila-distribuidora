@@ -910,7 +910,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <div class="drop" id="rr-pro-drop"></div>
         </div>
         <div class="fg" style="width:80px"><label>Cantidad</label><input id="rr-cant" type="number" value="1" min="0.01" step="0.01"></div>
-        <div class="fg" style="width:80px"><label>Peso/kg</label><input id="rr-peso" type="number" value="0" min="0" step="0.01" placeholder="0=N/A"></div>
+        <div class="fg" style="width:80px"><label>Peso kg</label><input id="rr-peso" type="number" value="0" min="0" step="0.01" placeholder="0" title="Solo para productos por kg"></div>
         <div class="fg" style="width:95px"><label>Precio ($)</label><input id="rr-precio" type="number" value="0"></div>
         <div class="fg" style="width:65px"><label>Dto%</label><input id="rr-dto" type="number" value="0"></div>
         <button class="btn P" onclick="agregarItemRR()">+ Agregar</button>
@@ -4418,10 +4418,24 @@ document.addEventListener('DOMContentLoaded',function(){
     const el = document.getElementById(id);
     if(!el) return;
     el.addEventListener('keydown',function(e){
-      if(e.key==='Enter'){
-        e.preventDefault();
-        if(i < campos.length-1) document.getElementById(campos[i+1])?.focus();
-        else{ agregarItemRR(); setTimeout(()=>document.getElementById('rr-cod')?.focus(),50); }
+      if(e.key==='Enter'||e.key==='Tab'){
+        // Si es campo peso y el producto es por kg, no dejar salir sin valor
+        if(id==='rr-peso' && _rrProTemp){
+          const unidad=(_rrProTemp.unidad||'').toLowerCase().trim();
+          const esPeso=['kg','kilo','kilos','k','kilogramo','kilogramos'].includes(unidad);
+          if(esPeso && (parseFloat(this.value)||0)<=0){
+            e.preventDefault();
+            this.style.borderColor='var(--D)';
+            this.style.background='#fdecea';
+            this.focus();this.select();
+            return;
+          }
+        }
+        if(e.key==='Enter'){
+          e.preventDefault();
+          if(i < campos.length-1) document.getElementById(campos[i+1])?.focus();
+          else{ agregarItemRR(); setTimeout(()=>document.getElementById('rr-cod')?.focus(),50); }
+        }
       }
       if(e.key==='ArrowUp' && i===0){
         e.preventDefault();
@@ -4460,9 +4474,21 @@ function selProRR(id){
   const cid=document.getElementById('rr-cli-id').value;
   const c=cid?_clientes.find(x=>x.id==cid):null;
   document.getElementById('rr-dto').value=Math.max(_rrProTemp.descuento||0,c?.descuento||0);
-  // Si es producto por peso, limpiar campo peso
-  const esPeso=(_rrProTemp.unidad||'').toLowerCase()==='kg';
-  document.getElementById('rr-peso').value=esPeso?'':0;
+  // Si es producto por peso, ir directo al campo peso y resaltarlo
+  const unidad=(_rrProTemp.unidad||'').toLowerCase().trim();
+  const esPeso=['kg','kilo','kilos','k','kilogramo','kilogramos'].includes(unidad);
+  const pesoEl=document.getElementById('rr-peso');
+  if(esPeso){
+    pesoEl.value='';
+    pesoEl.style.borderColor='var(--P)';
+    pesoEl.style.background='#fffde7';
+    setTimeout(()=>{pesoEl.focus();pesoEl.select();},80);
+  } else {
+    pesoEl.value=0;
+    pesoEl.style.borderColor='';
+    pesoEl.style.background='';
+    setTimeout(()=>{document.getElementById('rr-cant').focus();document.getElementById('rr-cant').select();},80);
+  }
 }
 function agregarItemRR(){
   if(!_rrProTemp){const q=(document.getElementById('rr-pro-q').value||'').toLowerCase();_rrProTemp=_productos.find(p=>(p.nombre||'').toLowerCase().includes(q));}
@@ -4473,13 +4499,14 @@ function agregarItemRR(){
   const dto=parseFloat(document.getElementById('rr-dto').value)||0;
   
   // Validar peso obligatorio para productos por kg
-  const unidad = (_rrProTemp.unidad||'').toLowerCase();
-  const esPorPeso = unidad === 'kg' || unidad === 'kilo' || unidad === 'kilos';
+  const unidad = (_rrProTemp.unidad||'').toLowerCase().trim();
+  const esPorPeso = ['kg','kilo','kilos','k','kilogramo','kilogramos'].includes(unidad);
   if(esPorPeso && peso <= 0){
-    alert('⚠️ Este producto se vende por kg. Ingresá el peso real antes de agregar.');
+    alert('⚠️ ' + _rrProTemp.nombre + ' se vende por kg. Ingresá el peso real de la balanza.');
     document.getElementById('rr-peso').focus();
+    document.getElementById('rr-peso').select();
     document.getElementById('rr-peso').style.borderColor = 'var(--D)';
-    setTimeout(()=>{ const el=document.getElementById('rr-peso'); if(el) el.style.borderColor=''; }, 2000);
+    setTimeout(()=>{ const el=document.getElementById('rr-peso'); if(el) el.style.borderColor=''; }, 3000);
     return;
   }
   
