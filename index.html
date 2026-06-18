@@ -7229,7 +7229,7 @@ async function cargarComprobantes(){
   _comprobantes = data || [];
 }
 
-function abrirComprobante(){
+async function abrirComprobante(){
   document.getElementById('comp-edit-id').value = '';
   document.getElementById('m-comp-title').textContent = 'Nuevo comprobante';
   document.getElementById('comp-fecha').value = new Date().toISOString().split('T')[0];
@@ -7242,6 +7242,9 @@ function abrirComprobante(){
   
   // Calcular vencimiento
   calcVencimiento();
+  
+  // Recargar proveedores por si acaso
+  if(!_proveedores.length) await cargarProveedores();
   
   // Poblar proveedores
   const sel = document.getElementById('comp-prov-id');
