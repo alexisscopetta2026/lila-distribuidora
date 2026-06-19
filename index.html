@@ -6156,17 +6156,31 @@ async function guardarCobMovil(){
 let _pmCliId=null, _pmCarrito=[], _pmMarcaActual=null, _pmProdActual=null;
 
 function abrirPedidoMovil(){
+  // Si el panel fue reemplazado con innerHTML, restaurarlo primero
+  const panel=document.getElementById('p-pedido-movil');
+  if(panel && window._pmPanelOriginal && !document.getElementById('pm-cli-nombre')){
+    panel.innerHTML=window._pmPanelOriginal;
+  }
   _pmCliId=null;_pmCarrito=[];_pmMarcaActual=null;_pmProdActual=null;
   go('pedido-movil');
-  document.getElementById('pm-cli-nombre').textContent='Seleccioná un cliente';
-  document.getElementById('pm-cli-saldo').textContent='';
-  document.getElementById('pm-cli-q').value='';
-  document.getElementById('pm-cli-lista').innerHTML='';
-  document.getElementById('pm-paso-cliente').style.display='block';
-  document.getElementById('pm-paso-productos').style.display='none';
-  document.getElementById('pm-paso-resumen').style.display='none';
+  const nomEl=document.getElementById('pm-cli-nombre');
+  const saldoEl=document.getElementById('pm-cli-saldo');
+  const qEl=document.getElementById('pm-cli-q');
+  const listaEl=document.getElementById('pm-cli-lista');
+  const pasoCliEl=document.getElementById('pm-paso-cliente');
+  const pasoProdEl=document.getElementById('pm-paso-productos');
+  const pasoResEl=document.getElementById('pm-paso-resumen');
+  if(nomEl)nomEl.textContent='Seleccioná un cliente';
+  if(saldoEl)saldoEl.textContent='';
+  if(qEl)qEl.value='';
+  if(listaEl)listaEl.innerHTML='';
+  if(pasoCliEl)pasoCliEl.style.display='block';
+  if(pasoProdEl)pasoProdEl.style.display='none';
+  if(pasoResEl)pasoResEl.style.display='none';
+  const saldoWrap=document.getElementById('pm-cli-saldo-wrap');
+  if(saldoWrap)saldoWrap.style.display='none';
   actualizarCarritoBar();
-  setTimeout(()=>document.getElementById('pm-cli-q').focus(),100);
+  setTimeout(()=>document.getElementById('pm-cli-q')?.focus(),100);
 }
 
 function buscarClienteMovil(){
