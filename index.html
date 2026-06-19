@@ -817,7 +817,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
 
     <!-- ZONA PRINCIPAL: 3 columnas -->
-    <div style="display:grid;grid-template-columns:220px 1fr;gap:10px;margin-bottom:8px">
+    <div style="display:grid;grid-template-columns:280px 1fr;gap:10px;margin-bottom:8px">
 
       <!-- IZQ: Total + Forma de cobro -->
       <div>
@@ -860,16 +860,35 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
               onkeydown="if(event.key==='Tab'||event.key==='Enter'){event.preventDefault();focusImprimerInput();}">
           </div>
           <div id="cob-bloque-ch" style="display:none;margin-bottom:4px">
-            <input id="cob-cheque3" type="number" value="0" min="0" oninput="calcTotalCobro()" placeholder="Cheque $"
-              style="width:100%;padding:7px 8px;border:2px solid var(--W);border-radius:6px;font-size:16px;font-weight:700;text-align:right;margin-bottom:6px"
-              onkeydown="if(event.key==='Tab'||event.key==='Enter'){event.preventDefault();document.getElementById('cob-banco').focus();}">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--WL);padding:6px;border-radius:6px">
-              <input id="cob-banco" placeholder="Banco"
-                onkeydown="if(event.key==='Tab'||event.key==='Enter'){event.preventDefault();document.getElementById('cob-nrocheque').focus();}">
-              <input id="cob-nrocheque" placeholder="Nro. cheque"
-                onkeydown="if(event.key==='Tab'||event.key==='Enter'){event.preventDefault();document.getElementById('cob-fecha-cheque').focus();}">
-              <div style="grid-column:1/-1"><input type="date" id="cob-fecha-cheque" style="width:100%"
-                onkeydown="if(event.key==='Tab'||event.key==='Enter'){event.preventDefault();focusImprimerInput();}"></div>
+            <div style="background:var(--WL);border:1px solid var(--W);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:7px">
+              <div class="fg">
+                <label style="font-size:10px">IMPORTE CHEQUE ($)</label>
+                <input id="cob-cheque3" type="number" value="0" min="0" oninput="calcTotalCobro()" placeholder="0"
+                  style="width:100%;padding:7px 8px;border:2px solid var(--W);border-radius:6px;font-size:18px;font-weight:700;text-align:right"
+                  onkeydown="if(event.key==='Tab'||event.key==='Enter'){event.preventDefault();document.getElementById('cob-banco').focus();}">
+              </div>
+              <div class="fg">
+                <label style="font-size:10px">BANCO</label>
+                <input id="cob-banco" placeholder="Nombre del banco" style="width:100%"
+                  onkeydown="if(event.key==='Tab'||event.key==='Enter'){event.preventDefault();document.getElementById('cob-nrocheque').focus();}">
+              </div>
+              <div class="fg">
+                <label style="font-size:10px">NRO. CHEQUE</label>
+                <input id="cob-nrocheque" placeholder="Número de cheque" style="width:100%"
+                  onkeydown="if(event.key==='Tab'||event.key==='Enter'){event.preventDefault();document.getElementById('cob-fecha-emision').focus();}">
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+                <div class="fg">
+                  <label style="font-size:10px">FECHA EMISIÓN</label>
+                  <input type="date" id="cob-fecha-emision" style="width:100%"
+                    onkeydown="if(event.key==='Tab'||event.key==='Enter'){event.preventDefault();document.getElementById('cob-fecha-cheque').focus();}">
+                </div>
+                <div class="fg">
+                  <label style="font-size:10px">FECHA COBRO (PLAZA)</label>
+                  <input type="date" id="cob-fecha-cheque" style="width:100%"
+                    onkeydown="if(event.key==='Tab'||event.key==='Enter'){event.preventDefault();focusImprimerInput();}">
+                </div>
+              </div>
             </div>
           </div>
           <div style="border-top:1px solid var(--brd);padding-top:6px;margin-top:4px;display:flex;justify-content:space-between">
@@ -2552,7 +2571,11 @@ function doLogin(){
       });
       document.querySelectorAll('.sidebar-item,.sidebar-dash').forEach(b=>b.classList.remove('on'));
       const dashBtn=document.querySelector('.sidebar-dash[data-p="dash"]');
-      if(dashBtn){dashBtn.classList.add('on');setTimeout(()=>dashBtn.focus(),300);}
+      if(dashBtn){
+        dashBtn.classList.add('on');
+        dashBtn.setAttribute('tabindex','0');
+        setTimeout(()=>{dashBtn.focus();},400);
+      }
       go('dash');
     });
   }
@@ -2564,6 +2587,14 @@ function logout(){
 }
 
 // ─── CARGA INICIAL ───
+async function recargarTodo(){
+  const btn = document.querySelector('[onclick="recargarTodo()"]');
+  if(btn){btn.textContent='⏳ Cargando...';btn.disabled=true;}
+  await cargarTodo();
+  if(btn){btn.textContent='🔄 Actualizar';btn.disabled=false;}
+  go(_panelActual||'dash');
+}
+
 async function cargarTodo(){
   // Guardar HTML original del panel pedido-movil
   const pmPanel = document.getElementById('p-pedido-movil');
@@ -3774,7 +3805,7 @@ function selCliCob(id){
   const ciTxt=document.getElementById('cob-cli-info-txt');
   if(ci){
     const dias=diasDesde(c.ultimo_remito);
-    if(ciTxt)ciTxt.innerHTML=`<b>${c.nombre}</b> · ${c.localidad||''} · ${c.telefono||'—'} · Saldo: <b style="${(c.saldo||0)>0?'color:var(--D)':''}">${fmt(c.saldo)}</b>${dias!==null?` · Último rem: ${dias}d`:''}`;
+    if(ciTxt)ciTxt.innerHTML=`<b>${c.nombre}</b> · ${c.localidad||''} · ${c.direccion?'📍 '+c.direccion+' · ':''} ${c.telefono||'—'} · Saldo: <b style="${(c.saldo||0)>0?'color:var(--D)':''}">${fmt(c.saldo)}</b>${dias!==null?` · Último rem: ${dias}d`:''}`;
     ci.style.display='flex';
   }
   // Mostrar remitos pendientes
@@ -3798,7 +3829,7 @@ function selCliCob(id){
           placeholder="0" oninput="limitarImputacion(this,${r.saldo_pendiente||r.total});calcTotalDesdeImputacion()"
           ondblclick="imputarTotal(${r.id},${r.saldo_pendiente||r.total});this.select();"
           title="Doble clic = imputar total"
-          onkeydown="if(event.key==='Tab'||event.key==='Enter'){event.preventDefault();const inputs=[...document.querySelectorAll('[id^=imp-rem-]')];const idx=inputs.indexOf(this);if(idx<inputs.length-1){inputs[idx+1].focus();inputs[idx+1].select();}else{document.getElementById('cob-obs2')?.focus();}}">
+          onkeydown="if(event.key==='F'){event.preventDefault();imputarTotal(parseInt(this.id.replace('imp-rem-','')),parseFloat(this.max)||0);return;}if(event.key==='Tab'||event.key==='Enter'){event.preventDefault();const inputs=[...document.querySelectorAll('[id^=imp-rem-]')];const idx=inputs.indexOf(this);if(idx<inputs.length-1){inputs[idx+1].focus();inputs[idx+1].select();}else{document.getElementById('cob-obs2')?.focus();}}">
         <button class="btn P" onclick="imputarTotal(${r.id},${r.saldo_pendiente||r.total})"
           style="padding:8px 14px;font-size:13px;white-space:nowrap">✓ Todo</button>
       </div>`).join('');
@@ -3947,6 +3978,7 @@ async function guardarCobro(){
     forma:formas.join('+')||'efectivo',importe:imp,
     efectivo:ef,transferencia:tr,cheque_terceros:ch3,
     ret_ganancias:rg,ret_ing_brutos:rib,ret_otras:ro,
+    estado_rendicion:'pendiente',
     banco_cheque:document.getElementById('cob-banco')?.value||'',
     nro_cheque:document.getElementById('cob-nrocheque')?.value||'',
     fecha_cheque:document.getElementById('cob-fecha-cheque')?.value||'',
@@ -6658,7 +6690,7 @@ function go(p){
   }
   if(p==='maestro-proveedores')renderProveedores();
   if(p==='zonas')renderZonas();
-  if(p==='compras'){renderComprobantes();}
+  if(p==='compras'){renderComprobantes();setTimeout(()=>{const q=document.getElementById('comp-q');if(q)q.focus();},100);}
   if(p==='remitos'){const f=document.getElementById('rem-grupo-fecha');if(f&&!f.value)f.value=new Date().toISOString().split('T')[0];}
   // Actualizar sidebar activo
   document.querySelectorAll('.sidebar-item,.sidebar-dash').forEach(b=>b.classList.remove('on'));
