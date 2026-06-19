@@ -2583,6 +2583,9 @@ function logout(){
 
 // ─── CARGA INICIAL ───
 async function cargarTodo(){
+  // Guardar HTML original del panel pedido-movil
+  const pmPanel = document.getElementById('p-pedido-movil');
+  if(pmPanel && !window._pmPanelOriginal) window._pmPanelOriginal = pmPanel.innerHTML;
   await Promise.all([cargarClientes(),cargarProductos(),cargarPedidos(),cargarRemitos(),cargarCobros(),cargarCargas(),cargarGastos(),cargarProveedores(),cargarZonas(),cargarComprobantes()]);
   renderDash();renderPedidos();renderClientes();renderProductos();renderRemitos();renderCobros();renderCC();renderCargas();renderGastos();
   poblarZonas();
@@ -6353,8 +6356,10 @@ function actualizarCarritoBar(){
   const bar=document.getElementById('pm-carrito-bar');
   const tot=_pmCarrito.reduce((a,x)=>a+x.neto,0);
   const n=_pmCarrito.length;
-  document.getElementById('pm-carrito-items').textContent=n+' producto'+(n!==1?'s':'');
-  document.getElementById('pm-carrito-total').textContent=fmt(tot);
+  const itemsEl=document.getElementById('pm-carrito-items');
+  const totalEl=document.getElementById('pm-carrito-total');
+  if(itemsEl)itemsEl.textContent=n+' producto'+(n!==1?'s':'');
+  if(totalEl)totalEl.textContent=fmt(tot);
   if(bar)bar.style.display=n>0?'flex':'none';
 }
 
