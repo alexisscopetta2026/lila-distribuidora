@@ -375,7 +375,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <div id="pm-cli-detalle" style="font-size:11px;opacity:0.8;margin-top:2px"></div>
       </div>
       <div style="text-align:right">
-        <button onclick="go('pedidos')" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;margin-bottom:6px">✕ Salir</button>
+        <button onclick="go('vendedor-home')" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;margin-bottom:6px">← Volver</button>
         <div id="pm-cli-saldo-wrap" style="display:none;cursor:pointer" onclick="verSaldoMovil()">
           <div style="font-size:10px;opacity:0.8">SALDO CC</div>
           <div id="pm-cli-saldo" style="font-size:24px;font-weight:700;line-height:1"></div>
@@ -3809,8 +3809,8 @@ function selCliCob(id){
         </div>
         <input type="number" id="imp-rem-${r.id}" value="0" min="0" max="${r.saldo_pendiente||r.total}" step="0.01"
           style="width:110px;padding:4px 7px;border:1px solid var(--brd);border-radius:6px;text-align:right;font-size:13px"
-          placeholder="0" oninput="calcTotalDesdeImputacion()"
-          ondblclick="this.value=${r.saldo_pendiente||r.total};calcTotalDesdeImputacion();this.select();"
+          placeholder="0" oninput="limitarImputacion(this,${r.saldo_pendiente||r.total});calcTotalDesdeImputacion()"
+          ondblclick="imputarTotal(${r.id},${r.saldo_pendiente||r.total});this.select();"
           title="Doble clic = imputar total"
           onkeydown="if(event.key==='Tab'||event.key==='Enter'){event.preventDefault();const inputs=[...document.querySelectorAll('[id^=imp-rem-]')];const idx=inputs.indexOf(this);if(idx<inputs.length-1){inputs[idx+1].focus();inputs[idx+1].select();}else{document.getElementById('cob-obs2')?.focus();}}">
         <button class="btn sm" style="background:var(--P);color:#fff;border-color:var(--P)" onclick="imputarTotal(${r.id},${r.saldo_pendiente||r.total})" title="Imputar total">✓ Todo</button>
@@ -3824,6 +3824,26 @@ function selCliCob(id){
   if(ef&&(c.saldo||0)>0){ef.value=Math.round(c.saldo);calcTotalCobro();}
   // foco manejado por buscarCodCli o dropdown
 }
+function limitarImputacion(input, maxRemito){
+  const val = parseFloat(input.value)||0;
+  // Calcular cuánto ya está imputado en otros remitos
+  const inputs = document.querySelectorAll('[id^="imp-rem-"]');
+  let otrosImputados = 0;
+  inputs.forEach(inp => { if(inp !== input) otrosImputados += parseFloat(inp.value)||0; });
+  // Total que cobra
+  const totalCobra = parseFloat(document.getElementById('cob-total-imputar')?.value)||0;
+  const disponible = Math.max(0, totalCobra - otrosImputados);
+  // Limitar al mínimo entre el saldo del remito y lo disponible
+  const maximo = Math.min(maxRemito, disponible);
+  if(val > maximo){
+    input.value = maximo.toFixed(2);
+    input.style.borderColor = 'var(--W)';
+    setTimeout(()=>input.style.borderColor='', 1500);
+  } else {
+    input.style.borderColor = '';
+  }
+}
+
 function imputarTotal(remId, total){
   const input = document.getElementById(`imp-rem-${remId}`);
   if(!input) return;
