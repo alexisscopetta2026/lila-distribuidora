@@ -341,11 +341,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 
 <div class="panel" id="p-pedidos">
+  <div id="pedidos-btn-volver-movil" style="display:none;padding:8px 0 0 0">
+    <button onclick="go('vendedor-home')" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--PD);display:flex;align-items:center;gap:6px"><span>←</span><span style="font-size:14px">Volver al inicio</span></button>
+  </div>
   <div class="sech">
     <h2>Pedidos</h2>
     <div style="display:flex;gap:6px">
-      <button class="btn P" onclick="abrirPedidoMovil()">📱 Pedido móvil</button>
-      <button class="btn" onclick="abrirPedido()">+ Nuevo pedido</button>
+      <button class="btn P" onclick="abrirPedidoMovil()">📱 Nuevo pedido</button>
+      <button class="btn" onclick="abrirPedido()" id="btn-nuevo-pedido-desk">+ Escritorio</button>
     </div>
   </div>
   <div class="tb">
@@ -2544,7 +2547,7 @@ function doLogin(){
     if(sidebar)sidebar.style.display='none';
     document.querySelector('[data-p="vendedor-home"]').style.display='flex';
     // Si es admin en modo vendedor, mostrar botón para volver al admin
-    if(found.rol_original==='admin' || found.user==='mauricio'){
+    if(found.rol_original==='admin' || found.user==='mauricio' || found.esAdmin){
       const btnAdmin = document.getElementById('btn-volver-admin');
       if(btnAdmin) btnAdmin.style.display='flex';
     }
@@ -6404,9 +6407,9 @@ function mostrarConfirmacionMovil(tipo, cliente, detalle){
           style="width:100%;padding:14px;background:var(--P);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:600;cursor:pointer">
           ${esCobranza?'💰 Nuevo cobro':'📋 Nuevo pedido'}
         </button>
-        <button onclick="verMisPedidosHoy()" 
+        <button onclick="${esCobranza?'verCobranzaHoy()':'verMisPedidosHoy()'}" 
           style="width:100%;padding:14px;background:var(--bg2);color:var(--PD);border:2px solid var(--P);border-radius:10px;font-size:15px;font-weight:600;cursor:pointer">
-          📋 Ver mis pedidos de hoy
+          ${esCobranza?'📊 Ver mis cobros de hoy':'📋 Ver mis pedidos de hoy'}
         </button>
         <button onclick="go('vendedor-home')" 
           style="width:100%;padding:12px;background:transparent;color:var(--txt2);border:1px solid var(--brd);border-radius:10px;font-size:14px;cursor:pointer">
@@ -6423,10 +6426,14 @@ function verCobranzaHoy(){
   const nombre = usuarioActual?.nombre||'';
   
   // Filtrar cobros del día del vendedor actual
-  const cobrosHoy = _cobros.filter(c => 
-    c.fecha === hoy && 
-    (c.vendedor||'').toLowerCase() === nombre.toLowerCase()
-  );
+  // Filtrar cobros del día — si es vendedor puro filtrar por nombre, si es admin ver todos
+  const esVendedorPuro = usuarioActual?.rol==='vendedor' && !usuarioActual?.esAdmin;
+  const cobrosHoy = _cobros.filter(c => {
+    if(c.fecha !== hoy) return false;
+    if(!esVendedorPuro) return true;
+    return (c.vendedor||'').toLowerCase() === nombre.toLowerCase() ||
+           (c.vendedor||'').toLowerCase() === (usuarioActual?.vendedor||'').toLowerCase();
+  });
 
   // Título
   const tit = document.getElementById('cob-hoy-titulo');
@@ -6503,7 +6510,7 @@ function verMisPedidosHoy(){
   panel.innerHTML=`
     <div style="max-width:480px;padding:16px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-        <button onclick="abrirPedidoMovil()" style="background:none;border:none;font-size:20px;cursor:pointer">←</button>
+        <button onclick="go('vendedor-home')" style="background:none;border:none;font-size:20px;cursor:pointer">←</button>
         <h2 style="font-size:16px;font-weight:700;color:var(--PD)">Mis pedidos de hoy</h2>
       </div>
       ${misPedidos.length?misPedidos.map(p=>`
@@ -6610,6 +6617,12 @@ function go(p){
   }
   if(p==='contabilidad')contTab('gastos');
   if(p==='nc')renderNCs();
+  if(p==='pedidos'){
+    const bv=document.getElementById('pedidos-btn-volver-movil');
+    const bd=document.getElementById('btn-nuevo-pedido-desk');
+    if(bv) bv.style.display=(usuarioActual?.rol==='vendedor'&&!usuarioActual?.esAdmin)?'block':'none';
+    if(bd) bd.style.display=(usuarioActual?.esAdmin||usuarioActual?.rol==='admin')?'inline-flex':'none';
+  }
   if(p==='maestro-proveedores')renderProveedores();
   if(p==='zonas')renderZonas();
   if(p==='compras'){renderComprobantes();}
