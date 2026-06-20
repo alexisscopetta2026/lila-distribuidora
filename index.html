@@ -212,7 +212,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="sidebar-item" onclick="go('maestro-proveedores')" data-p="maestro-proveedores">🏭 Proveedores</button>
       <button class="sidebar-item" onclick="go('zonas')" data-p="zonas">🗺 Zonas</button>
       <button class="sidebar-item" onclick="go('productos');renderProductos()" data-p="productos">📦 Productos</button>
-      <button class="sidebar-item" onclick="go('stock')" data-p="stock">📊 Stock</buttonton>
+      <button class="sidebar-item" onclick="go('stock')" data-p="stock">📊 Stock</button>
     </div>
   </div>
 
@@ -1926,6 +1926,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="fg"><label>Observaciones</label><input id="np-obs" style="width:100%"></div>
     <div class="fg" style="justify-content:flex-end"><label>&nbsp;</label><button class="btn P" onclick="agregarItem()" style="width:100%">+ Agregar</button></div>
   </div>
+  <input type="hidden" id="np-fecha">
+  <input type="hidden" id="np-visita">
   <div id="np-items-lista"></div>
   <div id="np-totbar" style="display:none;justify-content:space-between;align-items:center;background:var(--PL);border-radius:8px;padding:10px 14px;margin-top:8px">
     <span style="font-weight:600;color:var(--PD)">Total pedido</span>
@@ -2191,6 +2193,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 
 </div><!-- fin app-layout -->
+</div><!-- /app -->
 
 <div id="print-area" style="display:none"></div>
 
@@ -3843,49 +3846,6 @@ function calcTotalCobro(){
   const tot=ef+tr+ch3;
   const el=document.getElementById('cob-total-display');if(el)el.textContent=fmt(tot);
   calcTotalDesdeImputacion();
-}
-function calcTotalDesdeImputacion(){
-  const inputs=document.querySelectorAll('[id^="imp-rem-"]');
-  let totalImputado=0;
-  inputs.forEach(inp=>totalImputado+=parseFloat(inp.value)||0);
-
-  // Total cobrado: usa cob-total-imputar si está completado, sino suma formas
-  const tiField=parseFloat(document.getElementById('cob-total-imputar')?.value)||0;
-  const ef=parseFloat(document.getElementById('cob-efectivo')?.value)||0;
-  const tr=parseFloat(document.getElementById('cob-transferencia')?.value)||0;
-  const ch3=parseFloat(document.getElementById('cob-cheque3')?.value)||0;
-  const formas=ef+tr+ch3;
-  const totalCobrado=tiField||formas;
-
-  const resto=Math.round((totalCobrado-totalImputado)*100)/100;
-
-  // Actualizar displays
-  const elImp=document.getElementById('cob-imputado-monto');if(elImp)elImp.textContent=fmt(totalImputado);
-  const elRec=document.getElementById('cob-recibido-monto');if(elRec)elRec.textContent=fmt(totalCobrado);
-  const elResM=document.getElementById('cob-resto-monto');if(elResM)elResM.textContent=fmt(Math.abs(resto));
-  const elRes=document.getElementById('cob-resto-display');
-  if(elRes){
-    if(resto===0){elRes.textContent='$0';elRes.style.color='var(--P)';}
-    else if(resto>0){elRes.textContent=fmt(resto);elRes.style.color='var(--W)';}
-    else{elRes.textContent='-'+fmt(Math.abs(resto));elRes.style.color='var(--D)';}
-  }
-  // Botón saldo a favor
-  const rsSection=document.getElementById('cob-resto-section');
-  if(rsSection)rsSection.style.display=(resto>0&&totalCobrado>0)?'flex':'none';
-
-  // Bloquear inputs de imputación si ya se llegó al tope
-  if(totalCobrado>0){
-    inputs.forEach(inp=>{
-      const val=parseFloat(inp.value)||0;
-      if(totalImputado>=totalCobrado&&val===0){
-        inp.disabled=true;inp.style.opacity='0.4';
-      } else {
-        inp.disabled=false;inp.style.opacity='1';
-      }
-    });
-  }
-
-  const lbl=document.getElementById('cob-imputado-label');if(lbl)lbl.textContent='';
 }
 function toggleListaCobros(){
   const s=document.getElementById('cob-historial-section');
