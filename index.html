@@ -2198,6 +2198,34 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="empty">Seleccioná tipo y dos períodos para comparar</div>
     </div>
   </div>
+
+  <!-- Vista cruzada Ventas × Saldos -->
+  <div class="card" style="margin-top:16px">
+    <div class="sech"><h3>🔀 Vista cruzada Ventas × Saldos</h3></div>
+    <p style="font-size:12px;color:var(--txt2);margin:6px 0 12px">Combiná ventas y saldos del mismo período para detectar clientes que compran mucho pero deben mucho.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <div class="fg" style="min-width:200px">
+        <label>Período a analizar</label>
+        <select id="imp-cruz-per" style="width:100%"><option value="">— Seleccionar —</option></select>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div class="fg" style="min-width:160px">
+          <label>Ordenar por</label>
+          <select id="imp-cruz-orden" style="width:100%">
+            <option value="saldo">Mayor saldo</option>
+            <option value="rot">Mayor rotación %</option>
+            <option value="ventas">Mayor venta</option>
+          </select>
+        </div>
+        <div style="padding-top:18px">
+          <button class="btn" onclick="verVistaCruzada()" style="padding:9px 20px">🔍 Analizar</button>
+        </div>
+      </div>
+    </div>
+    <div id="imp-cruz-result" style="margin-top:14px">
+      <div class="empty">Seleccioná un período para analizar</div>
+    </div>
+  </div>
 </div>
 
 <!-- MODAL PROVEEDOR -->
@@ -8170,6 +8198,7 @@ let _impPeriodos = { ventas: [], saldos: [], resultado: [] };
 async function initImportarHistorico() {
   await cargarPeriodosImport();
   renderSelectoresPeriodo();
+  renderSelectorCruzado();
 }
 
 async function cargarPeriodosImport() {
@@ -8270,6 +8299,7 @@ async function importarHistorico() {
 
       await cargarPeriodosImport();
       renderSelectoresPeriodo();
+      renderSelectorCruzado();
       renderImpPreview(tipo, registros.slice(0, 5));
 
     } catch(err) {
@@ -8479,6 +8509,108 @@ function _impRenderCompResultado(el, dA, perA, dB, perB) {
     </tbody>
   </table></div>
   <div style="font-size:11px;color:var(--txt2);margin-top:8px">Verde = vendió más · Rojo = vendió menos vs ${perA}</div>`;
+}
+
+function renderSelectorCruzado() {
+  const perVentas = new Set(_impPeriodos.ventas);
+  const perSaldos = new Set(_impPeriodos.saldos);
+  const comunes = [...perVentas].filter(p => perSaldos.has(p)).sort();
+  const todos = [...new Set([..._impPeriodos.ventas, ..._impPeriodos.saldos])].sort();
+  const opciones = comunes.length ? comunes : todos;
+  const sel = document.getElementById('imp-cruz-per');
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">— Seleccionar —</option>' +
+    opciones.map(p => {
+      const aviso = !comunes.includes(p) ? ' ⚠ datos incompletos' : '';
+      return `<option value="${p}"${p===prev?' selected':''}>${p}${aviso}</option>`;
+    }).join('');
+}
+
+async function verVistaCruzada() {
+  const periodo = document.getElementById('imp-cruz-per').value;
+  const orden = document.getElementById('imp-cruz-orden').value;
+  const el = document.getElementById('imp-cruz-result');
+  if (!periodo) { el.innerHTML = '<div class="empty">Seleccioná un período</div>'; return; }
+
+  el.innerHTML = '<div class="loading">Cargando...</div>';
+
+  const [resV, resS] = await Promise.all([
+    sb.from('importaciones_ventas').select('*').eq('periodo', periodo),
+    sb.from('importaciones_saldos').select('*').eq('periodo', periodo),
+  ]);
+
+  const dataV = resV.data || [], dataS = resS.data || [];
+  if (!dataV.length && !dataS.length) {
+    el.innerHTML = '<div class="empty">No hay datos de ventas ni saldos para este período</div>';
+    return;
+  }
+
+  const mapV = {}, mapS = {};
+  dataV.forEach(r => mapV[r.codigo_cliente] = r);
+  dataS.forEach(r => mapS[r.codigo_cliente] = r);
+
+  const claves = [...new Set([...Object.keys(mapV), ...Object.keys(mapS)])];
+  let filas = claves.map(cod => {
+    const v = mapV[cod], s = mapS[cod];
+    const nombre = (v||s)?.nombre_cliente || '';
+    const vendido = v?.monto_vendido || 0;
+    const saldo = s?.saldo || 0;
+    const rot = vendido > 0 ? (saldo / vendido * 100) : (saldo > 0 ? 9999 : 0);
+    return { cod, nombre, vendido, saldo, rot };
+  });
+
+  if (orden === 'saldo') filas.sort((a,b) => b.saldo - a.saldo);
+  else if (orden === 'rot') filas.sort((a,b) => b.rot - a.rot);
+  else filas.sort((a,b) => b.vendido - a.vendido);
+
+  const totalVendido = filas.reduce((a,r) => a + r.vendido, 0);
+  const totalSaldo = filas.reduce((a,r) => a + r.saldo, 0);
+  const rotGlobal = totalVendido > 0 ? (totalSaldo / totalVendido * 100) : 0;
+  const conRiesgo = filas.filter(r => r.rot > 70).length;
+
+  el.innerHTML = `
+  <div class="g4" style="margin-bottom:14px">
+    <div class="stat"><div class="n">${fmt(totalVendido)}</div><div class="l">Total vendido</div></div>
+    <div class="stat"><div class="n" style="color:var(--D)">${fmt(totalSaldo)}</div><div class="l">Saldo total adeudado</div></div>
+    <div class="stat"><div class="n" style="color:${rotGlobal<30?'var(--P)':rotGlobal<70?'var(--W)':'var(--D)'}">${rotGlobal.toFixed(1)}%</div><div class="l">Rotación global</div></div>
+    <div class="stat"><div class="n" style="color:${conRiesgo?'var(--D)':'var(--P)'}">${conRiesgo}</div><div class="l">Clientes en riesgo (&gt;70%)</div></div>
+  </div>
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr>
+      <th>Código</th><th>Cliente</th>
+      <th style="text-align:right">Vendido</th>
+      <th style="text-align:right">Saldo</th>
+      <th style="text-align:right">Rotación</th>
+      <th>Estado</th>
+    </tr></thead>
+    <tbody>
+    ${filas.map(r => {
+      const rotStr = r.rot >= 9999 ? '∞' : r.rot.toFixed(1) + '%';
+      const color = r.rot === 0 ? 'var(--P)' : r.rot < 30 ? 'var(--P)' : r.rot < 70 ? 'var(--W)' : 'var(--D)';
+      const badge = r.rot === 0
+        ? '<span class="b bP">Sin deuda</span>'
+        : r.rot < 30 ? '<span class="b bP">OK</span>'
+        : r.rot < 70 ? '<span class="b bW">Atención</span>'
+        : '<span class="b bD">Riesgo</span>';
+      const rowBg = r.rot >= 9999 || r.rot > 70 ? 'background:var(--DL)' : r.rot === 0 ? 'background:var(--PL)' : '';
+      return `<tr style="${rowBg}">
+        <td style="font-size:11px;color:var(--txt2)">${r.cod}</td>
+        <td style="font-weight:500">${r.nombre}</td>
+        <td style="text-align:right">${r.vendido ? fmt(r.vendido) : '—'}</td>
+        <td style="text-align:right;font-weight:${r.saldo?'600':'400'};color:${r.saldo?'var(--D)':'var(--txt2)'}">${r.saldo ? fmt(r.saldo) : '—'}</td>
+        <td style="text-align:right;font-weight:600;color:${color}">${rotStr}</td>
+        <td>${badge}</td>
+      </tr>`;
+    }).join('')}
+    </tbody>
+  </table></div>
+  <div style="font-size:11px;color:var(--txt2);margin-top:8px">
+    Rotación = saldo ÷ vendido × 100 &nbsp;·&nbsp;
+    <span style="color:var(--P)">Verde &lt;30%</span> &nbsp;·&nbsp;
+    <span style="color:var(--W)">Amarillo 30–70%</span> &nbsp;·&nbsp;
+    <span style="color:var(--D)">Rojo &gt;70% o sin ventas registradas</span>
+  </div>`;
 }
 
 </script>
