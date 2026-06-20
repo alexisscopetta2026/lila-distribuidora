@@ -262,6 +262,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="sidebar-item" onclick="go('comisiones')" data-p="comisiones">💰 Comisiones</button>
       <button class="sidebar-item" onclick="go('contrib-zona')" data-p="contrib-zona">📊 Contrib. Marginal</button>
       <button class="sidebar-item" onclick="go('gastos-fijos')" data-p="gastos-fijos">📋 Gastos Fijos</button>
+      <button class="sidebar-item" onclick="go('importar-historico')" data-p="importar-historico">📥 Importar histórico</button>
       <button class="sidebar-item" onclick="exportarTodo()">💾 Exportar</button>
     </div>
   </div>
@@ -2130,6 +2131,75 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </table></div>
 </div>
 
+<!-- IMPORTAR HISTÓRICO FOXPRO -->
+<div class="panel" id="p-importar-historico">
+  <div style="padding:0 0 16px">
+    <h2 style="margin-bottom:4px">📥 Importar histórico FoxPro</h2>
+    <p style="color:var(--txt2);font-size:13px">Importá archivos Excel del sistema anterior para análisis comparativo por período</p>
+  </div>
+
+  <!-- Carga de archivo -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="sech"><h3>Cargar archivo</h3></div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;align-items:flex-end">
+      <div class="fg" style="min-width:180px">
+        <label>Tipo de archivo</label>
+        <select id="imp-tipo" style="width:100%" onchange="document.getElementById('imp-tipo-hint').textContent={ventas:'Columnas: Código, Descripción (cliente), Cpra Total — datos desde fila 6',saldos:'Columnas: Código, Cliente, Dirección, Localidad, Saldo — datos desde fila 3',resultado:'Columnas: Código, Descripción, Cantidad, Kilos, Venta Neta, Costo, Diferencia, % margen — datos desde fila 12'}[this.value]||''">
+          <option value="">— Seleccionar tipo —</option>
+          <option value="ventas">Ventas por cliente</option>
+          <option value="saldos">Saldos de cuentas</option>
+          <option value="resultado">Resultado / CMG por producto</option>
+        </select>
+        <div id="imp-tipo-hint" style="font-size:11px;color:var(--txt2);margin-top:3px;min-height:14px"></div>
+      </div>
+      <div class="fg" style="min-width:140px">
+        <label>Período</label>
+        <input id="imp-periodo" placeholder="Ej: Mayo 2026" style="width:100%">
+      </div>
+      <div class="fg" style="min-width:200px">
+        <label>Archivo Excel (.xlsx / .xls)</label>
+        <input type="file" id="imp-file" accept=".xlsx,.xls,.csv" style="width:100%">
+      </div>
+      <div>
+        <button class="btn P" onclick="importarHistorico()" style="padding:9px 20px">📥 Importar</button>
+      </div>
+    </div>
+    <div id="imp-status" style="margin-top:10px;font-size:13px;min-height:20px;font-weight:500"></div>
+  </div>
+
+  <!-- Vista previa del último import -->
+  <div id="imp-preview" style="margin-bottom:16px"></div>
+
+  <!-- Comparación entre períodos -->
+  <div class="card">
+    <div class="sech"><h3>Comparar períodos</h3></div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;align-items:flex-end">
+      <div class="fg" style="min-width:140px">
+        <label>Tipo de datos</label>
+        <select id="imp-comp-tipo" style="width:100%" onchange="renderSelectoresPeriodo()">
+          <option value="ventas">Ventas</option>
+          <option value="saldos">Saldos</option>
+          <option value="resultado">Resultado</option>
+        </select>
+      </div>
+      <div class="fg" style="min-width:150px">
+        <label>Período A (base)</label>
+        <select id="imp-per-a" style="width:100%"><option value="">— Seleccionar —</option></select>
+      </div>
+      <div class="fg" style="min-width:150px">
+        <label>Período B (comparar)</label>
+        <select id="imp-per-b" style="width:100%"><option value="">— Seleccionar —</option></select>
+      </div>
+      <div>
+        <button class="btn" onclick="compararPeriodos()" style="padding:9px 20px">📊 Comparar</button>
+      </div>
+    </div>
+    <div id="imp-comp-result" style="margin-top:14px">
+      <div class="empty">Seleccioná tipo y dos períodos para comparar</div>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL PROVEEDOR -->
 <div class="mbg" id="m-proveedor">
 <div class="mdl" style="width:520px">
@@ -2653,7 +2723,7 @@ const USUARIOS = [
 ];
 
 // Pantallas por rol
-const MENUS_ADMIN=['dash','pedidos','pedido-movil','carga','remitos','cobranza','cuentas','clientes','maestro-proveedores','productos','remito-rapido','nc','rendicion','stock','informes','comisiones','contrib-zona','gastos-fijos','contabilidad','exportar'];
+const MENUS_ADMIN=['dash','pedidos','pedido-movil','carga','remitos','cobranza','cuentas','clientes','maestro-proveedores','productos','remito-rapido','nc','rendicion','stock','informes','comisiones','contrib-zona','gastos-fijos','contabilidad','exportar','importar-historico'];
 const MENUS_VENDEDOR=['vendedor-home','pedidos','pedido-movil','cobranza','cuentas'];
 let usuarioActual = null;
 
@@ -7248,6 +7318,7 @@ function go(p){
   if(p==='contrib-zona')initContribZona();
   if(p==='gastos-fijos')initGastosFijos();
   if(p==='zonas')renderZonas();
+  if(p==='importar-historico')initImportarHistorico();
   if(p==='compras'){renderComprobantes();setTimeout(()=>{const q=document.getElementById('comp-q');if(q)q.focus();},100);}
   if(p==='remitos'){const f=document.getElementById('rem-grupo-fecha');if(f&&!f.value)f.value=new Date().toISOString().split('T')[0];}
   // Actualizar sidebar activo
@@ -7258,7 +7329,7 @@ function go(p){
     'clientes':'maestros','cuentas':'maestros','productos':'maestros','stock':'maestros','maestro-proveedores':'maestros',
     'pedidos':'ventas','pedido-movil':'ventas','carga':'ventas','remitos':'ventas','remito-rapido':'ventas','nc':'ventas',
     'cobranza':'tesoreria','contabilidad':'tesoreria',
-    'informes':'informes','rendicion':'informes','comisiones':'informes','contrib-zona':'informes','gastos-fijos':'informes'
+    'informes':'informes','rendicion':'informes','comisiones':'informes','contrib-zona':'informes','gastos-fijos':'informes','importar-historico':'informes'
   };
   const g=grupoMap[p];
   if(g){const sg=document.getElementById('sg-'+g);if(sg)sg.classList.add('active');}
@@ -8091,6 +8162,323 @@ function renderComprobantes(){
   }).join('') : '<tr><td colspan="9"><div class="empty">Sin comprobantes</div></td></tr>';
   
   pag('comp-pg', data.length, _compPg, p => { _compPg = p; renderComprobantes(); });
+}
+
+// ─── IMPORTADOR HISTÓRICO FOXPRO ───
+let _impPeriodos = { ventas: [], saldos: [], resultado: [] };
+
+async function initImportarHistorico() {
+  await cargarPeriodosImport();
+  renderSelectoresPeriodo();
+}
+
+async function cargarPeriodosImport() {
+  const [v, s, r] = await Promise.all([
+    sb.from('importaciones_ventas').select('periodo').order('periodo'),
+    sb.from('importaciones_saldos').select('periodo').order('periodo'),
+    sb.from('importaciones_resultado').select('periodo').order('periodo'),
+  ]);
+  _impPeriodos.ventas = [...new Set((v.data||[]).map(x=>x.periodo))];
+  _impPeriodos.saldos = [...new Set((s.data||[]).map(x=>x.periodo))];
+  _impPeriodos.resultado = [...new Set((r.data||[]).map(x=>x.periodo))];
+}
+
+async function importarHistorico() {
+  const fileEl = document.getElementById('imp-file');
+  const tipo = document.getElementById('imp-tipo').value;
+  const periodo = document.getElementById('imp-periodo').value.trim();
+  const status = document.getElementById('imp-status');
+
+  if (!fileEl.files.length) { alert('Seleccioná un archivo Excel'); return; }
+  if (!tipo) { alert('Seleccioná el tipo de archivo'); return; }
+  if (!periodo) { alert('Ingresá el período (ej: Mayo 2026)'); return; }
+
+  const file = fileEl.files[0];
+  status.textContent = 'Leyendo archivo...';
+  status.style.color = 'var(--txt2)';
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'binary' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      let registros = [];
+
+      if (tipo === 'ventas') {
+        // Encabezado filas 1-5, datos desde fila 6 (índice 5)
+        // Columnas: Código | Descripción (cliente) | Cpra Total
+        for (let i = 5; i < rows.length; i++) {
+          const r = rows[i];
+          const cod = String(r[0]||'').trim();
+          const nombre = String(r[1]||'').trim();
+          const monto = parseFloat(String(r[2]||'').replace(',','.')) || 0;
+          if (!cod || !nombre || monto <= 0) continue;
+          registros.push({ periodo, codigo_cliente: cod, nombre_cliente: nombre, monto_vendido: monto });
+        }
+        await sb.from('importaciones_ventas').delete().eq('periodo', periodo);
+        if (registros.length) {
+          const { error } = await sb.from('importaciones_ventas').insert(registros);
+          if (error) throw error;
+        }
+
+      } else if (tipo === 'saldos') {
+        // Datos desde fila 3 (índice 2)
+        // Columnas: Código | Cliente | Dirección | Localidad | Saldo
+        for (let i = 2; i < rows.length; i++) {
+          const r = rows[i];
+          const cod = String(r[0]||'').trim();
+          const nombre = String(r[1]||'').trim();
+          const direccion = String(r[2]||'').trim();
+          const localidad = String(r[3]||'').trim();
+          const saldo = parseFloat(String(r[4]||'').replace(',','.')) || 0;
+          if (!cod || !nombre) continue;
+          registros.push({ periodo, codigo_cliente: cod, nombre_cliente: nombre, direccion, localidad, saldo });
+        }
+        await sb.from('importaciones_saldos').delete().eq('periodo', periodo);
+        if (registros.length) {
+          const { error } = await sb.from('importaciones_saldos').insert(registros);
+          if (error) throw error;
+        }
+
+      } else if (tipo === 'resultado') {
+        // Datos desde fila 12 (índice 11)
+        // Columnas: Código | Descripción | Cantidad | Kilos | Venta Neta | Costo | Diferencia | % margen
+        for (let i = 11; i < rows.length; i++) {
+          const r = rows[i];
+          const cod = String(r[0]||'').trim();
+          const descripcion = String(r[1]||'').trim();
+          const cantidad = parseFloat(String(r[2]||'').replace(',','.')) || 0;
+          const kilos = parseFloat(String(r[3]||'').replace(',','.')) || 0;
+          const venta_neta = parseFloat(String(r[4]||'').replace(',','.')) || 0;
+          const costo = parseFloat(String(r[5]||'').replace(',','.')) || 0;
+          const diferencia = parseFloat(String(r[6]||'').replace(',','.')) || 0;
+          const pct_margen = parseFloat(String(r[7]||'').replace(',','.').replace('%','')) || 0;
+          if (!cod || !descripcion || venta_neta <= 0) continue;
+          registros.push({ periodo, codigo_producto: cod, descripcion, cantidad, kilos, venta_neta, costo, diferencia, pct_margen });
+        }
+        await sb.from('importaciones_resultado').delete().eq('periodo', periodo);
+        if (registros.length) {
+          const { error } = await sb.from('importaciones_resultado').insert(registros);
+          if (error) throw error;
+        }
+      }
+
+      status.textContent = `✅ Importados ${registros.length} registros para "${periodo}"`;
+      status.style.color = 'var(--P)';
+      document.getElementById('imp-file').value = '';
+
+      await cargarPeriodosImport();
+      renderSelectoresPeriodo();
+      renderImpPreview(tipo, registros.slice(0, 5));
+
+    } catch(err) {
+      status.textContent = '❌ Error: ' + (err.message || JSON.stringify(err));
+      status.style.color = 'var(--D)';
+    }
+  };
+  reader.readAsBinaryString(file);
+}
+
+function renderSelectoresPeriodo() {
+  const tipo = document.getElementById('imp-comp-tipo')?.value || 'ventas';
+  const periodos = _impPeriodos[tipo] || [];
+  ['imp-per-a', 'imp-per-b'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">— Seleccionar —</option>' +
+      periodos.map(p => `<option value="${p}"${p===prev?' selected':''}>${p}</option>`).join('');
+  });
+}
+
+function renderImpPreview(tipo, rows) {
+  const el = document.getElementById('imp-preview');
+  if (!el || !rows.length) return;
+  let headers, cells;
+  if (tipo === 'ventas') {
+    headers = ['Código', 'Cliente', 'Monto vendido'];
+    cells = r => [r.codigo_cliente, r.nombre_cliente, fmt(r.monto_vendido)];
+  } else if (tipo === 'saldos') {
+    headers = ['Código', 'Cliente', 'Localidad', 'Saldo'];
+    cells = r => [r.codigo_cliente, r.nombre_cliente, r.localidad, fmt(r.saldo)];
+  } else {
+    headers = ['Código', 'Descripción', 'Venta Neta', 'Costo', '% Margen'];
+    cells = r => [r.codigo_producto, r.descripcion, fmt(r.venta_neta), fmt(r.costo), _fmtPct(r.pct_margen)];
+  }
+  el.innerHTML = `<div style="font-size:12px;color:var(--txt2);margin-bottom:6px">Vista previa — primeros ${rows.length} registros</div>
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(r=>`<tr>${cells(r).map(v=>`<td>${v}</td>`).join('')}</tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+function _fmtPct(v) {
+  if (!v && v !== 0) return '—';
+  const n = parseFloat(v);
+  return (Math.abs(n) <= 1 ? (n*100).toFixed(1) : n.toFixed(1)) + '%';
+}
+
+async function compararPeriodos() {
+  const tipo = document.getElementById('imp-comp-tipo').value;
+  const perA = document.getElementById('imp-per-a').value;
+  const perB = document.getElementById('imp-per-b').value;
+  const el = document.getElementById('imp-comp-result');
+
+  if (!perA || !perB) { el.innerHTML = '<div class="empty">Seleccioná dos períodos para comparar</div>'; return; }
+  if (perA === perB) { el.innerHTML = '<div class="empty">Los períodos deben ser distintos</div>'; return; }
+
+  el.innerHTML = '<div class="loading">Cargando...</div>';
+
+  const tabla = 'importaciones_' + tipo;
+  const [resA, resB] = await Promise.all([
+    sb.from(tabla).select('*').eq('periodo', perA),
+    sb.from(tabla).select('*').eq('periodo', perB),
+  ]);
+
+  const dA = resA.data || [], dB = resB.data || [];
+
+  if (tipo === 'ventas') _impRenderCompVentas(el, dA, perA, dB, perB);
+  else if (tipo === 'saldos') _impRenderCompSaldos(el, dA, perA, dB, perB);
+  else _impRenderCompResultado(el, dA, perA, dB, perB);
+}
+
+function _impRenderCompVentas(el, dA, perA, dB, perB) {
+  const mapA = {}, mapB = {};
+  dA.forEach(r => mapA[r.codigo_cliente] = r);
+  dB.forEach(r => mapB[r.codigo_cliente] = r);
+  const claves = [...new Set([...Object.keys(mapA), ...Object.keys(mapB)])].sort();
+  const totalA = dA.reduce((a,r) => a + r.monto_vendido, 0);
+  const totalB = dB.reduce((a,r) => a + r.monto_vendido, 0);
+  const diff = totalB - totalA;
+  const pct = totalA ? (diff/totalA*100) : 0;
+
+  el.innerHTML = `
+  <div class="g3" style="margin-bottom:14px">
+    <div class="stat"><div class="n">${fmt(totalA)}</div><div class="l">${perA}</div></div>
+    <div class="stat"><div class="n">${fmt(totalB)}</div><div class="l">${perB}</div></div>
+    <div class="stat"><div class="n" style="color:${diff>=0?'var(--P)':'var(--D)'}">${diff>=0?'+':''}${fmt(diff)}</div><div class="l">${pct>=0?'+':''}${pct.toFixed(1)}% variación</div></div>
+  </div>
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr>
+      <th>Código</th><th>Cliente</th>
+      <th style="text-align:right">${perA}</th>
+      <th style="text-align:right">${perB}</th>
+      <th style="text-align:right">Diferencia</th>
+      <th style="text-align:right">%</th>
+    </tr></thead>
+    <tbody>
+    ${claves.map(cod => {
+      const a = mapA[cod]?.monto_vendido || 0;
+      const b = mapB[cod]?.monto_vendido || 0;
+      if (a === 0 && b === 0) return '';
+      const d = b - a;
+      const p = a ? (d/a*100) : null;
+      const nombre = (mapA[cod]||mapB[cod])?.nombre_cliente || '';
+      return `<tr style="${d<0?'background:var(--DL)':d>0?'background:var(--PL)':''}">
+        <td style="font-size:11px;color:var(--txt2)">${cod}</td>
+        <td style="font-weight:500">${nombre}</td>
+        <td style="text-align:right">${a?fmt(a):'—'}</td>
+        <td style="text-align:right">${b?fmt(b):'—'}</td>
+        <td style="text-align:right;font-weight:600;color:${d>=0?'var(--P)':'var(--D)'}">${d>=0?'+':''}${fmt(d)}</td>
+        <td style="text-align:right;font-size:11px;color:var(--txt2)">${p!==null?(p>=0?'+':'')+p.toFixed(1)+'%':'nuevo'}</td>
+      </tr>`;
+    }).join('')}
+    </tbody>
+  </table></div>
+  <div style="font-size:11px;color:var(--txt2);margin-top:8px">${claves.filter(c=>(mapA[c]?.monto_vendido||0)+(mapB[c]?.monto_vendido||0)>0).length} clientes · Verde = subió · Rojo = bajó</div>`;
+}
+
+function _impRenderCompSaldos(el, dA, perA, dB, perB) {
+  const mapA = {}, mapB = {};
+  dA.forEach(r => mapA[r.codigo_cliente] = r);
+  dB.forEach(r => mapB[r.codigo_cliente] = r);
+  const claves = [...new Set([...Object.keys(mapA), ...Object.keys(mapB)])].sort();
+  const totalA = dA.reduce((a,r) => a + r.saldo, 0);
+  const totalB = dB.reduce((a,r) => a + r.saldo, 0);
+  const diff = totalB - totalA;
+
+  el.innerHTML = `
+  <div class="g3" style="margin-bottom:14px">
+    <div class="stat"><div class="n">${fmt(totalA)}</div><div class="l">Deuda total ${perA}</div></div>
+    <div class="stat"><div class="n">${fmt(totalB)}</div><div class="l">Deuda total ${perB}</div></div>
+    <div class="stat"><div class="n" style="color:${diff<=0?'var(--P)':'var(--D)'}">${diff>=0?'+':''}${fmt(diff)}</div><div class="l">${diff<=0?'Deuda bajó':'Deuda subió'}</div></div>
+  </div>
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr>
+      <th>Código</th><th>Cliente</th><th>Localidad</th>
+      <th style="text-align:right">Saldo ${perA}</th>
+      <th style="text-align:right">Saldo ${perB}</th>
+      <th style="text-align:right">Diferencia</th>
+    </tr></thead>
+    <tbody>
+    ${claves.map(cod => {
+      const rA = mapA[cod], rB = mapB[cod];
+      const sA = rA?.saldo || 0, sB = rB?.saldo || 0;
+      if (sA === 0 && sB === 0) return '';
+      const d = sB - sA;
+      const nombre = (rA||rB)?.nombre_cliente || '';
+      const loc = (rA||rB)?.localidad || '';
+      return `<tr style="${d>0?'background:var(--DL)':d<0?'background:var(--PL)':''}">
+        <td style="font-size:11px;color:var(--txt2)">${cod}</td>
+        <td style="font-weight:500">${nombre}</td>
+        <td style="font-size:12px;color:var(--txt2)">${loc}</td>
+        <td style="text-align:right">${sA?fmt(sA):'—'}</td>
+        <td style="text-align:right">${sB?fmt(sB):'—'}</td>
+        <td style="text-align:right;font-weight:600;color:${d<=0?'var(--P)':'var(--D)'}">${d>=0?'+':''}${fmt(d)}</td>
+      </tr>`;
+    }).join('')}
+    </tbody>
+  </table></div>
+  <div style="font-size:11px;color:var(--txt2);margin-top:8px">Verde = saldo bajó (cobró) · Rojo = saldo subió</div>`;
+}
+
+function _impRenderCompResultado(el, dA, perA, dB, perB) {
+  const mapA = {}, mapB = {};
+  dA.forEach(r => mapA[r.codigo_producto] = r);
+  dB.forEach(r => mapB[r.codigo_producto] = r);
+  const claves = [...new Set([...Object.keys(mapA), ...Object.keys(mapB)])].sort();
+  const totalVA = dA.reduce((a,r) => a+r.venta_neta, 0);
+  const totalVB = dB.reduce((a,r) => a+r.venta_neta, 0);
+  const totalDA = dA.reduce((a,r) => a+r.diferencia, 0);
+  const totalDB = dB.reduce((a,r) => a+r.diferencia, 0);
+  const diffV = totalVB - totalVA;
+  const diffD = totalDB - totalDA;
+
+  el.innerHTML = `
+  <div class="g4" style="margin-bottom:14px">
+    <div class="stat"><div class="n">${fmt(totalVA)}</div><div class="l">Venta neta ${perA}</div></div>
+    <div class="stat"><div class="n">${fmt(totalVB)}</div><div class="l">Venta neta ${perB}</div></div>
+    <div class="stat"><div class="n" style="color:${diffV>=0?'var(--P)':'var(--D)'}">${diffV>=0?'+':''}${fmt(diffV)}</div><div class="l">Δ Venta</div></div>
+    <div class="stat"><div class="n" style="color:${diffD>=0?'var(--P)':'var(--D)'}">${diffD>=0?'+':''}${fmt(diffD)}</div><div class="l">Δ Margen</div></div>
+  </div>
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr>
+      <th>Código</th><th>Descripción</th>
+      <th style="text-align:right">Venta ${perA}</th><th style="text-align:right">% Mgn</th>
+      <th style="text-align:right">Venta ${perB}</th><th style="text-align:right">% Mgn</th>
+      <th style="text-align:right">Δ Venta</th>
+    </tr></thead>
+    <tbody>
+    ${claves.map(cod => {
+      const rA = mapA[cod], rB = mapB[cod];
+      const vA = rA?.venta_neta||0, vB = rB?.venta_neta||0;
+      if (vA===0 && vB===0) return '';
+      const dV = vB - vA;
+      const desc = (rA||rB)?.descripcion||'';
+      return `<tr style="${dV<0?'background:var(--DL)':dV>0?'background:var(--PL)':''}">
+        <td style="font-size:11px;color:var(--txt2)">${cod}</td>
+        <td style="font-weight:500;font-size:12px">${desc}</td>
+        <td style="text-align:right">${vA?fmt(vA):'—'}</td>
+        <td style="text-align:right;font-size:11px;color:var(--txt2)">${rA?_fmtPct(rA.pct_margen):'—'}</td>
+        <td style="text-align:right">${vB?fmt(vB):'—'}</td>
+        <td style="text-align:right;font-size:11px;color:var(--txt2)">${rB?_fmtPct(rB.pct_margen):'—'}</td>
+        <td style="text-align:right;font-weight:600;color:${dV>=0?'var(--P)':'var(--D)'}">${dV>=0?'+':''}${fmt(dV)}</td>
+      </tr>`;
+    }).join('')}
+    </tbody>
+  </table></div>
+  <div style="font-size:11px;color:var(--txt2);margin-top:8px">Verde = vendió más · Rojo = vendió menos vs ${perA}</div>`;
 }
 
 </script>
