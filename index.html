@@ -1017,22 +1017,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="pg" id="pro-pg"></div>
 </div>
 
-<!-- PROVEEDORES -->
-<div class="panel" id="p-maestro-proveedores">
-  <div class="sech">
-    <h2>🏭 Proveedores</h2>
-    <button class="btn P" onclick="abrirProveedor()">+ Nuevo</button>
-  </div>
-  <div class="tb">
-    <input id="prov-q" placeholder="Nombre, CUIT, localidad..." oninput="renderProveedores();resetNav('prov-tbody')" onkeydown="navProveedores(event)">
-  </div>
-  <div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>Nombre</th><th>CUIT</th><th>Contacto</th><th>Teléfono</th><th>Email</th><th>Localidad</th><th></th></tr></thead>
-    <tbody id="prov-tbody"></tbody>
-  </table></div>
-  <div class="pg" id="prov-pg"></div>
-</div>
-
 <!-- NOTAS DE CREDITO -->
 <div class="panel" id="p-nc">
   <div class="sech">
@@ -1902,28 +1886,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
     <button class="btn" onclick="cerrar('m-producto')">Cancelar</button>
     <button class="btn P" onclick="guardarProducto()">✓ Guardar</button>
-  </div>
-</div>
-</div>
-
-<!-- MODAL PROVEEDOR -->
-<div class="mbg" id="m-proveedor">
-<div class="mdl" style="width:520px">
-  <div class="mh"><h3 id="m-prov-title">Nuevo proveedor</h3><button class="btn sm" onclick="cerrar('m-proveedor')">✕</button></div>
-  <div class="fr x2">
-    <div class="fg" style="grid-column:1/-1"><label>Nombre / Razón social</label><input id="prov-nom" style="width:100%" placeholder="Nombre del proveedor"></div>
-    <div class="fg"><label>CUIT</label><input id="prov-cuit" style="width:100%" placeholder="20-12345678-9"></div>
-    <div class="fg"><label>Contacto</label><input id="prov-contacto" style="width:100%" placeholder="Nombre del contacto"></div>
-    <div class="fg"><label>Teléfono</label><input id="prov-tel" style="width:100%" placeholder="Teléfono"></div>
-    <div class="fg"><label>Email</label><input id="prov-email" type="email" style="width:100%" placeholder="email@ejemplo.com"></div>
-    <div class="fg"><label>Dirección</label><input id="prov-dir" style="width:100%" placeholder="Dirección"></div>
-    <div class="fg"><label>Localidad</label><input id="prov-loc" style="width:100%" placeholder="Localidad"></div>
-    <div class="fg" style="grid-column:1/-1"><label>Notas</label><input id="prov-notas" style="width:100%" placeholder="Observaciones opcionales"></div>
-  </div>
-  <input type="hidden" id="prov-edit-id">
-  <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
-    <button class="btn" onclick="cerrar('m-proveedor')">Cancelar</button>
-    <button class="btn P" onclick="guardarProveedor()">✓ Guardar</button>
   </div>
 </div>
 </div>
@@ -4493,62 +4455,6 @@ async function guardarCliente(){
   cerrar('m-cliente');await cargarClientes();renderClientes();renderCC();poblarZonas();
 }
 function pedRapido(id){go('pedidos');abrirPedido();setTimeout(()=>selCli(id),100);}
-
-// ─── PROVEEDORES ───
-let _proveedores=[], _provPg=1;
-async function cargarProveedores(){const {data}=await sb.from('proveedores').select('*').order('nombre');_proveedores=data||[];}
-function renderProveedores(){
-  const q=(document.getElementById('prov-q')?.value||'').toLowerCase();
-  let data=_proveedores.filter(p=>
-    !q||(p.nombre||'').toLowerCase().includes(q)||(p.cuit||'').includes(q)||(p.localidad||'').toLowerCase().includes(q)||(p.contacto||'').toLowerCase().includes(q)
-  );
-  const tot=data.length,sl=data.slice((_provPg-1)*PP,_provPg*PP);
-  const tbody=document.getElementById('prov-tbody');
-  if(!tbody)return;
-  tbody.innerHTML=sl.length?sl.map(p=>`<tr>
-    <td style="font-weight:600">${p.nombre}</td><td style="color:var(--txt2);font-size:12px">${p.cuit||''}</td>
-    <td>${p.contacto||''}</td><td>${p.telefono||''}</td><td style="font-size:12px">${p.email||''}</td>
-    <td>${p.localidad||''}</td>
-    <td><button class="btn sm" onclick="editarProveedor(${p.id})">✏️</button></td>
-  </tr>`).join(''):'<tr><td colspan="7"><div class="empty">Sin proveedores cargados</div></td></tr>';
-  pag('prov-pg',tot,_provPg,p=>{_provPg=p;renderProveedores();});
-}
-function abrirProveedor(){
-  document.getElementById('prov-edit-id').value='';
-  document.getElementById('m-prov-title').textContent='Nuevo proveedor';
-  ['prov-nom','prov-cuit','prov-contacto','prov-tel','prov-email','prov-dir','prov-loc','prov-notas'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  document.getElementById('m-proveedor').classList.add('on');
-  setTimeout(()=>document.getElementById('prov-nom').focus(),100);
-}
-function editarProveedor(id){
-  const p=_proveedores.find(x=>x.id===id);if(!p)return;
-  document.getElementById('prov-edit-id').value=id;
-  document.getElementById('m-prov-title').textContent='Editar proveedor';
-  document.getElementById('prov-nom').value=p.nombre||'';
-  document.getElementById('prov-cuit').value=p.cuit||'';
-  document.getElementById('prov-contacto').value=p.contacto||'';
-  document.getElementById('prov-tel').value=p.telefono||'';
-  document.getElementById('prov-email').value=p.email||'';
-  document.getElementById('prov-dir').value=p.direccion||'';
-  document.getElementById('prov-loc').value=p.localidad||'';
-  document.getElementById('prov-notas').value=p.notas||'';
-  document.getElementById('m-proveedor').classList.add('on');
-}
-async function guardarProveedor(){
-  const nom=(document.getElementById('prov-nom').value||'').trim().toUpperCase();
-  if(!nom){alert('Ingresá el nombre');return;}
-  const editId=document.getElementById('prov-edit-id').value;
-  const obj={nombre:nom,cuit:document.getElementById('prov-cuit').value.trim(),
-    contacto:document.getElementById('prov-contacto').value.trim(),
-    telefono:document.getElementById('prov-tel').value.trim(),
-    email:document.getElementById('prov-email').value.trim(),
-    direccion:document.getElementById('prov-dir').value.trim(),
-    localidad:document.getElementById('prov-loc').value.trim().toUpperCase(),
-    notas:document.getElementById('prov-notas').value.trim()};
-  if(editId){await sb.from('proveedores').update(obj).eq('id',editId);}
-  else{await sb.from('proveedores').insert(obj);}
-  cerrar('m-proveedor');await cargarProveedores();renderProveedores();
-}
 
 // ─── PRODUCTOS ───
 function renderProductos(){
