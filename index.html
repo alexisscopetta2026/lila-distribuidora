@@ -258,6 +258,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="sidebar-items">
       <button class="sidebar-item" onclick="go('informes')" data-p="informes">📈 Informes</button>
       <button class="sidebar-item" onclick="go('rendicion')" data-p="rendicion">💼 Rendición</button>
+      <button class="sidebar-item" onclick="go('comisiones')" data-p="comisiones">💰 Comisiones</button>
+      <button class="sidebar-item" onclick="go('contrib-zona')" data-p="contrib-zona">📊 Contrib. Marginal</button>
+      <button class="sidebar-item" onclick="go('gastos-fijos')" data-p="gastos-fijos">📋 Gastos Fijos</button>
       <button class="sidebar-item" onclick="exportarTodo()">💾 Exportar</button>
     </div>
   </div>
@@ -345,7 +348,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
   </div>
   <div class="tb">
-    <input id="ped-q" placeholder="Buscar cliente..." oninput="renderPedidos()">
+    <input id="ped-q" placeholder="Buscar cliente..." oninput="renderPedidos();resetNav('ped-lista')" onkeydown="navPedidos(event)">
     <select id="ped-est" onchange="renderPedidos()">
       <option value="">Todos</option>
       <option value="pendiente">Pendientes</option>
@@ -470,7 +473,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="panel" id="p-remitos">
   <div class="sech"><h2>Remitos emitidos</h2></div>
   <div class="tb">
-    <input id="rem-q" placeholder="Buscar cliente..." oninput="renderRemitos()">
+    <input id="rem-q" placeholder="Buscar cliente..." oninput="renderRemitos();resetNav('rem-tbody')" onkeydown="navRemitos(event)">
     <select id="rem-est" onchange="renderRemitos()">
       <option value="">Todos</option>
       <option value="false">Pendientes de cobro</option>
@@ -729,7 +732,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <!-- Historial -->
   <div id="cob-historial-section" style="display:none;margin-top:8px">
     <div style="display:flex;gap:7px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
-      <input id="cob-q" placeholder="Buscar cliente..." oninput="renderCobros()" style="padding:7px 10px;border:1px solid var(--brd);border-radius:8px;font-size:13px;flex:1;min-width:120px">
+      <input id="cob-q" placeholder="Buscar cliente..." oninput="renderCobros();resetNav('cob-tbody')" onkeydown="navCobros(event)" style="padding:7px 10px;border:1px solid var(--brd);border-radius:8px;font-size:13px;flex:1;min-width:120px">
       <select id="cob-f" onchange="renderCobros()" style="padding:7px 10px;border:1px solid var(--brd);border-radius:8px;font-size:13px">
         <option value="">Todas las formas</option>
         <option value="efectivo">Efectivo</option>
@@ -754,7 +757,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div style="font-size:12px;color:var(--txt2)" id="cc-total-deuda"></div>
   </div>
   <div class="tb">
-    <input id="cc-q" placeholder="Buscar por nombre o código..." oninput="renderCC();_ccIdx=-1;" onkeydown="navCC(event)">
+    <input id="cc-q" placeholder="Buscar por nombre o código..." oninput="renderCC();resetNav('cc-tbody')" onkeydown="navCC(event)">
     <select id="cc-f" onchange="renderCC()">
       <option value="">Todos</option>
       <option value="deuda">Con deuda</option>
@@ -776,7 +779,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button class="btn P" onclick="abrirCliente()">+ Nuevo</button>
   </div>
   <div class="tb">
-    <input id="cli-q" placeholder="Nombre, teléfono, localidad..." oninput="renderClientes();_cliIdx=-1;" onkeydown="navCliTabla(event)">
+    <input id="cli-q" placeholder="Nombre, teléfono, localidad..." oninput="renderClientes();resetNav('cli-tbody')" onkeydown="navCliTabla(event)">
     <select id="cli-zon" onchange="renderClientes()">
       <option value="">Todas las zonas</option>
     </select>
@@ -798,7 +801,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button class="btn P" onclick="abrirProducto()">+ Nuevo</button>
   </div>
   <div class="tb">
-    <input id="pro-q" placeholder="Nombre, código..." oninput="renderProductos()">
+    <input id="pro-q" placeholder="Nombre, código..." oninput="renderProductos();resetNav('pro-tbody')" onkeydown="navProductos(event)">
     <select id="pro-cat" onchange="renderProductos()">
       <option value="">Todas las categorías</option>
       <option value="FIAMBRES">Fiambres</option>
@@ -813,6 +816,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <tbody id="pro-tbody"></tbody>
   </table></div>
   <div class="pg" id="pro-pg"></div>
+</div>
+
+<!-- PROVEEDORES -->
+<div class="panel" id="p-maestro-proveedores">
+  <div class="sech">
+    <h2>🏭 Proveedores</h2>
+    <button class="btn P" onclick="abrirProveedor()">+ Nuevo</button>
+  </div>
+  <div class="tb">
+    <input id="prov-q" placeholder="Nombre, CUIT, localidad..." oninput="renderProveedores();resetNav('prov-tbody')" onkeydown="navProveedores(event)">
+  </div>
+  <div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>Nombre</th><th>CUIT</th><th>Contacto</th><th>Teléfono</th><th>Email</th><th>Localidad</th><th></th></tr></thead>
+    <tbody id="prov-tbody"></tbody>
+  </table></div>
+  <div class="pg" id="prov-pg"></div>
 </div>
 
 <!-- NOTAS DE CREDITO -->
@@ -991,7 +1010,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="btn P" onclick="abrirGasto()">+ Nuevo gasto</button>
     </div>
     <div class="tb">
-      <input id="gas-q" placeholder="Buscar..." oninput="renderGastos()">
+      <input id="gas-q" placeholder="Buscar..." oninput="renderGastos();resetNav('gas-tbody')" onkeydown="navGastos(event)">
       <select id="gas-mes" onchange="renderGastos()">
         <option value="">Todos los meses</option>
       </select>
@@ -1429,6 +1448,151 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 </div>
 
+<!-- COMISIONES POR PERSONA -->
+<div class="panel" id="p-comisiones">
+  <div class="sech"><h2>💰 Comisiones</h2></div>
+
+  <!-- Config personas -->
+  <div class="card" style="margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-weight:600;font-size:14px">👤 Personas y porcentajes</div>
+      <button class="btn P sm" onclick="agregarPersonaCom()">+ Agregar persona</button>
+    </div>
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Nombre</th><th>Rol</th><th style="text-align:center">% Ventas</th><th style="text-align:center">% Cobranza</th><th></th></tr></thead>
+      <tbody id="com-personas-tbody"></tbody>
+    </table></div>
+  </div>
+
+  <!-- Filtros -->
+  <div class="card" style="margin-bottom:12px">
+    <div style="font-weight:600;margin-bottom:10px">📅 Período</div>
+    <div class="fr">
+      <div class="fg"><label>Desde</label><input type="date" id="com-desde"></div>
+      <div class="fg"><label>Hasta</label><input type="date" id="com-hasta"></div>
+      <div class="fg"><label>Zona</label>
+        <select id="com-zona-fil"><option value="">Todas las zonas</option></select>
+      </div>
+      <div class="fg" style="align-self:flex-end">
+        <button class="btn P" onclick="calcularComisionesPorPersona()" style="width:100%">▶ Calcular</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Resultados -->
+  <div id="com-res-panel" style="display:none">
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-weight:600;margin-bottom:10px">📊 Comisiones por persona</div>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr>
+          <th>Nombre</th><th>Rol</th>
+          <th style="text-align:right">Ventas</th>
+          <th style="text-align:right">Cobranza</th>
+          <th style="text-align:right">Com. ventas</th>
+          <th style="text-align:right">Com. cobranza</th>
+          <th style="text-align:right">Total</th>
+        </tr></thead>
+        <tbody id="com-res-tbody"></tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <div style="font-weight:600;margin-bottom:10px">🗺 Ventas y cobranza por zona</div>
+      <div id="com-zonas-res"></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- GASTOS FIJOS -->
+<div class="panel" id="p-gastos-fijos">
+  <div class="sech">
+    <h2>📋 Gastos Fijos</h2>
+    <button class="btn P" onclick="agregarGastoFijo()">+ Agregar</button>
+  </div>
+
+  <div class="card" style="margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div>
+        <div style="font-weight:600;font-size:14px">Plantillas de gastos recurrentes</div>
+        <div style="font-size:12px;color:var(--txt2)">Configurá los gastos fijos mensuales. Después los registrás con un clic para cualquier mes.</div>
+      </div>
+    </div>
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Descripción</th><th>Tipo</th><th style="text-align:right">Importe estimado</th><th style="text-align:center">Activo</th><th></th></tr></thead>
+      <tbody id="gf-tbody"></tbody>
+    </table></div>
+  </div>
+
+  <div class="card" style="margin-bottom:12px">
+    <div style="font-weight:600;margin-bottom:10px">📅 Registrar mes</div>
+    <div class="fr" style="align-items:flex-end">
+      <div class="fg"><label>Mes a registrar</label><input type="month" id="gf-mes"></div>
+      <div class="fg"><label>Fecha del comprobante</label><input type="date" id="gf-fecha-comp"></div>
+      <div class="fg" style="align-self:flex-end">
+        <button class="btn P" onclick="aplicarGastosFijos()" style="width:100%">✓ Registrar gastos del mes</button>
+      </div>
+    </div>
+    <div id="gf-estado" style="margin-top:10px"></div>
+  </div>
+
+  <div class="card">
+    <div style="font-weight:600;margin-bottom:10px">📊 Resumen del mes actual</div>
+    <div id="gf-resumen"></div>
+  </div>
+</div>
+
+<!-- CONTRIBUCIÓN MARGINAL POR ZONA -->
+<div class="panel" id="p-contrib-zona">
+  <div class="sech"><h2>📊 Contribución Marginal por Zona</h2></div>
+
+  <div class="card" style="margin-bottom:12px">
+    <div style="font-weight:600;margin-bottom:10px">📅 Período</div>
+    <div class="fr">
+      <div class="fg"><label>Desde</label><input type="date" id="cm-desde"></div>
+      <div class="fg"><label>Hasta</label><input type="date" id="cm-hasta"></div>
+      <div class="fg" style="align-self:flex-end">
+        <button class="btn P" onclick="calcularContribMarginal()" style="width:100%">▶ Calcular</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="cm-res-panel" style="display:none">
+    <!-- KPIs globales -->
+    <div id="cm-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:12px"></div>
+
+    <!-- Tabla por zona -->
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-weight:600;margin-bottom:10px">🗺 Por zona</div>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr>
+          <th>Zona</th>
+          <th style="text-align:right">Ventas</th>
+          <th style="text-align:right">CMV</th>
+          <th style="text-align:right">Contrib. Marginal</th>
+          <th style="text-align:right">% Margen</th>
+          <th style="text-align:right">Remitos</th>
+        </tr></thead>
+        <tbody id="cm-zona-tbody"></tbody>
+      </table></div>
+    </div>
+
+    <!-- Top productos por margen -->
+    <div class="card">
+      <div style="font-weight:600;margin-bottom:10px">🏆 Top 15 productos por contribución</div>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr>
+          <th>Producto</th>
+          <th style="text-align:right">Unidades</th>
+          <th style="text-align:right">Ventas</th>
+          <th style="text-align:right">CMV</th>
+          <th style="text-align:right">Margen</th>
+          <th style="text-align:right">% Margen</th>
+        </tr></thead>
+        <tbody id="cm-prod-tbody"></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
 
 <!-- BUSCADOR GLOBAL F3 -->
 <div id="f3-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:flex-start;justify-content:center;padding-top:80px">
@@ -1507,6 +1671,28 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
     <button class="btn" onclick="cerrar('m-producto')">Cancelar</button>
     <button class="btn P" onclick="guardarProducto()">✓ Guardar</button>
+  </div>
+</div>
+</div>
+
+<!-- MODAL PROVEEDOR -->
+<div class="mbg" id="m-proveedor">
+<div class="mdl" style="width:520px">
+  <div class="mh"><h3 id="m-prov-title">Nuevo proveedor</h3><button class="btn sm" onclick="cerrar('m-proveedor')">✕</button></div>
+  <div class="fr x2">
+    <div class="fg" style="grid-column:1/-1"><label>Nombre / Razón social</label><input id="prov-nom" style="width:100%" placeholder="Nombre del proveedor"></div>
+    <div class="fg"><label>CUIT</label><input id="prov-cuit" style="width:100%" placeholder="20-12345678-9"></div>
+    <div class="fg"><label>Contacto</label><input id="prov-contacto" style="width:100%" placeholder="Nombre del contacto"></div>
+    <div class="fg"><label>Teléfono</label><input id="prov-tel" style="width:100%" placeholder="Teléfono"></div>
+    <div class="fg"><label>Email</label><input id="prov-email" type="email" style="width:100%" placeholder="email@ejemplo.com"></div>
+    <div class="fg"><label>Dirección</label><input id="prov-dir" style="width:100%" placeholder="Dirección"></div>
+    <div class="fg"><label>Localidad</label><input id="prov-loc" style="width:100%" placeholder="Localidad"></div>
+    <div class="fg" style="grid-column:1/-1"><label>Notas</label><input id="prov-notas" style="width:100%" placeholder="Observaciones opcionales"></div>
+  </div>
+  <input type="hidden" id="prov-edit-id">
+  <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+    <button class="btn" onclick="cerrar('m-proveedor')">Cancelar</button>
+    <button class="btn P" onclick="guardarProveedor()">✓ Guardar</button>
   </div>
 </div>
 </div>
@@ -2179,7 +2365,7 @@ const USUARIOS = [
 ];
 
 // Pantallas por rol
-const MENUS_ADMIN=['dash','pedidos','pedido-movil','carga','remitos','cobranza','cuentas','clientes','productos','remito-rapido','nc','rendicion','stock','informes','contabilidad','exportar'];
+const MENUS_ADMIN=['dash','pedidos','pedido-movil','carga','remitos','cobranza','cuentas','clientes','maestro-proveedores','productos','remito-rapido','nc','rendicion','stock','informes','comisiones','contrib-zona','gastos-fijos','contabilidad','exportar'];
 const MENUS_VENDEDOR=['vendedor-home','pedidos','pedido-movil','cobranza','cuentas'];
 let usuarioActual = null;
 
@@ -2245,8 +2431,8 @@ function logout(){
 
 // ─── CARGA INICIAL ───
 async function cargarTodo(){
-  await Promise.all([cargarClientes(),cargarProductos(),cargarPedidos(),cargarRemitos(),cargarCobros(),cargarCargas(),cargarGastos()]);
-  renderDash();renderPedidos();renderClientes();renderProductos();renderRemitos();renderCobros();renderCC();renderCargas();renderGastos();
+  await Promise.all([cargarClientes(),cargarProductos(),cargarPedidos(),cargarRemitos(),cargarCobros(),cargarCargas(),cargarGastos(),cargarProveedores()]);
+  renderDash();renderPedidos();renderClientes();renderProductos();renderProveedores();renderRemitos();renderCobros();renderCC();renderCargas();renderGastos();
   poblarZonas();
   // Asegurar que el panel activo sea el correcto
   if(!document.querySelector('.panel.on'))go('dash');
@@ -3891,6 +4077,62 @@ async function guardarCliente(){
 }
 function pedRapido(id){go('pedidos');abrirPedido();setTimeout(()=>selCli(id),100);}
 
+// ─── PROVEEDORES ───
+let _proveedores=[], _provPg=1;
+async function cargarProveedores(){const {data}=await sb.from('proveedores').select('*').order('nombre');_proveedores=data||[];}
+function renderProveedores(){
+  const q=(document.getElementById('prov-q')?.value||'').toLowerCase();
+  let data=_proveedores.filter(p=>
+    !q||(p.nombre||'').toLowerCase().includes(q)||(p.cuit||'').includes(q)||(p.localidad||'').toLowerCase().includes(q)||(p.contacto||'').toLowerCase().includes(q)
+  );
+  const tot=data.length,sl=data.slice((_provPg-1)*PP,_provPg*PP);
+  const tbody=document.getElementById('prov-tbody');
+  if(!tbody)return;
+  tbody.innerHTML=sl.length?sl.map(p=>`<tr>
+    <td style="font-weight:600">${p.nombre}</td><td style="color:var(--txt2);font-size:12px">${p.cuit||''}</td>
+    <td>${p.contacto||''}</td><td>${p.telefono||''}</td><td style="font-size:12px">${p.email||''}</td>
+    <td>${p.localidad||''}</td>
+    <td><button class="btn sm" onclick="editarProveedor(${p.id})">✏️</button></td>
+  </tr>`).join(''):'<tr><td colspan="7"><div class="empty">Sin proveedores cargados</div></td></tr>';
+  pag('prov-pg',tot,_provPg,p=>{_provPg=p;renderProveedores();});
+}
+function abrirProveedor(){
+  document.getElementById('prov-edit-id').value='';
+  document.getElementById('m-prov-title').textContent='Nuevo proveedor';
+  ['prov-nom','prov-cuit','prov-contacto','prov-tel','prov-email','prov-dir','prov-loc','prov-notas'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('m-proveedor').classList.add('on');
+  setTimeout(()=>document.getElementById('prov-nom').focus(),100);
+}
+function editarProveedor(id){
+  const p=_proveedores.find(x=>x.id===id);if(!p)return;
+  document.getElementById('prov-edit-id').value=id;
+  document.getElementById('m-prov-title').textContent='Editar proveedor';
+  document.getElementById('prov-nom').value=p.nombre||'';
+  document.getElementById('prov-cuit').value=p.cuit||'';
+  document.getElementById('prov-contacto').value=p.contacto||'';
+  document.getElementById('prov-tel').value=p.telefono||'';
+  document.getElementById('prov-email').value=p.email||'';
+  document.getElementById('prov-dir').value=p.direccion||'';
+  document.getElementById('prov-loc').value=p.localidad||'';
+  document.getElementById('prov-notas').value=p.notas||'';
+  document.getElementById('m-proveedor').classList.add('on');
+}
+async function guardarProveedor(){
+  const nom=(document.getElementById('prov-nom').value||'').trim().toUpperCase();
+  if(!nom){alert('Ingresá el nombre');return;}
+  const editId=document.getElementById('prov-edit-id').value;
+  const obj={nombre:nom,cuit:document.getElementById('prov-cuit').value.trim(),
+    contacto:document.getElementById('prov-contacto').value.trim(),
+    telefono:document.getElementById('prov-tel').value.trim(),
+    email:document.getElementById('prov-email').value.trim(),
+    direccion:document.getElementById('prov-dir').value.trim(),
+    localidad:document.getElementById('prov-loc').value.trim().toUpperCase(),
+    notas:document.getElementById('prov-notas').value.trim()};
+  if(editId){await sb.from('proveedores').update(obj).eq('id',editId);}
+  else{await sb.from('proveedores').insert(obj);}
+  cerrar('m-proveedor');await cargarProveedores();renderProveedores();
+}
+
 // ─── PRODUCTOS ───
 function renderProductos(){
   const q=(document.getElementById('pro-q').value||'').toLowerCase();
@@ -4548,6 +4790,18 @@ async function informeInactivos(){
   if(!data.length){el.innerHTML='<div style="color:var(--txt2);font-size:12px">Todos los clientes compraron recientemente</div>';return;}
   el.innerHTML=`<div style="background:var(--WL);border-radius:8px;padding:8px 12px;margin-bottom:8px"><b>${data.length}</b> clientes sin compras hace más de ${dias} días</div>
   ${data.slice(0,20).map(c=>{const d=diasDesde(c.ultimo_remito);return `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--brd);font-size:12px"><span><b>${c.nombre}</b> <span style="color:var(--txt2)">${c.localidad} · ${c.vendedor||'—'}</span></span><span class="b bW">${d!==null?d+'d':'nunca'}</span></div>`;}).join('')}`;
+}
+function informeSinCompras(){
+  const dias=parseInt(document.getElementById('inf-sin').value)||30;
+  const data=_clientes.filter(c=>{
+    const d=diasDesde(c.ultimo_remito);
+    return d===null||d>=dias;
+  }).sort((a,b)=>(diasDesde(b.ultimo_remito)||9999)-(diasDesde(a.ultimo_remito)||9999));
+  const el=document.getElementById('inf-sin-res');
+  if(!el)return;
+  if(!data.length){el.innerHTML='<div style="color:var(--txt2);font-size:12px">Todos los clientes compraron recientemente</div>';return;}
+  el.innerHTML=`<div style="background:var(--WL);border-radius:8px;padding:8px 12px;margin-bottom:8px"><b>${data.length}</b> clientes sin compras hace más de ${dias} días</div>
+  ${data.slice(0,50).map(c=>{const d=diasDesde(c.ultimo_remito);return `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--brd);font-size:12px"><span><b>${c.nombre}</b> <span style="color:var(--txt2)">${c.localidad||''} · ${c.vendedor||'—'}</span></span><span class="b bW">${d!==null?d+'d':'nunca'}</span></div>`;}).join('')}`;
 }
 async function informeProductos(){
   const {data}=await sb.from('remitos').select('items,fecha').order('fecha',{ascending:false}).limit(200);
@@ -5322,10 +5576,10 @@ function actualizarNavActivo(p){
   // Resaltar grupo padre
   const grupos={
     'pedidos':'ventas','pedido-movil':'ventas','carga':'ventas','remitos':'ventas','remito-rapido':'ventas','nc':'ventas',
-    'clientes':'maestros','cuentas':'maestros','productos':'maestros','stock':'maestros',
+    'clientes':'maestros','cuentas':'maestros','productos':'maestros','stock':'maestros','maestro-proveedores':'maestros',
     'cobranza':'tesoreria',
     'contabilidad':'contabilidad',
-    'informes':'informes','rendicion':'informes'
+    'informes':'informes','rendicion':'informes','comisiones':'informes','contrib-zona':'informes','gastos-fijos':'informes'
   };
   const grupo=grupos[p];
   if(grupo){const ng=document.getElementById('ng-'+grupo);if(ng)ng.classList.add('active');}
@@ -5406,36 +5660,78 @@ function renderResultado(){
   const hasta=document.getElementById('res-hasta')?.value;
   const cuerpo=document.getElementById('res-cuerpo');
   if(!cuerpo)return;
-  // Ventas del período
-  const ventas=_remitos.filter(r=>r.fecha>=desde&&r.fecha<=hasta).reduce((a,r)=>a+(r.total||0),0);
-  // NC del período
-  const ncs=(_ncs||[]).filter(r=>r.fecha>=desde&&r.fecha<=hasta).reduce((a,r)=>a+(r.importe||0),0);
-  const ventasNetas=ventas-ncs;
-  // Gastos del período por tipo
+
+  // 1. Ventas brutas
+  const remsPeriodo=_remitos.filter(r=>r.fecha>=desde&&r.fecha<=hasta);
+  const ventas=remsPeriodo.reduce((a,r)=>a+(r.total||0),0);
+  const cantRemitos=remsPeriodo.length;
+
+  // 2. Notas de crédito
+  const totalNC=(_ncs||[]).filter(r=>r.fecha>=desde&&r.fecha<=hasta).reduce((a,r)=>a+(r.importe||0),0);
+  const ventasNetas=ventas-totalNC;
+
+  // 3. CMV — usa costo actual de _productos
+  const costoMap={};
+  _productos.forEach(p=>{costoMap[p.id]=p.costo||0;});
+  let cmv=0;
+  remsPeriodo.forEach(r=>{
+    (r.items||[]).forEach(it=>{cmv+=(costoMap[it.id]||0)*it.cant;});
+  });
+  const hayCostos=_productos.some(p=>p.costo>0);
+
+  // 4. Contribución marginal
+  const contribMarginal=ventasNetas-cmv;
+  const pctCM=ventasNetas>0?contribMarginal/ventasNetas*100:0;
+
+  // 5. Gastos del período por tipo
   const gastosPeriodo=_gastos.filter(g=>g.fecha>=desde&&g.fecha<=hasta);
   const totalGastos=gastosPeriodo.reduce((a,g)=>a+(g.importe||0),0);
   const porTipo={};
-  gastosPeriodo.forEach(g=>{porTipo[g.tipo]=(porTipo[g.tipo]||0)+g.importe;});
-  const resultado=ventasNetas-totalGastos;
-  cuerpo.innerHTML=`
-    <div style="max-width:600px">
-      <div style="background:var(--PL);border-radius:8px;padding:12px 16px;margin-bottom:8px">
-        <div style="display:flex;justify-content:space-between;font-size:13px"><span>Ventas brutas</span><span style="font-weight:600">${fmt(ventas)}</span></div>
-        ${ncs>0?`<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--txt2)"><span>Notas de crédito</span><span>- ${fmt(ncs)}</span></div>`:''}
-        <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;border-top:1px solid var(--brd);margin-top:6px;padding-top:6px"><span>Ventas netas</span><span style="color:var(--P)">${fmt(ventasNetas)}</span></div>
-      </div>
-      <div style="background:var(--bg2);border-radius:8px;padding:12px 16px;margin-bottom:8px">
-        <div style="font-size:12px;font-weight:600;color:var(--txt2);text-transform:uppercase;margin-bottom:8px">Gastos</div>
-        ${Object.entries(porTipo).sort((a,b)=>b[1]-a[1]).map(([tipo,tot])=>`
-          <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;border-bottom:0.5px solid var(--brd)"><span>${tipo}</span><span style="color:var(--D)">${fmt(tot)}</span></div>`).join('')}
-        <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;border-top:2px solid var(--brd);margin-top:6px;padding-top:6px"><span>Total gastos</span><span style="color:var(--D)">${fmt(totalGastos)}</span></div>
-      </div>
-      <div style="background:${resultado>=0?'var(--PL)':'var(--DL)'};border-radius:8px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:16px;font-weight:700">RESULTADO DEL PERÍODO</span>
-        <span style="font-size:24px;font-weight:700;color:${resultado>=0?'var(--P)':'var(--D)'}">${fmt(resultado)}</span>
-      </div>
-      <div style="font-size:11px;color:var(--txt2);margin-top:8px;text-align:right">Período: ${desde} al ${hasta}</div>
+  gastosPeriodo.forEach(g=>{porTipo[g.tipo]=(porTipo[g.tipo]||0)+(g.importe||0);});
+
+  // 6. Resultado neto
+  const resultadoNeto=contribMarginal-totalGastos;
+  const pctResult=ventasNetas>0?resultadoNeto/ventasNetas*100:0;
+
+  const row=(label,val,opts={})=>{
+    const color=opts.color?`color:${opts.color}`:'';
+    const bold=opts.bold?'font-weight:700':'';
+    const sz=opts.sz?`font-size:${opts.sz}`:'font-size:13px';
+    const sub=opts.sub?`<div style="font-size:11px;color:var(--txt2)">${opts.sub}</div>`:'';
+    const pct=opts.pct!==undefined?`<span style="font-size:11px;color:var(--txt2);margin-left:8px">${opts.pct.toFixed(1)}%</span>`:'';
+    const neg=opts.neg?`<span style="font-size:12px;color:var(--txt2)">−</span> `:'';
+    return `<div style="display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;border-bottom:0.5px solid var(--brd)">
+      <span style="${sz};${bold}">${label}${sub?'<br>'+sub:''}</span>
+      <span style="${sz};${bold};${color};text-align:right">${neg}${fmt(Math.abs(val))}${pct}</span>
     </div>`;
+  };
+  const separator=(label)=>`<div style="font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 6px">${label}</div>`;
+  const totalRow=(label,val,bg,color,pct)=>`
+    <div style="background:${bg};border-radius:6px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;margin:6px 0">
+      <span style="font-size:14px;font-weight:700">${label}</span>
+      <span style="font-size:18px;font-weight:700;color:${color}">${fmt(val)}${pct!==undefined?`<span style="font-size:12px;font-weight:400;margin-left:8px">${pct.toFixed(1)}%</span>`:''}</span>
+    </div>`;
+
+  cuerpo.innerHTML=`<div style="max-width:640px">
+    ${separator('Ingresos')}
+    ${row('Ventas brutas',ventas,{sub:`${cantRemitos} remitos`})}
+    ${totalNC>0?row('Notas de crédito',totalNC,{neg:true,color:'var(--txt2)'}):''}
+    ${totalRow('Ventas netas',ventasNetas,'var(--PL)','var(--P)')}
+
+    ${separator('Costo de Mercadería Vendida (CMV)')}
+    ${hayCostos
+      ? row('CMV',cmv,{neg:true,color:'var(--D)'})
+      : `<div style="font-size:12px;color:var(--W);padding:6px 0">⚠ Sin costos cargados en productos — CMV = $0. Completá el costo en el panel Productos.</div>`}
+    ${totalRow('Contribución Marginal',contribMarginal,pctCM>=20?'var(--PL)':pctCM>=5?'var(--WL)':'var(--DL)',pctCM>=20?'var(--P)':pctCM>=5?'var(--W)':'var(--D)',pctCM)}
+
+    ${separator('Gastos del período')}
+    ${Object.entries(porTipo).sort((a,b)=>b[1]-a[1]).map(([tipo,tot])=>row(tipo,tot,{neg:true,color:'var(--D)'})).join('')||'<div style="font-size:12px;color:var(--txt2);padding:6px 0">Sin gastos registrados en el período.</div>'}
+    ${totalGastos>0?row('Total gastos',totalGastos,{neg:true,bold:true,color:'var(--D)','sz':'14px'}):''}
+
+    ${totalRow('RESULTADO NETO',resultadoNeto,resultadoNeto>=0?'var(--PL)':'var(--DL)',resultadoNeto>=0?'var(--P)':'var(--D)',pctResult)}
+
+    <div style="font-size:11px;color:var(--txt2);margin-top:10px;text-align:right">Período: ${desde} al ${hasta}</div>
+  </div>`;
 }
 
 function renderChequesCartera(){
@@ -6042,48 +6338,441 @@ function verMisPedidosHoy(){
   go('pedido-movil');
 }
 // ─── FIN PEDIDO MÓVIL ───
-let _ccIdx=-1;
-function navCC(e){
-  const rows=document.querySelectorAll('#cc-tbody tr');
-  if(!rows.length)return;
-  if(e.key==='ArrowDown'){
-    e.preventDefault();
-    _ccIdx=Math.min(_ccIdx+1,rows.length-1);
-    rows.forEach((r,i)=>r.style.background=i===_ccIdx?'var(--PL)':'');
-    rows[_ccIdx]?.scrollIntoView({block:'nearest'});
-  }else if(e.key==='ArrowUp'){
-    e.preventDefault();
-    _ccIdx=Math.max(_ccIdx-1,0);
-    rows.forEach((r,i)=>r.style.background=i===_ccIdx?'var(--PL)':'');
-    rows[_ccIdx]?.scrollIntoView({block:'nearest'});
-  }else if(e.key==='Enter'&&_ccIdx>=0){
-    e.preventDefault();
-    rows[_ccIdx]?.click();
-    _ccIdx=-1;
+// ─── GASTOS FIJOS ───
+const GF_KEY='lila_gastos_fijos';
+const GF_TIPOS=[
+  'Sueldos y Jornales','Cargas Sociales','Combustible y Lubricante','Seguros',
+  'Repuestos Varios','Alquileres','Agua - Luz - Impuestos','Honorarios Profesionales',
+  'Fletes','Peaje','Neumáticos','Reparaciones','Marketing y Publicidad',
+  'Librería y Papelería','Gastos Informáticos','Gastos Varios'
+];
+const GF_CUENTA={
+  'Sueldos y Jornales':'50201','Cargas Sociales':'50202','Combustible y Lubricante':'50203',
+  'Seguros':'50204','Repuestos Varios':'50205','Alquileres':'50206','Agua - Luz - Impuestos':'50207',
+  'Gastos Varios':'50208','Gastos Informáticos':'50209','Honorarios Profesionales':'50210',
+  'Librería y Papelería':'50221','Peaje':'50222','Reparaciones':'50223',
+  'Marketing y Publicidad':'50229','Fletes':'50231','Neumáticos':'50233'
+};
+
+let _gf=[];
+function cargarGF(){try{_gf=JSON.parse(localStorage.getItem(GF_KEY)||'[]');}catch(e){_gf=[];}}
+function guardarGF(){localStorage.setItem(GF_KEY,JSON.stringify(_gf));}
+
+function renderGastosFijos(){
+  const tbody=document.getElementById('gf-tbody');
+  if(!tbody)return;
+  const tiposOpts=GF_TIPOS.map(t=>`<option value="${t}">${t}</option>`).join('');
+  if(!_gf.length){
+    tbody.innerHTML='<tr><td colspan="5" style="color:var(--txt2);text-align:center;padding:16px">Sin plantillas. Hacé clic en "+ Agregar".</td></tr>';
+    return;
+  }
+  tbody.innerHTML=_gf.map((g,i)=>`<tr>
+    <td><input value="${g.descripcion||''}" placeholder="Ej: Sueldo Juan" oninput="_gf[${i}].descripcion=this.value;guardarGF()" style="width:100%;padding:5px 7px;border:1px solid var(--brd);border-radius:6px;font-size:13px"></td>
+    <td><select onchange="_gf[${i}].tipo=this.value;guardarGF()" style="padding:5px 7px;border:1px solid var(--brd);border-radius:6px;font-size:12px;width:100%">
+      <option value="">— Elegir —</option>
+      ${GF_TIPOS.map(t=>`<option value="${t}" ${g.tipo===t?'selected':''}>${t}</option>`).join('')}
+    </select></td>
+    <td style="text-align:right">
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px">
+        <span style="font-size:13px;color:var(--txt2)">$</span>
+        <input type="number" value="${g.importe||0}" min="0" step="100" oninput="_gf[${i}].importe=parseFloat(this.value)||0;guardarGF()" style="width:110px;padding:5px 7px;border:1px solid var(--brd);border-radius:6px;font-size:13px;text-align:right">
+      </div>
+    </td>
+    <td style="text-align:center">
+      <input type="checkbox" ${g.activo!==false?'checked':''} onchange="_gf[${i}].activo=this.checked;guardarGF()" style="width:16px;height:16px;cursor:pointer">
+    </td>
+    <td><button class="btn D sm" onclick="_gf.splice(${i},1);guardarGF();renderGastosFijos()">🗑</button></td>
+  </tr>`).join('');
+  renderResumenGF();
+}
+
+function agregarGastoFijo(){
+  _gf.push({descripcion:'',tipo:'Gastos Varios',importe:0,activo:true});
+  guardarGF();renderGastosFijos();
+  setTimeout(()=>{const rows=document.querySelectorAll('#gf-tbody tr');if(rows.length){const inp=rows[rows.length-1].querySelector('input');if(inp)inp.focus();}},50);
+}
+
+function renderResumenGF(){
+  const el=document.getElementById('gf-resumen');
+  if(!el)return;
+  const activos=_gf.filter(g=>g.activo!==false&&g.importe>0);
+  if(!activos.length){el.innerHTML='<div style="color:var(--txt2);font-size:12px">Sin gastos fijos configurados.</div>';return;}
+  const total=activos.reduce((a,g)=>a+(g.importe||0),0);
+  const porTipo={};
+  activos.forEach(g=>{porTipo[g.tipo||'Sin tipo']=(porTipo[g.tipo||'Sin tipo']||0)+(g.importe||0);});
+  el.innerHTML=`
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:12px">
+      <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:11px;color:var(--txt2)">TOTAL MENSUAL ESTIMADO</div>
+        <div style="font-size:20px;font-weight:700;color:var(--D);margin-top:4px">${fmt(total)}</div>
+      </div>
+      <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:11px;color:var(--txt2)">ÍTEMS ACTIVOS</div>
+        <div style="font-size:20px;font-weight:700;margin-top:4px">${activos.length}</div>
+      </div>
+    </div>
+    ${Object.entries(porTipo).sort((a,b)=>b[1]-a[1]).map(([tipo,tot])=>`
+      <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:0.5px solid var(--brd);font-size:13px">
+        <span style="color:var(--txt2)">${tipo}</span>
+        <span style="font-weight:600;color:var(--D)">${fmt(tot)}</span>
+      </div>`).join('')}`;
+}
+
+async function aplicarGastosFijos(){
+  const mesVal=document.getElementById('gf-mes').value;
+  const fechaComp=document.getElementById('gf-fecha-comp').value;
+  if(!mesVal){alert('Seleccioná el mes a registrar');return;}
+  const activos=_gf.filter(g=>g.activo!==false&&g.tipo&&g.importe>0);
+  if(!activos.length){alert('No hay gastos fijos activos con tipo e importe definidos');return;}
+
+  const estado=document.getElementById('gf-estado');
+  estado.innerHTML=`<div style="color:var(--txt2);font-size:13px">⏳ Registrando ${activos.length} gastos...</div>`;
+
+  const fechaBase=fechaComp||mesVal+'-01';
+  const errores=[];
+  let ok=0;
+
+  for(const g of activos){
+    const cuentaCod=GF_CUENTA[g.tipo]||'50208';
+    const {error}=await sb.from('gastos').insert({
+      fecha:fechaBase,
+      tipo:g.tipo,
+      cuenta_cod:cuentaCod,
+      cuenta_nom:g.tipo,
+      importe:g.importe,
+      contrapartida:'Caja',
+      descripcion:(g.descripcion||g.tipo)+' — gasto fijo '+mesVal,
+      comprobante:'',
+      vendedor:usuarioActual?.nombre||''
+    });
+    if(error)errores.push(g.descripcion||g.tipo);
+    else ok++;
+  }
+
+  await cargarGastos();
+  if(errores.length){
+    estado.innerHTML=`<div style="background:var(--WL);border-radius:6px;padding:10px;font-size:13px">
+      ⚠ ${ok} gastos registrados. Errores en: ${errores.join(', ')}</div>`;
+  }else{
+    estado.innerHTML=`<div style="background:var(--PL);border-radius:6px;padding:10px;font-size:13px">
+      ✓ ${ok} gastos fijos registrados para ${mesVal}. Podés verlos en <b>Contabilidad → Gastos</b>.</div>`;
   }
 }
-// ─── NAVEGACIÓN CON FLECHAS EN CLIENTES ───
-let _cliIdx=-1;
-function navCliTabla(e){
-  const rows=document.querySelectorAll('#cli-tbody tr');
-  if(!rows.length)return;
-  if(e.key==='ArrowDown'){
-    e.preventDefault();
-    _cliIdx=Math.min(_cliIdx+1,rows.length-1);
-    rows.forEach((r,i)=>r.style.background=i===_cliIdx?'var(--PL)':'');
-    rows[_cliIdx]?.scrollIntoView({block:'nearest'});
+
+function initGastosFijos(){
+  cargarGF();renderGastosFijos();
+  const hoy=new Date();
+  const mes=document.getElementById('gf-mes');
+  const fc=document.getElementById('gf-fecha-comp');
+  if(mes&&!mes.value)mes.value=hoy.toISOString().substring(0,7);
+  if(fc&&!fc.value)fc.value=hoy.toISOString().split('T')[0];
+}
+
+// ─── CONTRIBUCIÓN MARGINAL POR ZONA ───
+function initContribZona(){
+  const hoy=new Date().toISOString().split('T')[0];
+  const primerDia=hoy.substring(0,7)+'-01';
+  const d=document.getElementById('cm-desde'),h=document.getElementById('cm-hasta');
+  if(d&&!d.value)d.value=primerDia;
+  if(h&&!h.value)h.value=hoy;
+  document.getElementById('cm-res-panel').style.display='none';
+}
+
+function calcularContribMarginal(){
+  const desde=document.getElementById('cm-desde').value;
+  const hasta=document.getElementById('cm-hasta').value;
+
+  const rems=_remitos.filter(r=>(!desde||r.fecha>=desde)&&(!hasta||r.fecha<=hasta));
+
+  // Mapa de costos por producto id
+  const costoMap={};
+  _productos.forEach(p=>{costoMap[p.id]=p.costo||0;});
+
+  // Acumular por zona y por producto
+  const porZona={};
+  const porProd={};
+  let totVentas=0,totCMV=0,totRems=0;
+
+  rems.forEach(r=>{
+    const cli=_clientes.find(c=>c.id===r.cliente_id);
+    const zona=(cli?.zona)||'Sin zona';
+    if(!porZona[zona])porZona[zona]={ventas:0,cmv:0,rems:0};
+    porZona[zona].rems++;
+    totRems++;
+
+    (r.items||[]).forEach(it=>{
+      const venta=it.precio*it.cant*(1-(it.dto||0)/100);
+      const costo=(costoMap[it.id]||0)*it.cant;
+      porZona[zona].ventas+=venta;
+      porZona[zona].cmv+=costo;
+      totVentas+=venta;
+      totCMV+=costo;
+
+      const nom=it.nom||'—';
+      if(!porProd[nom])porProd[nom]={cant:0,ventas:0,cmv:0};
+      porProd[nom].cant+=it.cant;
+      porProd[nom].ventas+=venta;
+      porProd[nom].cmv+=costo;
+    });
+  });
+
+  const totMargen=totVentas-totCMV;
+  const pctMargen=totVentas>0?totMargen/totVentas*100:0;
+
+  // KPIs
+  const kpiColor=(pct)=>pct>=30?'var(--P)':pct>=15?'var(--W)':'var(--D)';
+  document.getElementById('cm-kpis').innerHTML=`
+    <div class="card" style="text-align:center;padding:12px 8px">
+      <div style="font-size:11px;color:var(--txt2);margin-bottom:4px">VENTAS TOTALES</div>
+      <div style="font-size:20px;font-weight:700;color:var(--P)">${fmt(totVentas)}</div>
+      <div style="font-size:11px;color:var(--txt2)">${totRems} remitos</div>
+    </div>
+    <div class="card" style="text-align:center;padding:12px 8px">
+      <div style="font-size:11px;color:var(--txt2);margin-bottom:4px">CMV</div>
+      <div style="font-size:20px;font-weight:700;color:var(--D)">${fmt(totCMV)}</div>
+      <div style="font-size:11px;color:var(--txt2)">${totVentas>0?Math.round(totCMV/totVentas*100):0}% de ventas</div>
+    </div>
+    <div class="card" style="text-align:center;padding:12px 8px">
+      <div style="font-size:11px;color:var(--txt2);margin-bottom:4px">CONTRIB. MARGINAL</div>
+      <div style="font-size:20px;font-weight:700;color:${kpiColor(pctMargen)}">${fmt(totMargen)}</div>
+      <div style="font-size:11px;color:var(--txt2)">${pctMargen.toFixed(1)}% de margen</div>
+    </div>`;
+
+  // Tabla por zona
+  const zonasArr=Object.entries(porZona).sort((a,b)=>b[1].ventas-a[1].ventas);
+  const tbody=document.getElementById('cm-zona-tbody');
+  if(!zonasArr.length){
+    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--txt2)">Sin datos en ese período</td></tr>';
+  }else{
+    const margenBadge=pct=>pct>=30?'bP':pct>=15?'bW':'bD';
+    tbody.innerHTML=zonasArr.map(([z,d])=>{
+      const margen=d.ventas-d.cmv;
+      const pct=d.ventas>0?margen/d.ventas*100:0;
+      const pctVentas=totVentas>0?Math.round(d.ventas/totVentas*100):0;
+      return `<tr>
+        <td><span class="b bA">Z${z}</span></td>
+        <td style="text-align:right;font-weight:600">${fmt(d.ventas)}
+          <div style="height:4px;background:var(--PL);border-radius:2px;margin-top:3px"><div style="height:4px;background:var(--P);border-radius:2px;width:${pctVentas}%"></div></div>
+        </td>
+        <td style="text-align:right;color:var(--D)">${fmt(d.cmv)}</td>
+        <td style="text-align:right;font-weight:700">${fmt(margen)}</td>
+        <td style="text-align:right"><span class="b ${margenBadge(pct)}">${pct.toFixed(1)}%</span></td>
+        <td style="text-align:right;color:var(--txt2)">${d.rems}</td>
+      </tr>`;
+    }).join('');
+    tbody.innerHTML+=`<tr style="background:var(--bg2);font-weight:700;border-top:2px solid var(--brd)">
+      <td>TOTAL</td>
+      <td style="text-align:right">${fmt(totVentas)}</td>
+      <td style="text-align:right;color:var(--D)">${fmt(totCMV)}</td>
+      <td style="text-align:right">${fmt(totMargen)}</td>
+      <td style="text-align:right">${pctMargen.toFixed(1)}%</td>
+      <td style="text-align:right;color:var(--txt2)">${totRems}</td>
+    </tr>`;
+  }
+
+  // Top productos
+  const prodsArr=Object.entries(porProd).sort((a,b)=>(b[1].ventas-b[1].cmv)-(a[1].ventas-a[1].cmv)).slice(0,15);
+  const ptbody=document.getElementById('cm-prod-tbody');
+  const hasCosto=_productos.some(p=>p.costo>0);
+  if(!hasCosto){
+    ptbody.innerHTML='<tr><td colspan="6" style="color:var(--txt2);text-align:center;padding:12px">Los productos no tienen costo cargado — el CMV es $0. Ingresá el costo en el panel Productos.</td></tr>';
+  }else if(!prodsArr.length){
+    ptbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--txt2)">Sin datos</td></tr>';
+  }else{
+    ptbody.innerHTML=prodsArr.map(([nom,d])=>{
+      const margen=d.ventas-d.cmv;
+      const pct=d.ventas>0?margen/d.ventas*100:0;
+      const margenBadge=pct>=30?'bP':pct>=15?'bW':'bD';
+      return `<tr>
+        <td style="font-weight:500">${nom}</td>
+        <td style="text-align:right;color:var(--txt2)">${d.cant}</td>
+        <td style="text-align:right">${fmt(d.ventas)}</td>
+        <td style="text-align:right;color:var(--D)">${fmt(d.cmv)}</td>
+        <td style="text-align:right;font-weight:600">${fmt(margen)}</td>
+        <td style="text-align:right"><span class="b ${margenBadge}">${pct.toFixed(1)}%</span></td>
+      </tr>`;
+    }).join('');
+  }
+
+  document.getElementById('cm-res-panel').style.display='block';
+}
+
+// ─── COMISIONES POR PERSONA ───
+let _comPersonas=[];
+function cargarComPersonas(){try{_comPersonas=JSON.parse(localStorage.getItem('lila_com_personas')||'[]');}catch(e){_comPersonas=[];}}
+function guardarComPersonas(){localStorage.setItem('lila_com_personas',JSON.stringify(_comPersonas));}
+
+function renderComPersonas(){
+  const tbody=document.getElementById('com-personas-tbody');
+  if(!tbody)return;
+  if(!_comPersonas.length){
+    tbody.innerHTML='<tr><td colspan="5" style="color:var(--txt2);text-align:center;padding:16px">Sin personas configuradas. Hacé clic en "+ Agregar persona".</td></tr>';
+    return;
+  }
+  tbody.innerHTML=_comPersonas.map((p,i)=>`<tr>
+    <td><input value="${p.nombre||''}" oninput="_comPersonas[${i}].nombre=this.value;guardarComPersonas()" style="width:100%;padding:5px 7px;border:1px solid var(--brd);border-radius:6px;font-size:13px"></td>
+    <td><select onchange="_comPersonas[${i}].rol=this.value;guardarComPersonas()" style="padding:5px 7px;border:1px solid var(--brd);border-radius:6px;font-size:13px">
+      <option value="vendedor" ${(p.rol||'vendedor')==='vendedor'?'selected':''}>Vendedor</option>
+      <option value="cobrador" ${p.rol==='cobrador'?'selected':''}>Cobrador</option>
+      <option value="repartidor" ${p.rol==='repartidor'?'selected':''}>Repartidor</option>
+    </select></td>
+    <td style="text-align:center"><input type="number" value="${p.pct_ventas??2}" min="0" max="100" step="0.1" oninput="_comPersonas[${i}].pct_ventas=parseFloat(this.value)||0;guardarComPersonas()" style="width:65px;padding:5px 7px;border:1px solid var(--brd);border-radius:6px;font-size:13px;text-align:right"> %</td>
+    <td style="text-align:center"><input type="number" value="${p.pct_cobranza??1}" min="0" max="100" step="0.1" oninput="_comPersonas[${i}].pct_cobranza=parseFloat(this.value)||0;guardarComPersonas()" style="width:65px;padding:5px 7px;border:1px solid var(--brd);border-radius:6px;font-size:13px;text-align:right"> %</td>
+    <td><button class="btn D sm" onclick="_comPersonas.splice(${i},1);guardarComPersonas();renderComPersonas()">🗑</button></td>
+  </tr>`).join('');
+}
+
+function agregarPersonaCom(){
+  _comPersonas.push({nombre:'',rol:'vendedor',pct_ventas:2,pct_cobranza:1});
+  guardarComPersonas();renderComPersonas();
+  setTimeout(()=>{const rows=document.querySelectorAll('#com-personas-tbody tr');if(rows.length){const inp=rows[rows.length-1].querySelector('input');if(inp)inp.focus();}},50);
+}
+
+function initComisiones(){
+  cargarComPersonas();renderComPersonas();
+  const hoy=new Date().toISOString().split('T')[0];
+  const primerDia=hoy.substring(0,7)+'-01';
+  const desde=document.getElementById('com-desde');const hasta=document.getElementById('com-hasta');
+  if(desde&&!desde.value)desde.value=primerDia;
+  if(hasta&&!hasta.value)hasta.value=hoy;
+  const sel=document.getElementById('com-zona-fil');
+  if(sel&&sel.options.length<=1){
+    const zonas=[...new Set(_clientes.map(c=>c.zona||'').filter(Boolean))].sort();
+    zonas.forEach(z=>{const o=document.createElement('option');o.value=z;o.textContent='Zona '+z;sel.appendChild(o);});
+  }
+  document.getElementById('com-res-panel').style.display='none';
+}
+
+function calcularComisionesPorPersona(){
+  const desde=document.getElementById('com-desde').value;
+  const hasta=document.getElementById('com-hasta').value;
+  const zonaFil=document.getElementById('com-zona-fil').value;
+  if(!_comPersonas.length){alert('Agregá al menos una persona');return;}
+
+  let rems=_remitos.filter(r=>(!desde||r.fecha>=desde)&&(!hasta||r.fecha<=hasta));
+  let cobs=_cobros.filter(c=>(!desde||c.fecha>=desde)&&(!hasta||c.fecha<=hasta));
+
+  if(zonaFil){
+    rems=rems.filter(r=>{const cli=_clientes.find(c=>c.id===r.cliente_id);return (cli?.zona||'')===zonaFil;});
+    cobs=cobs.filter(c=>{const cli=_clientes.find(cl=>cl.id===c.cliente_id);return (cli?.zona||'')===zonaFil;});
+  }
+
+  const rolBadge=r=>r==='vendedor'?'bP':r==='cobrador'?'bA':'bW';
+  const rolLabel=r=>({vendedor:'Vendedor',cobrador:'Cobrador',repartidor:'Repartidor'}[r]||r);
+
+  const res=_comPersonas.map(p=>{
+    const nom=(p.nombre||'').toLowerCase().trim();
+    const remsP=rems.filter(r=>(r.vendedor||'').toLowerCase().trim()===nom);
+    const cobsP=cobs.filter(c=>(c.vendedor||'').toLowerCase().trim()===nom);
+    const ventas=remsP.reduce((a,r)=>a+(r.total||0),0);
+    const cobranza=cobsP.reduce((a,c)=>a+(c.importe||0),0);
+    const comV=ventas*(p.pct_ventas||0)/100;
+    const comC=cobranza*(p.pct_cobranza||0)/100;
+    return {...p,ventas,cobranza,comV,comC,total:comV+comC};
+  });
+
+  const tbody=document.getElementById('com-res-tbody');
+  tbody.innerHTML=res.map(p=>`<tr>
+    <td style="font-weight:600">${p.nombre||'—'}</td>
+    <td><span class="b ${rolBadge(p.rol)}">${rolLabel(p.rol)}</span></td>
+    <td style="text-align:right">${fmt(p.ventas)}</td>
+    <td style="text-align:right">${fmt(p.cobranza)}</td>
+    <td style="text-align:right;color:var(--P)">${fmt(p.comV)} <span style="font-size:10px;color:var(--txt2)">${p.pct_ventas}%</span></td>
+    <td style="text-align:right;color:var(--A)">${fmt(p.comC)} <span style="font-size:10px;color:var(--txt2)">${p.pct_cobranza}%</span></td>
+    <td style="text-align:right;font-weight:700;color:var(--PD);font-size:15px">${fmt(p.total)}</td>
+  </tr>`).join('')||'<tr><td colspan="7" style="text-align:center;color:var(--txt2)">Sin datos en ese período</td></tr>';
+
+  const totVentas=res.reduce((a,p)=>a+p.ventas,0),totCobs=res.reduce((a,p)=>a+p.cobranza,0);
+  const totComV=res.reduce((a,p)=>a+p.comV,0),totComC=res.reduce((a,p)=>a+p.comC,0),totCom=res.reduce((a,p)=>a+p.total,0);
+  tbody.innerHTML+=`<tr style="background:var(--bg2);font-weight:700;border-top:2px solid var(--brd)">
+    <td colspan="2">TOTAL</td>
+    <td style="text-align:right">${fmt(totVentas)}</td>
+    <td style="text-align:right">${fmt(totCobs)}</td>
+    <td style="text-align:right;color:var(--P)">${fmt(totComV)}</td>
+    <td style="text-align:right;color:var(--A)">${fmt(totComC)}</td>
+    <td style="text-align:right;color:var(--PD);font-size:15px">${fmt(totCom)}</td>
+  </tr>`;
+
+  // Desglose por zona
+  const porZona={};
+  rems.forEach(r=>{
+    const cli=_clientes.find(c=>c.id===r.cliente_id);
+    const z=(cli?.zona)||'Sin zona';
+    if(!porZona[z])porZona[z]={ventas:0,cobranza:0};
+    porZona[z].ventas+=(r.total||0);
+  });
+  cobs.forEach(c=>{
+    const cli=_clientes.find(cl=>cl.id===c.cliente_id);
+    const z=(cli?.zona)||'Sin zona';
+    if(!porZona[z])porZona[z]={ventas:0,cobranza:0};
+    porZona[z].cobranza+=(c.importe||0);
+  });
+  const zonaDiv=document.getElementById('com-zonas-res');
+  const zonasArr=Object.entries(porZona).sort((a,b)=>b[1].ventas-a[1].ventas);
+  if(zonasArr.length){
+    const totalZ=zonasArr.reduce((a,[,d])=>a+d.ventas,0);
+    zonaDiv.innerHTML=`<div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Zona</th><th style="text-align:right">Ventas</th><th style="text-align:right">% del total</th><th style="text-align:right">Cobranza</th><th style="text-align:right">% Cobrado</th></tr></thead>
+      <tbody>${zonasArr.map(([z,d])=>{
+        const pctTotal=totalZ>0?Math.round(d.ventas/totalZ*100):0;
+        const pctCob=d.ventas>0?Math.round(d.cobranza/d.ventas*100):0;
+        return `<tr>
+          <td><span class="b bA">Z${z}</span></td>
+          <td style="text-align:right;font-weight:600">${fmt(d.ventas)}</td>
+          <td style="text-align:right"><div style="display:flex;align-items:center;justify-content:flex-end;gap:6px">
+            <div style="background:var(--PL);border-radius:3px;height:8px;width:${pctTotal}px;max-width:80px"></div>
+            <span style="font-size:11px;color:var(--txt2)">${pctTotal}%</span></div></td>
+          <td style="text-align:right">${fmt(d.cobranza)}</td>
+          <td style="text-align:right"><span class="b ${pctCob>=80?'bP':pctCob>=50?'bW':'bD'}">${pctCob}%</span></td>
+        </tr>`;
+      }).join('')}</tbody>
+      <tfoot><tr style="font-weight:700;background:var(--bg2)">
+        <td>TOTAL</td>
+        <td style="text-align:right">${fmt(totalZ)}</td>
+        <td style="text-align:right">100%</td>
+        <td style="text-align:right">${fmt(zonasArr.reduce((a,[,d])=>a+d.cobranza,0))}</td>
+        <td></td>
+      </tr></tfoot>
+    </table></div>`;
+  }else{
+    zonaDiv.innerHTML='<div style="color:var(--txt2);font-size:12px;padding:10px">Sin datos de zona para el período seleccionado.</div>';
+  }
+  document.getElementById('com-res-panel').style.display='block';
+}
+
+// ─── NAVEGACIÓN GENÉRICA EN LISTAS/TABLAS ───
+const _tblNav={};
+function navTablaGen(e,listId,selector,enterFn){
+  if(!['ArrowDown','ArrowUp','Tab','Enter','Escape'].includes(e.key))return;
+  const items=[...document.querySelectorAll('#'+listId+' '+selector)].filter(el=>!el.querySelector('[colspan]'));
+  if(!items.length)return;
+  if(_tblNav[listId]===undefined)_tblNav[listId]=-1;
+  let idx=_tblNav[listId];
+  if(e.key==='ArrowDown'||e.key==='Tab'){
+    e.preventDefault();idx=Math.min(idx+1,items.length-1);
   }else if(e.key==='ArrowUp'){
     e.preventDefault();
-    _cliIdx=Math.max(_cliIdx-1,0);
-    rows.forEach((r,i)=>r.style.background=i===_cliIdx?'var(--PL)':'');
-    rows[_cliIdx]?.scrollIntoView({block:'nearest'});
-  }else if(e.key==='Enter'&&_cliIdx>=0){
-    e.preventDefault();
-    const btn=rows[_cliIdx]?.querySelector('button.btn');
-    if(btn)btn.click();
-    _cliIdx=-1;
-  }
+    if(idx<=0){_tblNav[listId]=-1;items.forEach(r=>r.style.background='');return;}
+    idx--;
+  }else if(e.key==='Enter'&&idx>=0&&enterFn){
+    e.preventDefault();enterFn(items[idx]);
+    _tblNav[listId]=-1;items.forEach(r=>r.style.background='');return;
+  }else if(e.key==='Escape'){
+    _tblNav[listId]=-1;items.forEach(r=>r.style.background='');return;
+  }else return;
+  _tblNav[listId]=idx;
+  items.forEach((r,i)=>r.style.background=i===idx?'var(--PL)':'');
+  if(idx>=0)items[idx]?.scrollIntoView({block:'nearest'});
 }
+function resetNav(listId){_tblNav[listId]=-1;}
+function navCC(e){navTablaGen(e,'cc-tbody','tr',r=>r.click());}
+function navCliTabla(e){navTablaGen(e,'cli-tbody','tr',r=>{const b=r.querySelector('button.btn');if(b)b.click();});}
+function navRemitos(e){navTablaGen(e,'rem-tbody','tr',r=>{const b=r.querySelector('button.btn');if(b)b.click();});}
+function navCobros(e){navTablaGen(e,'cob-tbody','tr',r=>{const b=r.querySelector('button.btn');if(b)b.click();});}
+function navProductos(e){navTablaGen(e,'pro-tbody','tr',r=>{const b=r.querySelector('button.btn');if(b)b.click();});}
+function navProveedores(e){navTablaGen(e,'prov-tbody','tr',r=>{const b=r.querySelector('button.btn');if(b)b.click();});}
+function navGastos(e){navTablaGen(e,'gas-tbody','tr',null);}
+function navPedidos(e){navTablaGen(e,'ped-lista','.ccard',r=>{const b=r.querySelector('button.btn');if(b)b.click();});}
 // ─── CERRAR DROPS ───
 document.addEventListener('click',e=>{
   const hide=id=>{const el=document.getElementById(id);if(el)el.style.display='none';};
@@ -6128,16 +6817,20 @@ function go(p){
   }
   if(p==='contabilidad')contTab('gastos');
   if(p==='nc')renderNCs();
+  if(p==='maestro-proveedores')renderProveedores();
+  if(p==='comisiones')initComisiones();
+  if(p==='contrib-zona')initContribZona();
+  if(p==='gastos-fijos')initGastosFijos();
   if(p==='remitos'){const f=document.getElementById('rem-grupo-fecha');if(f&&!f.value)f.value=new Date().toISOString().split('T')[0];}
   // Actualizar sidebar activo
   document.querySelectorAll('.sidebar-item,.sidebar-dash').forEach(b=>b.classList.remove('on'));
   document.querySelectorAll(`[data-p="${p}"]`).forEach(b=>b.classList.add('on'));
   document.querySelectorAll('.sidebar-group').forEach(g=>g.classList.remove('active'));
   const grupoMap={
-    'clientes':'maestros','cuentas':'maestros','productos':'maestros','stock':'maestros',
+    'clientes':'maestros','cuentas':'maestros','productos':'maestros','stock':'maestros','maestro-proveedores':'maestros',
     'pedidos':'ventas','pedido-movil':'ventas','carga':'ventas','remitos':'ventas','remito-rapido':'ventas','nc':'ventas',
     'cobranza':'tesoreria','contabilidad':'tesoreria',
-    'informes':'informes','rendicion':'informes'
+    'informes':'informes','rendicion':'informes','comisiones':'informes','contrib-zona':'informes','gastos-fijos':'informes'
   };
   const g=grupoMap[p];
   if(g){const sg=document.getElementById('sg-'+g);if(sg)sg.classList.add('active');}
