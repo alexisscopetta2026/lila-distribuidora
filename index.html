@@ -676,8 +676,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <select id="rem-est" onchange="renderRemitos()">
       <option value="">Todos</option>
       <option value="false">Pendientes de cobro</option>
+      <option value="parcial">Pago parcial</option>
       <option value="true">Cobrados</option>
     </select>
+    <input type="date" id="rem-fd" title="Desde" oninput="renderRemitos()" style="width:130px">
+    <input type="date" id="rem-fh" title="Hasta" oninput="renderRemitos()" style="width:130px">
+    <button class="btn sm" onclick="document.getElementById('rem-fd').value='';document.getElementById('rem-fh').value='';renderRemitos();" title="Limpiar fechas">✕ fecha</button>
   </div>
   <!-- Impresión grupal -->
   <div style="background:var(--bg2);border:1px solid var(--brd);border-radius:8px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -1959,6 +1963,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <h3 id="m-ver-title">Ver remito</h3>
     <div style="display:flex;gap:6px">
       <button class="btn sm" onclick="window.print()" id="m-ver-print">🖨 Imprimir</button>
+      <button class="btn D sm" id="m-ver-anular" style="display:none" onclick="anularRemito()">🚫 Anular</button>
       <button class="btn sm" onclick="cerrar('m-ver')">✕</button>
     </div>
   </div>
@@ -3471,21 +3476,34 @@ function resumenCarga(id){
 function renderRemitos(){
   const q=(document.getElementById('rem-q').value||'').toLowerCase();
   const est=document.getElementById('rem-est').value;
-  let data=_remitos.filter(r=>(!q||(r.cliente||'').toLowerCase().includes(q))&&(est===''||String(r.cobrado)===est));
+  const fd=document.getElementById('rem-fd')?.value||'';
+  const fh=document.getElementById('rem-fh')?.value||'';
+  let data=_remitos.filter(r=>{
+    if(r.anulado)return false;
+    if(q&&!(r.cliente||'').toLowerCase().includes(q))return false;
+    if(est==='parcial'){if(!(r.saldo_pendiente>0&&r.saldo_pendiente<r.total&&!r.cobrado))return false;}
+    else if(est!==''&&String(r.cobrado)!==est)return false;
+    if(fd&&r.fecha<fd)return false;
+    if(fh&&r.fecha>fh)return false;
+    return true;
+  });
   const tot=data.length,sl=data.slice((_remPg-1)*PP,_remPg*PP);
   const tbody=document.getElementById('rem-tbody');
-  tbody.innerHTML=sl.length?sl.map(r=>`<tr>
+  tbody.innerHTML=sl.length?sl.map(r=>{
+    const parcial=!r.cobrado&&r.saldo_pendiente>0&&r.saldo_pendiente<r.total;
+    const cobBadge=r.cobrado?'<span class="b bP">Cobrado</span>':parcial?`<span class="b bW" title="Saldo: ${fmt(r.saldo_pendiente)}">Parcial</span>`:'<span class="b" style="background:var(--bg2);color:var(--txt2)">Pendiente</span>';
+    return `<tr>
     <td style="font-weight:600;color:var(--P)">R-${String(r.id).padStart(4,'0')}</td>
     <td>${r.fecha}</td><td style="font-weight:500">${r.cliente}</td><td>${r.localidad||''}</td>
     <td>${(r.items||[]).length}</td><td style="font-weight:600">${fmt(r.total)}</td>
-    <td>${r.cobrado?'<span class="b bP">Cobrado</span>':'<span class="b bW">Pendiente</span>'}</td>
+    <td>${cobBadge}</td>
     <td>${r.factura_arca?`<span class="b bA" title="${r.nro_arca||''}" style="cursor:pointer">✅ ${r.nro_arca||'ARCA'}</span>`:`<button class="btn sm" style="font-size:11px" onclick="marcarARCA(${r.id})">+ ARCA</button>`}</td>
     <td>
       <button class="btn sm" onclick="verRemito(${r.id})">👁</button>
       <button class="btn sm" onclick="impRem(${r.id})">🖨️</button>
       ${!r.cobrado?`<button class="btn sm" style="background:var(--G);color:#fff;font-size:11px" onclick="cobrarRemito(${r.id})">💵 Cobrar</button>`:''}
     </td>
-  </tr>`).join(''):'<tr><td colspan="9"><div class="empty">Sin remitos</div></td></tr>';
+  </tr>`;}).join(''):'<tr><td colspan="9"><div class="empty">Sin remitos</div></td></tr>';
   pag('rem-pg',tot,_remPg,p=>{_remPg=p;renderRemitos();});
 }
 
@@ -3563,14 +3581,29 @@ function verRemito(id){
   const r=_remitos.find(x=>x.id===id);if(!r)return;
   _remActual=r;_verTipo='remito';
   document.getElementById('m-ver-title').textContent='Remito R-'+String(r.id).padStart(4,'0')+' — '+r.cliente;
-  // Ocultar ambos botones de carga, mostrar solo impresión de remito
   const _p2=document.getElementById('m-ver-print2');if(_p2){_p2.style.display='none';}
   const _p=document.getElementById('m-ver-print');
   if(_p){_p.textContent='🖨️ Imprimir remito';_p.onclick=imprimirRemito;_p.style.display='inline-flex';}
+  const _an=document.getElementById('m-ver-anular');
+  if(_an){_an.style.display=(!r.cobrado&&!r.anulado)?'inline-flex':'none';}
   document.getElementById('m-ver-body').innerHTML=detalleHTML(r,true);
   document.getElementById('m-ver').classList.add('on');
 }
-function impRem(id){verRemito(id);setTimeout(imprimirRemito,200);}
+async function anularRemito(){
+  if(!_remActual)return;
+  const r=_remActual;
+  if(r.cobrado){toast('No se puede anular un remito ya cobrado','err');return;}
+  if(!confirm(`¿Anular Remito R-${String(r.id).padStart(4,'0')} de ${r.cliente}?\nSe revertirá el saldo del cliente.`))return;
+  await sb.from('remitos').update({anulado:true}).eq('id',r.id);
+  const c=_clientes.find(x=>x.id===r.cliente_id);
+  if(c){const ns=Math.max(0,(c.saldo||0)-r.total);const nc=Math.max(0,(c.total_comprado||0)-r.total);await sb.from('clientes').update({saldo:ns,total_comprado:nc}).eq('id',c.id);}
+  if(r.pedido_id)await sb.from('pedidos').update({estado:'pendiente',remito_id:null}).eq('id',r.pedido_id);
+  cerrar('m-ver');
+  await Promise.all([cargarRemitos(),cargarClientes(),cargarPedidos()]);
+  renderRemitos();renderCC();renderDash();renderPedidos();
+  toast('Remito anulado — saldo del cliente revertido');
+}
+function impRem(id){verRemito(id);imprimirRemito();}
 
 
 function imprimirHojaCarga(){
