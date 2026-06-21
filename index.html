@@ -3548,8 +3548,13 @@ async function cobrarRemito(id){
     const hoy = new Date().toISOString().split('T')[0];
     await sb.from('cobros').insert({
       cliente_id: r.cliente_id, remito_id: id,
-      fecha: hoy, total: imp, medio,
-      vendedor: r.vendedor||usuarioActual.nombre||''
+      fecha: hoy, importe: imp, forma: medio,
+      efectivo: medio==='efectivo'?imp:0,
+      transferencia: medio==='transferencia'?imp:0,
+      cheque_terceros: medio==='cheque'?imp:0,
+      vendedor: r.vendedor||usuarioActual?.nombre||'',
+      estado_rendicion:'pendiente',
+      imputaciones:[{remito_id:id,monto:imp}]
     });
     
     // Actualizar remito
@@ -3565,7 +3570,7 @@ async function cobrarRemito(id){
     modal.remove();
     await cargarTodo();
     renderRemitos(); renderCC(); renderDash(); renderCobros();
-    alert(`✓ Cobro registrado: ${fmt(imp)} en ${medio}`);
+    toast(`✓ Cobro registrado: ${fmt(imp)} en ${medio}`);
   };
 }
 async function marcarARCA(id){
@@ -4116,9 +4121,14 @@ function selCliCob(id){
     if(seccion)seccion.style.display='none';
     if(lista)lista.innerHTML='<span style="font-size:12px;color:var(--txt2);font-style:italic">Sin facturas pendientes</span>';
   }
-  // Sugerir saldo en efectivo
+  // Sugerir saldo en efectivo y sincronizar total a imputar
   const ef=document.getElementById('cob-efectivo');
-  if(ef&&(c.saldo||0)>0){ef.value=Math.round(c.saldo);calcTotalCobro();}
+  if(ef&&(c.saldo||0)>0){
+    ef.value=Math.round(c.saldo);
+    calcTotalCobro();
+    const ti=document.getElementById('cob-total-imputar');
+    if(ti){ti.value=Math.round(c.saldo);calcTotalDesdeImputacion();}
+  }
   // foco manejado por buscarCodCli o dropdown
 }
 function limitarImputacion(input, maxRemito){
@@ -4177,7 +4187,7 @@ function calcTotalDesdeImputacion(){
   const elResM=document.getElementById('cob-resto-monto');
   if(elImp)elImp.textContent=fmt(totalImputado);
   if(elRec)elRec.textContent=fmt(totalCobrado);
-  if(elResM)elResM.textContent=fmt(Math.abs(resto));
+  if(elResM){elResM.textContent=fmt(Math.abs(resto));elResM.dataset.val=Math.abs(resto);}
   if(elRes){
     if(resto===0){elRes.textContent='$0';elRes.style.color='var(--P)';}
     else if(resto>0){elRes.textContent=fmt(resto);elRes.style.color='var(--W)';}
@@ -4200,7 +4210,7 @@ function calcTotalDesdeImputacion(){
 let _cobRestoSaldoFavor=0;
 function dejarComoSaldoFavor(){
   const restoMonto=document.getElementById('cob-resto-monto');
-  const monto=parseFloat((restoMonto?.textContent||'0').replace(/[^0-9.,-]/g,'').replace(',','.'))||0;
+  const monto=parseFloat(restoMonto?.dataset?.val)||0;
   if(monto<=0)return;
   _cobRestoSaldoFavor=monto;
   const aviso=document.getElementById('cob-saldo-favor-aviso');
@@ -4260,6 +4270,7 @@ async function guardarCobro(){
     estado_rendicion:'pendiente',
     banco_cheque:document.getElementById('cob-banco')?.value||'',
     nro_cheque:document.getElementById('cob-nrocheque')?.value||'',
+    fecha_emision:document.getElementById('cob-fecha-emision')?.value||'',
     fecha_cheque:document.getElementById('cob-fecha-cheque')?.value||'',
     reparto:document.getElementById('cob-reparto')?.value||'',
     tipo_cobrador:document.getElementById('cob-tipo-cobrador')?.value||'',
@@ -4295,15 +4306,15 @@ async function guardarCobro(){
 
   // Mostrar confirmación breve y limpiar para el siguiente cobro (modal queda abierto)
   const nombreCli=c?.nombre||'cliente';
-  const restoMsg=_cobRestoSaldoFavor>0?`\nSaldo a favor: ${fmt(_cobRestoSaldoFavor)}`:'';
+  const restoMsg=_cobRestoSaldoFavor>0?` · Saldo a favor: ${fmt(_cobRestoSaldoFavor)}`:'';
   _cobRestoSaldoFavor=0;
-  alert(`✅ Cobro de ${fmt(imp)} guardado para ${nombreCli}.${restoMsg}\n\nListo para el siguiente cobro.`);
+  toast(`✅ Cobro de ${fmt(imp)} guardado para ${nombreCli}.${restoMsg}`);
   limpiarModalCobro();
 }
 function renderCobros(){
   const q=(document.getElementById('cob-q').value||'').toLowerCase();
   const f=document.getElementById('cob-f').value;
-  let data=_cobros.filter(c=>(!q||(c.cliente||'').toLowerCase().includes(q))&&(!f||c.forma===f));
+  let data=_cobros.filter(c=>(!q||(c.cliente||'').toLowerCase().includes(q))&&(!f||(c.forma||'').includes(f)));
   const tot=data.length,sl=data.slice((_cobPg-1)*PP,_cobPg*PP);
   const tbody=document.getElementById('cob-tbody');
   tbody.innerHTML=sl.length?sl.map(r=>{
