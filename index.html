@@ -60,7 +60,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .nav-dropdown button:hover{background:rgba(255,255,255,.15);color:#fff}
 .nav-dropdown button.on{background:rgba(255,255,255,.2);color:#fff;font-weight:600}
 .body{flex:1;padding:14px;overflow-y:auto;min-width:0;scroll-behavior:smooth}
-.panel{display:none!important;width:100%;box-sizing:border-box}.panel.on{display:block!important;width:100%}#p-informes.on{overflow-y:visible}
+.panel{display:none!important;width:100%;box-sizing:border-box}.panel.on{display:block!important;width:100%}#p-informes.on{display:flex!important;flex-direction:column;height:100%;overflow:hidden}
 
 /* Cards */
 .card{background:var(--bg);border:1px solid var(--brd);border-radius:10px;padding:14px;margin-bottom:12px}
@@ -1341,7 +1341,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="sech"><h2>📈 Informes</h2></div>
 
   <!-- Tabs internos -->
-  <div style="background:var(--bg2);border-radius:8px;padding:8px;margin-bottom:14px;display:flex;gap:6px;flex-wrap:wrap" onkeydown="navInfTabs(event)">
+  <div id="inf-tabs-bar" style="background:var(--bg2);border-radius:8px;padding:8px;margin-bottom:14px;display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0" onkeydown="navInfTabs(event)">
     <button id="inf-tab-ventas" class="btn P sm" onclick="infTab('ventas')" tabindex="0">📅 Ventas</button>
     <button id="inf-tab-descuentos" class="btn sm" onclick="infTab('descuentos')" tabindex="-1">🏷️ Descuentos</button>
     <button id="inf-tab-clientes" class="btn sm" onclick="infTab('clientes')" tabindex="-1">👥 Clientes</button>
@@ -1354,6 +1354,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button id="inf-tab-financiamiento" class="btn sm" onclick="infTab('financiamiento')" tabindex="-1">🏭 Financiamiento</button>
     <button id="inf-tab-precios" class="btn sm" onclick="infTab('precios')" tabindex="-1">💰 Análisis de precios</button>
   </div>
+
+  <!-- Área de contenido scrolleable -->
+  <div id="inf-content" style="flex:1;overflow-y:auto;min-height:0;padding-right:4px">
 
   <!-- VENTAS -->
   <div id="inf-sec-ventas">
@@ -1649,7 +1652,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
     <div id="ger-dashboard" style="display:none">
     <div style="position:sticky;top:0;z-index:100;text-align:right;margin-bottom:8px">
-      <button class="btn sm" onclick="document.querySelector('.body').scrollTo({top:0,behavior:'smooth'})" style="background:var(--P);color:#fff">⬆ Ir arriba</button>
+      <button class="btn sm" onclick="document.getElementById('inf-content').scrollTo({top:0,behavior:'smooth'})" style="background:var(--P);color:#fff">⬆ Ir arriba</button>
     </div>
       <!-- KPIs -->
       <div id="ger-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px"></div>
@@ -1705,6 +1708,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
   </div>
 
+  </div><!-- /inf-content -->
 </div>
 
 <!-- COMISIONES POR PERSONA -->
@@ -2584,14 +2588,14 @@ async function cargarGerencialSupabase() {
 
   status.textContent = `✓ Datos cargados desde base de datos (${resVentas.data?.length || 0} registros de ventas).`;
   document.getElementById('ger-dashboard').style.display = 'block';
-  document.querySelector('.body').scrollTo({top:0, behavior:'smooth'});
+  (document.getElementById('inf-content')||document.querySelector('.body')).scrollTo({top:0, behavior:'smooth'});
   renderGerencial();
 }
 
 function renderGerencial() {
   if(!_gerData) return;
   document.getElementById('ger-dashboard').style.display = 'block';
-  document.querySelector('.body').scrollTo({top:0, behavior:'smooth'});
+  (document.getElementById('inf-content')||document.querySelector('.body')).scrollTo({top:0, behavior:'smooth'});
 
   const isDark = matchMedia('(prefers-color-scheme: dark)').matches;
   const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
