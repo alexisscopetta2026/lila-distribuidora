@@ -8217,8 +8217,9 @@ async function informeCMGClientes(){
       clis[cid].costo += costoTotal;
       clis[cid].cmg += cmg;
 
-      if(!clis[cid].productos[nomProd]) clis[cid].productos[nomProd] = {venta:0, cmg:0, cant:0};
+      if(!clis[cid].productos[nomProd]) clis[cid].productos[nomProd] = {venta:0, costo:0, cmg:0, cant:0};
       clis[cid].productos[nomProd].venta += venta;
+      clis[cid].productos[nomProd].costo += costoTotal;
       clis[cid].productos[nomProd].cmg += cmg;
       clis[cid].productos[nomProd].cant += cant;
     });
@@ -8233,6 +8234,29 @@ async function informeCMGClientes(){
   const totalCMG = arr.reduce((a,x) => a+x.cmg, 0);
   const pctTotal = totalVenta > 0 ? totalCMG/totalVenta*100 : 0;
 
+  // Guardar datos para renderizar el detalle al hacer clic
+  window._cmgcData = arr;
+
+  const rows = arr.map((x, idx) => {
+    const color = x.pct >= 20 ? 'var(--P)' : x.pct >= 10 ? 'var(--W)' : 'var(--D)';
+    return `<div class="cmgc-card" style="border:1px solid var(--brd);border-radius:8px;margin-bottom:8px">
+      <div onclick="toggleCMGCliente(${idx},this)" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;cursor:pointer;background:var(--bg2);border-radius:8px;user-select:none">
+        <div>
+          <span style="font-weight:600;font-size:13px">${x.nom}</span>
+          <span style="font-size:11px;color:var(--txt2);margin-left:8px">${x.remitos} remito(s)</span>
+        </div>
+        <div style="display:flex;gap:16px;align-items:center;text-align:right">
+          <div><div style="font-size:11px;color:var(--txt2)">Venta</div><div style="font-weight:600">${fmt(x.venta)}</div></div>
+          <div><div style="font-size:11px;color:var(--txt2)">Costo</div><div style="font-weight:600;color:var(--D)">${fmt(x.costo)}</div></div>
+          <div><div style="font-size:11px;color:var(--txt2)">CMG</div><div style="font-weight:700;color:${color}">${fmt(x.cmg)}</div></div>
+          <div><div style="font-size:11px;color:var(--txt2)">%CMG</div><div style="font-weight:700;color:${color}">${x.pct.toFixed(1)}%</div></div>
+          <span class="cmgc-arrow" style="color:var(--txt2);font-size:18px;line-height:1;transition:transform .2s">▸</span>
+        </div>
+      </div>
+      <div class="cmgc-detalle" style="display:none;border-top:1px solid var(--brd)"></div>
+    </div>`;
+  }).join('');
+
   el.innerHTML = `
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
       <div class="stat"><div class="n">${arr.length}</div><div class="l">Clientes activos</div></div>
@@ -8240,54 +8264,63 @@ async function informeCMGClientes(){
       <div class="stat"><div class="n" style="color:var(--P)">${fmt(totalCMG)}</div><div class="l">CMG total</div></div>
       <div class="stat"><div class="n" style="color:var(--P)">${pctTotal.toFixed(1)}%</div><div class="l">% CMG promedio</div></div>
     </div>
-    ${arr.map((x, idx) => {
-      const topProds = Object.entries(x.productos).sort((a,b) => b[1].cmg - a[1].cmg).slice(0,5);
-      const color = x.pct >= 20 ? 'var(--P)' : x.pct >= 10 ? 'var(--W)' : 'var(--D)';
-      const rowId = 'cmgc-row-'+idx;
-      return `<div style="border:1px solid var(--brd);border-radius:8px;margin-bottom:8px;overflow:hidden">
-        <div onclick="toggleCMGCliente('${rowId}')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;cursor:pointer;background:var(--bg2)">
-          <div>
-            <span style="font-weight:600;font-size:13px">${x.nom}</span>
-            <span style="font-size:11px;color:var(--txt2);margin-left:8px">${x.remitos} remito(s)</span>
-          </div>
-          <div style="display:flex;gap:16px;align-items:center;text-align:right">
-            <div><div style="font-size:11px;color:var(--txt2)">Venta</div><div style="font-weight:600">${fmt(x.venta)}</div></div>
-            <div><div style="font-size:11px;color:var(--txt2)">CMG</div><div style="font-weight:700;color:${color}">${fmt(x.cmg)}</div></div>
-            <div><div style="font-size:11px;color:var(--txt2)">%</div><div style="font-weight:700;color:${color}">${x.pct.toFixed(1)}%</div></div>
-            <span style="color:var(--txt2);font-size:16px">›</span>
-          </div>
-        </div>
-        <div id="${rowId}" style="display:none;padding:10px 14px;border-top:1px solid var(--brd)">
-          <div style="font-size:11px;font-weight:600;color:var(--txt2);text-transform:uppercase;margin-bottom:8px">Top productos por margen</div>
-          <table style="width:100%;border-collapse:collapse;font-size:12px">
-            <thead><tr style="background:var(--bg2)">
-              <th style="padding:5px 8px;text-align:left;border-bottom:1px solid var(--brd)">Producto</th>
-              <th style="padding:5px 8px;text-align:right;border-bottom:1px solid var(--brd)">Venta</th>
-              <th style="padding:5px 8px;text-align:right;border-bottom:1px solid var(--brd)">CMG $</th>
-              <th style="padding:5px 8px;text-align:right;border-bottom:1px solid var(--brd)">CMG %</th>
-            </tr></thead>
-            <tbody>
-              ${topProds.map(([nom, d]) => {
-                const pp = d.venta > 0 ? d.cmg/d.venta*100 : 0;
-                const cc = pp >= 20 ? 'var(--P)' : pp >= 10 ? 'var(--W)' : 'var(--D)';
-                return `<tr>
-                  <td style="padding:5px 8px;border-bottom:0.5px solid var(--brd);font-weight:500">${nom}</td>
-                  <td style="padding:5px 8px;border-bottom:0.5px solid var(--brd);text-align:right">${fmt(d.venta)}</td>
-                  <td style="padding:5px 8px;border-bottom:0.5px solid var(--brd);text-align:right;font-weight:600;color:${cc}">${fmt(d.cmg)}</td>
-                  <td style="padding:5px 8px;border-bottom:0.5px solid var(--brd);text-align:right;color:${cc}">${pp.toFixed(1)}%</td>
-                </tr>`;
-              }).join('')}
-            </tbody>
-          </table>
-        </div>
-      </div>`;
-    }).join('')}`;
+    ${rows}`;
 }
 
-function toggleCMGCliente(id){
-  const el = document.getElementById(id);
-  if(!el) return;
-  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+function toggleCMGCliente(idx, headerEl){
+  const card = headerEl.closest('.cmgc-card');
+  if(!card) return;
+  const detalle = card.querySelector('.cmgc-detalle');
+  const arrow = card.querySelector('.cmgc-arrow');
+  if(!detalle) return;
+
+  const open = detalle.style.display !== 'none';
+  if(open){
+    detalle.style.display = 'none';
+    if(arrow) arrow.style.transform = '';
+    headerEl.style.borderRadius = '8px';
+    return;
+  }
+
+  // Construir el detalle si no está generado aún
+  if(!detalle.innerHTML){
+    const x = window._cmgcData && window._cmgcData[idx];
+    if(!x){ detalle.style.display = 'block'; return; }
+    const prods = Object.entries(x.productos).sort((a,b) => b[1].cmg - a[1].cmg);
+    if(!prods.length){
+      detalle.innerHTML = '<div class="empty" style="margin:12px">Sin detalle de productos</div>';
+    } else {
+      const filas = prods.map(([nom, d]) => {
+        const pp = d.venta > 0 ? d.cmg/d.venta*100 : 0;
+        const cc = pp >= 20 ? 'var(--P)' : pp >= 10 ? 'var(--W)' : 'var(--D)';
+        return `<tr>
+          <td style="padding:5px 8px;border-bottom:0.5px solid var(--brd);font-weight:500">${nom}</td>
+          <td style="padding:5px 8px;border-bottom:0.5px solid var(--brd);text-align:right;color:var(--txt2)">${d.cant%1===0?d.cant:d.cant.toFixed(2)}</td>
+          <td style="padding:5px 8px;border-bottom:0.5px solid var(--brd);text-align:right">${fmt(d.venta)}</td>
+          <td style="padding:5px 8px;border-bottom:0.5px solid var(--brd);text-align:right;color:var(--D)">${fmt(d.costo)}</td>
+          <td style="padding:5px 8px;border-bottom:0.5px solid var(--brd);text-align:right;font-weight:600;color:${cc}">${fmt(d.cmg)}</td>
+          <td style="padding:5px 8px;border-bottom:0.5px solid var(--brd);text-align:right;color:${cc}">${pp.toFixed(1)}%</td>
+        </tr>`;
+      }).join('');
+      detalle.innerHTML = `<div style="padding:10px 14px">
+        <div style="font-size:11px;font-weight:600;color:var(--txt2);text-transform:uppercase;margin-bottom:8px">Detalle por producto (${prods.length})</div>
+        <div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr style="background:var(--bg2)">
+            <th style="padding:5px 8px;text-align:left;border-bottom:1px solid var(--brd)">Producto</th>
+            <th style="padding:5px 8px;text-align:right;border-bottom:1px solid var(--brd)">Cant.</th>
+            <th style="padding:5px 8px;text-align:right;border-bottom:1px solid var(--brd)">Venta</th>
+            <th style="padding:5px 8px;text-align:right;border-bottom:1px solid var(--brd)">Costo</th>
+            <th style="padding:5px 8px;text-align:right;border-bottom:1px solid var(--brd)">CMG $</th>
+            <th style="padding:5px 8px;text-align:right;border-bottom:1px solid var(--brd)">CMG %</th>
+          </tr></thead>
+          <tbody>${filas}</tbody>
+        </table></div>
+      </div>`;
+    }
+  }
+  detalle.style.display = 'block';
+  if(arrow) arrow.style.transform = 'rotate(90deg)';
+  headerEl.style.borderRadius = '8px 8px 0 0';
 }
 
 // ─── COMPROBANTES DE COMPRAS ───
