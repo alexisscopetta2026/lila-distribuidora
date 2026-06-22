@@ -9448,7 +9448,7 @@ async function initTesoreria(){
   if(sel&&_proveedores.length){
     const cur=sel.value;
     sel.innerHTML='<option value="">Seleccionar...</option>'+
-      _proveedores.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
+      _proveedores.map(p=>`<option value="${p.id}">${p.cuit?p.cuit+' — ':''}${p.nombre}</option>`).join('');
     if(cur)sel.value=cur;
   }
   // Defaults de fecha
@@ -9542,7 +9542,7 @@ function renderTesPagos(){
   const q=(document.getElementById('pag-q')?.value||'').toLowerCase();
   const forma=document.getElementById('pag-f-forma')?.value||'';
   let data=_pagosProv.filter(p=>{
-    if(q&&!(p.proveedor||'').toLowerCase().includes(q))return false;
+    if(q&&!((p.proveedor||'').toLowerCase().includes(q)||(p.cuit||'').includes(q)||(p.concepto||'').toLowerCase().includes(q)))return false;
     if(forma&&p.forma!==forma)return false;
     return true;
   });
@@ -9556,15 +9556,15 @@ function renderTesPagos(){
     <div class="stat"><div class="n" style="color:var(--A)">${fmt(totTr)}</div><div class="l">🏦 Transferencias</div></div>
     <div class="stat"><div class="n" style="color:var(--W)">${fmt(totCh)}</div><div class="l">📋 Cheques emitidos</div></div>
     <div class="stat"><div class="n" style="color:var(--D)">${fmt(totAll)}</div><div class="l">Total pagado (${data.length})</div></div>`;
-  const PP2=25,pg=_tesoPg.pagos||1,sl=data.slice((pg-1)*PP2,pg*PP2);
-  document.getElementById('tpag-tbody').innerHTML=sl.length?sl.map(p=>`<tr>
+  const PP2=200,pg=_tesoPg.pagos||1,sl=data.slice((pg-1)*PP2,pg*PP2);
+  document.getElementById('tpag-tbody').innerHTML=sl.length?sl.map(p=>{const prov=_proveedores.find(x=>x.nombre===p.proveedor);return`<tr>
     <td>${p.fecha}</td>
-    <td style="font-weight:600">${p.proveedor||'—'}</td>
+    <td style="font-weight:600">${p.proveedor||'—'}${prov?.cuit?`<br><span style="font-size:10px;color:var(--txt2)">${prov.cuit}</span>`:''}</td>
     <td>${p.concepto||'—'}</td>
     <td>${p.forma==='efectivo'?'💵 Efectivo':p.forma==='transferencia'?'🏦 Transf.':p.forma==='cheque'?'📋 Cheque':p.forma||'—'}</td>
     <td style="font-weight:700;color:var(--D)">${fmt(p.importe||0)}</td>
     <td><button class="btn sm D" onclick="eliminarPago(${p.id})">🗑</button></td>
-  </tr>`).join(''):'<tr><td colspan="6"><div class="empty">Sin pagos registrados</div></td></tr>';
+  </tr>`;}).join(''):'<tr><td colspan="6"><div class="empty">Sin pagos registrados</div></td></tr>';
   pag('tpag-pg',data.length,pg,p=>{_tesoPg.pagos=p;renderTesPagos();});
 }
 
