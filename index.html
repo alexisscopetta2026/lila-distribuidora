@@ -1497,6 +1497,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button id="inf-tab-cmg-cli" class="btn sm" onclick="infTab('cmg-cli')" tabindex="-1">👥 CMG Clientes</button>
     <button id="inf-tab-financiamiento" class="btn sm" onclick="infTab('financiamiento')" tabindex="-1">🏭 Financiamiento</button>
     <button id="inf-tab-precios" class="btn sm" onclick="infTab('precios')" tabindex="-1">💰 Análisis de precios</button>
+    <button id="inf-tab-historico" class="btn sm" onclick="infTab('historico')" tabindex="-1">📜 Histórico FoxPro</button>
   </div>
 
   <!-- Área de contenido scrolleable -->
@@ -1770,6 +1771,33 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         </div>
       </div>
       <div id="inf-prec-res"></div>
+    </div>
+  </div>
+
+  <!-- HISTÓRICO FOXPRO -->
+  <div id="inf-sec-historico" style="display:none">
+    <div class="card">
+      <div class="sech" style="margin-bottom:10px">
+        <div>
+          <div style="font-weight:700;margin-bottom:2px">📜 Evolución histórica — datos FoxPro</div>
+          <div id="inf-hist-status" style="font-size:11px;color:var(--txt2)">Cargando datos importados...</div>
+        </div>
+        <button class="btn P" onclick="informeHistoricoChart()" style="padding:8px 18px;font-weight:700">🔄 Actualizar</button>
+      </div>
+      <!-- Filtro de año -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+        <span style="font-size:12px;color:var(--txt2)">Filtrar año:</span>
+        <div id="inf-hist-años" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        <button class="btn sm" id="inf-hist-all" onclick="informeHistoricoChart(null)" style="font-size:11px">Todos</button>
+      </div>
+      <!-- Gráfico principal -->
+      <div style="position:relative;height:340px">
+        <canvas id="inf-hist-chart"></canvas>
+      </div>
+      <!-- KPIs resumen -->
+      <div id="inf-hist-kpis" class="g4" style="margin-top:14px"></div>
+      <!-- Tabla por período -->
+      <div id="inf-hist-tabla" style="margin-top:14px"></div>
     </div>
   </div>
 
@@ -6613,8 +6641,9 @@ function navInfTabs(e){
 }
 
 function infTab(tab){
-  const tabs=['ventas','descuentos','clientes','productos','comisiones','gerencial','comisiones2','cmg-prod','cmg-cli','financiamiento','precios'];
+  const tabs=['ventas','descuentos','clientes','productos','comisiones','gerencial','comisiones2','cmg-prod','cmg-cli','financiamiento','precios','historico'];
   if(tab==='gerencial') setTimeout(()=>cargarGerencialSupabase(), 100);
+  if(tab==='historico') setTimeout(()=>informeHistoricoChart(), 150);
   tabs.forEach(t=>{
     const el=document.getElementById('inf-sec-'+t);
     if(el)el.style.display=t===tab?'block':'none';
@@ -9703,6 +9732,173 @@ function renderImpHistChart(dA, perA, dB, perB) {
       scales: { x: { ticks: { callback: v => '$' + Math.round(v/1000) + 'k' } } }
     }
   });
+}
+
+// ─── GRÁFICO HISTÓRICO FOXPRO ────────────────────────────────
+let _histData = null; // cache de datos importados
+
+async function informeHistoricoChart(anioFiltro) {
+  if (typeof Chart === 'undefined') return;
+  const statusEl = document.getElementById('inf-hist-status');
+  const set = t => { if (statusEl) statusEl.textContent = t; };
+
+  set('Cargando datos importados...');
+
+  // Cargar desde Supabase (solo la primera vez o al actualizar)
+  if (!_histData) {
+    const { data, error } = await sb.from('importaciones_resultado')
+      .select('periodo, venta_neta, costo, diferencia');
+    if (error && error.code === '42P01') { set('Tabla importaciones_resultado no existe. Importá datos primero.'); return; }
+    if (!data?.length) { set('Sin datos importados. Importá archivos FoxPro desde Importar Histórico.'); return; }
+    _histData = data;
+  }
+
+  // Botones de filtro de año
+  const años = [...new Set(_histData.map(r => (r.periodo||'').substring(0,4)).filter(Boolean))].sort();
+  const añosEl = document.getElementById('inf-hist-años');
+  if (añosEl) {
+    añosEl.innerHTML = años.map(a =>
+      `<button class="btn sm${anioFiltro===a?' P':''}" onclick="informeHistoricoChart('${a}')" style="font-size:11px">${a}</button>`
+    ).join('');
+  }
+  const allBtn = document.getElementById('inf-hist-all');
+  if (allBtn) { allBtn.style.background = anioFiltro ? '' : 'var(--P)'; allBtn.style.color = anioFiltro ? '' : '#fff'; }
+
+  // Filtrar por año si aplica
+  const datos = anioFiltro ? _histData.filter(r => (r.periodo||'').startsWith(anioFiltro)) : _histData;
+
+  // Agrupar por período
+  const byPer = {};
+  datos.forEach(r => {
+    const p = r.periodo;
+    if (!p) return;
+    if (!byPer[p]) byPer[p] = { venta: 0, costo: 0, cmg: 0 };
+    byPer[p].venta += (r.venta_neta || 0);
+    byPer[p].costo += (r.costo || 0);
+    byPer[p].cmg   += (r.diferencia || 0);
+  });
+
+  const periodos = Object.keys(byPer).sort();
+  if (!periodos.length) { set('Sin datos para el período seleccionado.'); return; }
+
+  const ventas = periodos.map(p => byPer[p].venta);
+  const costos = periodos.map(p => byPer[p].costo);
+  const cmgs   = periodos.map(p => byPer[p].cmg);
+  const pcts   = periodos.map(p => byPer[p].venta > 0 ? byPer[p].cmg / byPer[p].venta * 100 : 0);
+
+  const labels = periodos.map(p => {
+    const [y, m] = p.split('-');
+    if (!y || !m) return p;
+    return new Date(+y, +m-1, 1).toLocaleDateString('es-AR', { month:'short', year:'2-digit' });
+  });
+
+  set(`${periodos.length} período${periodos.length!==1?'s':''} · ${periodos[0]} → ${periodos[periodos.length-1]}`);
+
+  // Renderizar gráfico
+  const ctx = document.getElementById('inf-hist-chart');
+  if (!ctx) return;
+  _infCharts.historico?.destroy();
+  _infCharts.historico = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Venta neta',
+          data: ventas,
+          borderColor: '#1a5fa8', backgroundColor: 'rgba(26,95,168,.07)',
+          tension: .3, pointRadius: 4, fill: false, yAxisID: 'y', borderWidth: 2
+        },
+        {
+          label: 'Costo',
+          data: costos,
+          borderColor: '#c0392b', backgroundColor: 'rgba(192,57,43,.07)',
+          tension: .3, pointRadius: 4, fill: false, yAxisID: 'y', borderWidth: 2
+        },
+        {
+          label: 'CMG ($)',
+          data: cmgs,
+          borderColor: '#1a7a52', backgroundColor: 'rgba(26,122,82,.07)',
+          tension: .3, pointRadius: 5, fill: false, yAxisID: 'y', borderWidth: 2.5
+        },
+        {
+          label: 'Margen %',
+          data: pcts,
+          borderColor: '#c47a00', backgroundColor: 'rgba(196,122,0,.07)',
+          tension: .3, pointRadius: 4, fill: false, yAxisID: 'y2',
+          borderWidth: 2, borderDash: [7, 4]
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', labels: { usePointStyle: true, pointStyleWidth: 14 } },
+        tooltip: {
+          callbacks: {
+            label: c => c.dataset.label === 'Margen %'
+              ? `  ${c.dataset.label}: ${c.raw.toFixed(1)}%`
+              : `  ${c.dataset.label}: ${fmt(c.raw)}`
+          }
+        }
+      },
+      scales: {
+        x: { grid: { color: 'rgba(0,0,0,.04)' } },
+        y: {
+          type: 'linear', position: 'left',
+          ticks: { callback: v => '$' + (v>=1e6 ? (v/1e6).toFixed(1)+'M' : Math.round(v/1000)+'k') },
+          grid: { color: 'rgba(0,0,0,.06)' }
+        },
+        y2: {
+          type: 'linear', position: 'right',
+          min: 0,
+          ticks: { callback: v => v.toFixed(0)+'%' },
+          grid: { drawOnChartArea: false }
+        }
+      }
+    }
+  });
+
+  // KPIs resumen del período filtrado
+  const totVenta = ventas.reduce((a,v)=>a+v,0);
+  const totCosto = costos.reduce((a,v)=>a+v,0);
+  const totCMG   = cmgs.reduce((a,v)=>a+v,0);
+  const avgPct   = totVenta > 0 ? totCMG/totVenta*100 : 0;
+  const kpisEl   = document.getElementById('inf-hist-kpis');
+  if (kpisEl) kpisEl.innerHTML = `
+    <div class="stat"><div class="n" style="font-size:16px">${fmt(totVenta)}</div><div class="l">Venta total</div></div>
+    <div class="stat"><div class="n" style="font-size:16px;color:var(--D)">${fmt(totCosto)}</div><div class="l">Costo total</div></div>
+    <div class="stat"><div class="n" style="font-size:16px;color:var(--P)">${fmt(totCMG)}</div><div class="l">CMG total</div></div>
+    <div class="stat"><div class="n" style="font-size:16px;color:${avgPct>=20?'var(--P)':avgPct>=10?'var(--W)':'var(--D)'}">${avgPct.toFixed(1)}%</div><div class="l">Margen promedio</div></div>`;
+
+  // Tabla detalle por período
+  const tablaEl = document.getElementById('inf-hist-tabla');
+  if (tablaEl) tablaEl.innerHTML = `
+    <details>
+      <summary style="cursor:pointer;font-size:12px;font-weight:600;color:var(--txt2);padding:6px 0">Ver tabla por período</summary>
+      <div class="tbl-wrap" style="margin-top:8px"><table class="tbl">
+        <thead><tr>
+          <th>Período</th>
+          <th style="text-align:right">Venta neta</th>
+          <th style="text-align:right">Costo</th>
+          <th style="text-align:right">CMG $</th>
+          <th style="text-align:right">Margen %</th>
+        </tr></thead>
+        <tbody>
+          ${periodos.map((p,i)=>{
+            const pct=pcts[i]; const color=pct>=20?'var(--P)':pct>=10?'var(--W)':'var(--D)';
+            return `<tr>
+              <td style="font-weight:600">${p}</td>
+              <td style="text-align:right">${fmt(ventas[i])}</td>
+              <td style="text-align:right;color:var(--txt2)">${fmt(costos[i])}</td>
+              <td style="text-align:right;font-weight:600;color:var(--P)">${fmt(cmgs[i])}</td>
+              <td style="text-align:right;font-weight:700;color:${color}">${pct.toFixed(1)}%</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table></div>
+    </details>`;
 }
 
 // ─── ZONAS DESDE LOCALIDADES ─────────────────────────────────
