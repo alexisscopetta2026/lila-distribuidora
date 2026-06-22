@@ -520,7 +520,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <!-- MODAL COMPROBANTE -->
 <div class="mbg" id="m-comprobante">
 <div class="mdl" style="width:580px">
-  <div class="mh"><h3 id="m-comp-title">Nuevo comprobante</h3><button class="btn sm" onclick="cerrar('m-comprobante')">✕</button></div>
+  <div class="mh"><h3 id="m-comp-title">Nuevo comprobante</h3>
+    <div style="display:flex;gap:6px;align-items:center">
+      <button class="btn sm A" onclick="cargarFacturaIA()" title="Sacar foto de la factura y que la IA extraiga los datos automáticamente">📷 Leer con IA</button>
+      <input type="file" id="comp-ia-file" accept="image/*" capture="environment" style="display:none" onchange="leerFacturaConIA(this)">
+      <button class="btn sm" onclick="cerrar('m-comprobante')">✕</button>
+    </div>
+  </div>
+  <div id="comp-ia-status" style="display:none;padding:8px 18px;background:var(--AL);border-radius:6px;font-size:12px;color:var(--A);margin:6px 18px 0;text-align:center">🤖 Leyendo factura con IA...</div>
   <div class="mb">
     <div class="fr">
       <div class="fg"><label>Fecha</label><input type="date" id="comp-fecha" style="width:100%"></div>
@@ -3637,6 +3644,7 @@ async function emitirRemitos(cargaId){
       direccion:c?.direccion||c?.domicilio||'',telefono:c?.telefono||''
     }).select().single();
     await sb.from('pedidos').update({estado:'remitado',remito_id:rem.id}).eq('id',p.id);
+    await descontarStock(p.items||[]);
     // Asiento contable
     const totDesc=(p.items||[]).reduce((a,it)=>{const bruto=it.precio*it.cant;return a+(bruto-bruto*(1-(it.dto||0)/100));},0);
     const {data:asiento}=await sb.from('asientos').insert({
@@ -5513,6 +5521,16 @@ function limpiarRR(){
   document.getElementById('rr-obs').value='';
   renderItemsRR();
 }
+async function descontarStock(items){
+  for(const it of items){
+    if(!(it.cant>0))continue;
+    const prod=_productos.find(p=>p.id===(it.id||it.producto_id));
+    if(!prod)continue;
+    const nuevoStock=Math.max(0,(prod.stock||0)-it.cant);
+    const {error}=await sb.from('productos').update({stock:nuevoStock}).eq('id',prod.id);
+    if(!error)prod.stock=nuevoStock;
+  }
+}
 async function emitirRemitoRapido(){
   const cid=document.getElementById('rr-cli-id').value;
   if(!cid){alert('Seleccioná un cliente');return;}
@@ -5559,7 +5577,8 @@ async function emitirRemitoRapido(){
     }
     await sb.from('asientos_detalle').insert(detalle);
   }
-  await Promise.all([cargarRemitos(),cargarClientes()]);
+  await descontarStock(_rrItems);
+  await Promise.all([cargarRemitos(),cargarClientes(),cargarProductos()]);
   limpiarRR();
   renderDash();renderCC();renderRemitos();
   // Guardar remito actual por si quiere imprimir después
@@ -7999,6 +8018,7 @@ function go(p){
       document.getElementById('cob-movil').style.display='none';
       document.getElementById('cob-form-inline').style.display='block';
       limpiarModalCobro();
+      setTimeout(()=>{const q=document.getElementById('cob-q');if(q)q.focus();},100);
     }
   }
   if(p==='vendedor-home'){
@@ -8019,12 +8039,13 @@ function go(p){
     const bd=document.getElementById('btn-nuevo-pedido-desk');
     if(bv) bv.style.display=(usuarioActual?.rol==='vendedor'&&!usuarioActual?.esAdmin)?'block':'none';
     if(bd) bd.style.display=(usuarioActual?.esAdmin||usuarioActual?.rol==='admin')?'inline-flex':'none';
+    setTimeout(()=>{const q=document.getElementById('ped-q');if(q)q.focus();},100);
   }
   if(p==='maestro-proveedores')renderProveedores();
   if(p==='comisiones')initComisiones();
   if(p==='contrib-zona')initContribZona();
   if(p==='gastos-fijos')initGastosFijos();
-  if(p==='zonas')renderZonas();
+  if(p==='zonas'){renderZonas();setTimeout(()=>{const q=document.getElementById('zona-q');if(q)q.focus();},100);}
   if(p==='importar-historico')initImportarHistorico();
   if(p==='tesoreria')initTesoreria();
   if(p==='compras'){renderComprobantes();setTimeout(()=>{const q=document.getElementById('comp-q');if(q)q.focus();},100);}
@@ -10159,6 +10180,88 @@ async function sincronizarZonasDesdeLocalidades() {
   renderZonas();
   if (errs) toast(`⚠️ ${ok2} creadas, ${errs} errores — revisá consola`, 'err');
   else toast(`✅ ${ok2} zona(s) creada(s): ${nuevas.slice(0,3).join(', ')}${nuevas.length>3?'…':''}`);
+}
+
+// ─── LECTURA DE FACTURA CON IA ────────────────────────────────
+function cargarFacturaIA(){
+  let key=localStorage.getItem('lila_anth_key');
+  if(!key){
+    key=prompt('Ingresá tu API key de Anthropic (se guarda solo en este dispositivo):');
+    if(!key)return;
+    localStorage.setItem('lila_anth_key',key.trim());
+  }
+  document.getElementById('comp-ia-file').click();
+}
+async function leerFacturaConIA(input){
+  const file=input.files[0];if(!file)return;
+  const key=localStorage.getItem('lila_anth_key');if(!key){toast('Falta API key','err');return;}
+  const status=document.getElementById('comp-ia-status');
+  status.style.display='block';status.textContent='🤖 Leyendo factura con IA...';
+  try{
+    const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=e=>res(e.target.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});
+    const mediaType=file.type||'image/jpeg';
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'x-api-key':key,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({
+        model:'claude-haiku-4-5-20251001',
+        max_tokens:1024,
+        messages:[{role:'user',content:[
+          {type:'image',source:{type:'base64',media_type:mediaType,data:b64}},
+          {type:'text',text:'Extraé los datos de esta factura/comprobante y respondé SOLO con JSON válido (sin markdown ni texto extra):\n{"proveedor":"...","nro_comprobante":"...","fecha":"YYYY-MM-DD","importe":0,"descripcion":"...","tipo":"factura|recibo|ticket|otro","productos":[{"nombre":"...","cantidad":1,"costo_unitario":0}]}'}
+        ]}]
+      })
+    });
+    if(!resp.ok){const e=await resp.json();throw new Error(e.error?.message||'Error API');}
+    const data=await resp.json();
+    const txt=data.content[0]?.text||'{}';
+    let parsed;
+    try{parsed=JSON.parse(txt);}catch{const m=txt.match(/\{[\s\S]*\}/);parsed=m?JSON.parse(m[0]):{};}
+    // Rellenar formulario
+    if(parsed.fecha)document.getElementById('comp-fecha').value=parsed.fecha;
+    if(parsed.nro_comprobante)document.getElementById('comp-nro').value=parsed.nro_comprobante;
+    if(parsed.importe)document.getElementById('comp-importe').value=parsed.importe;
+    if(parsed.descripcion)document.getElementById('comp-desc').value=parsed.descripcion;
+    if(parsed.tipo){const sel=document.getElementById('comp-tipo');for(const o of sel.options)if(o.value===parsed.tipo){sel.value=parsed.tipo;break;}}
+    // Proveedor: buscar por nombre similar
+    if(parsed.proveedor){
+      const q=parsed.proveedor.toLowerCase();
+      const match=_proveedores.find(p=>(p.nombre||'').toLowerCase().includes(q)||q.includes((p.nombre||'').toLowerCase().substring(0,5)));
+      if(match)document.getElementById('comp-prov-id').value=match.id;
+    }
+    // Productos: agregar a la lista de costos
+    if(parsed.productos?.length){
+      document.getElementById('comp-costos-lista').innerHTML='';
+      for(const prod of parsed.productos){
+        agregarItemCostoComp();
+        const rows=document.querySelectorAll('.comp-costo-row');
+        const last=rows[rows.length-1];
+        if(!last)continue;
+        const sel=last.querySelector('.comp-costo-sel');
+        const cant=last.querySelector('.comp-costo-cant');
+        const val=last.querySelector('.comp-costo-val');
+        // Buscar producto por nombre
+        const q2=(prod.nombre||'').toLowerCase();
+        const match2=_productos.find(p=>(p.nombre||'').toLowerCase().includes(q2.substring(0,6)));
+        if(match2&&sel){
+          sel.value=match2.id;
+          last.dataset.prodId=match2.id;
+          sel.dispatchEvent(new Event('change'));
+        } else if(sel){
+          const opt=document.createElement('option');opt.value='__ia__';opt.textContent=prod.nombre||'?';sel.appendChild(opt);sel.value='__ia__';
+        }
+        if(cant&&prod.cantidad)cant.value=prod.cantidad;
+        if(val&&prod.costo_unitario)val.value=prod.costo_unitario;
+      }
+    }
+    status.textContent=`✅ Datos extraídos${parsed.productos?.length?` · ${parsed.productos.length} producto(s) detectado(s)`:''}. Verificá y completá lo que falte.`;
+    setTimeout(()=>{status.style.display='none';},4000);
+  }catch(e){
+    console.error(e);
+    status.textContent='❌ Error: '+e.message;
+    setTimeout(()=>{status.style.display='none';},4000);
+  }
+  input.value='';
 }
 
 </script>
