@@ -310,6 +310,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div id="d-venc-list"><div class="loading">Cargando...</div></div>
     </div>
   </div>
+  <!-- Gráficos -->
+  <div class="g2" style="margin-top:12px">
+    <div class="card">
+      <div style="font-size:12px;font-weight:700;color:var(--PD);margin-bottom:8px">📈 Ventas últimos 6 meses</div>
+      <div style="position:relative;height:200px"><canvas id="dash-chart-ventas"></canvas></div>
+    </div>
+    <div class="card">
+      <div style="font-size:12px;font-weight:700;color:var(--PD);margin-bottom:8px">🗺 Participación por zona</div>
+      <div style="position:relative;height:200px"><canvas id="dash-chart-zonas"></canvas></div>
+    </div>
+  </div>
 </div>
 
 <!-- PEDIDOS -->
@@ -1502,6 +1513,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         </div>
         <button class="btn P" onclick="informeVentas()" style="width:100%">Ver informe</button>
         <div id="inf-ventas-res" style="margin-top:10px"></div>
+        <div id="inf-chart-ventas-wrap" style="display:none;margin-top:14px">
+          <div style="font-size:12px;font-weight:700;color:var(--PD);margin-bottom:6px">Top 10 clientes del período</div>
+          <div style="position:relative;height:260px"><canvas id="inf-chart-ventas-cli"></canvas></div>
+        </div>
       </div>
       <div class="card">
         <div style="font-weight:600;margin-bottom:10px">👤 Ventas por vendedor</div>
@@ -1710,6 +1725,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         </div>
       </div>
       <div id="cmgp-res" style="margin-top:12px"></div>
+      <div id="cmgp-chart-wrap" style="display:none;margin-top:14px">
+        <div style="font-size:12px;font-weight:700;color:var(--PD);margin-bottom:6px">Participación en CMG total — top 10 productos</div>
+        <div style="position:relative;height:280px"><canvas id="cmgp-chart"></canvas></div>
+      </div>
     </div>
   </div>
 
@@ -2309,7 +2328,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="panel" id="p-zonas">
   <div class="sech">
     <h2>🗺 Zonas</h2>
-    <button class="btn P" onclick="abrirZona()">+ Nueva</button>
+    <div style="display:flex;gap:6px">
+      <button class="btn P" onclick="abrirZona()">+ Nueva</button>
+      <button class="btn A" onclick="sincronizarZonasDesdeLocalidades()" title="Crear zonas para localidades de clientes que aún no tienen zona">🔄 Sincronizar desde clientes</button>
+    </div>
   </div>
   <div class="tb">
     <input id="zona-q" placeholder="Buscar..." oninput="renderZonas()">
@@ -2379,12 +2401,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <label>Período B (comparar)</label>
         <select id="imp-per-b" style="width:100%"><option value="">— Seleccionar —</option></select>
       </div>
-      <div>
-        <button class="btn" onclick="compararPeriodos()" style="padding:9px 20px">📊 Comparar</button>
+      <div style="align-self:flex-end">
+        <button class="btn P" onclick="compararPeriodos()" style="padding:12px 28px;font-size:15px;font-weight:700">📊 Comparar períodos</button>
       </div>
     </div>
     <div id="imp-comp-result" style="margin-top:14px">
       <div class="empty">Seleccioná tipo y dos períodos para comparar</div>
+    </div>
+    <div id="imp-chart-wrap" style="display:none;margin-top:14px">
+      <div style="font-size:12px;font-weight:700;color:var(--PD);margin-bottom:6px">Comparación visual — top 10 clientes</div>
+      <div style="position:relative;height:300px"><canvas id="imp-chart-comparacion"></canvas></div>
     </div>
   </div>
 
@@ -2407,7 +2433,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           </select>
         </div>
         <div style="padding-top:18px">
-          <button class="btn" onclick="verVistaCruzada()" style="padding:9px 20px">🔍 Analizar</button>
+          <button class="btn A" onclick="verVistaCruzada()" style="padding:12px 24px;font-size:14px;font-weight:700">🔍 Analizar</button>
         </div>
       </div>
     </div>
@@ -3118,6 +3144,7 @@ function renderDash(){
   const lr=_remitos.slice(0,6);
   document.getElementById('d-rem-list').innerHTML=lr.length?lr.map(r=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--brd);font-size:12px"><span style="font-weight:500">${r.cliente}</span><span style="color:var(--txt2)">${r.fecha}</span><span style="color:var(--P);font-weight:600">${fmt(r.total)}</span></div>`).join(''):'<div class="empty">Sin remitos aún</div>';
   document.getElementById('d-venc-list').innerHTML=vencidos.length?vencidos.slice(0,5).map(c=>{const d=diasDesde(c.ultimo_remito);return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--brd);font-size:12px"><span style="font-weight:500">${c.nombre}</span><span class="b bD">${d}d</span><span style="color:var(--D);font-weight:600">${fmt(c.saldo)}</span></div>`;}).join(''):'<div class="empty">✅ Ninguna cuenta vencida</div>';
+  renderDashCharts();
 }
 
 // ─── PEDIDOS ───
@@ -5448,6 +5475,7 @@ async function informeVentas(){
   </div>
   <div style="font-size:12px;color:var(--txt2);margin-bottom:6px">Por día:</div>
   ${Object.entries(porDia).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,10).map(([d,t])=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--brd);font-size:12px"><span>${d}</span><span style="font-weight:600">${fmt(t)}</span></div>`).join('')}`;
+  renderInfVentasChart(data);
 }
 async function informeVendedor(){
   const desde=document.getElementById('inf-vd-desde').value;
@@ -8341,6 +8369,7 @@ async function informeCMGProductos(){
         </tr>
       </tfoot>
     </table></div>`;
+  renderCMGChart(arr, totalCMG);
 }
 
 // ─── CMG POR CLIENTE ───
@@ -8882,13 +8911,22 @@ async function importarHistorico() {
 function renderSelectoresPeriodo() {
   const tipo = document.getElementById('imp-comp-tipo')?.value || 'ventas';
   const periodos = _impPeriodos[tipo] || [];
-  ['imp-per-a', 'imp-per-b'].forEach(id => {
-    const sel = document.getElementById(id);
-    if (!sel) return;
-    const prev = sel.value;
-    sel.innerHTML = '<option value="">— Seleccionar —</option>' +
-      periodos.map(p => `<option value="${p}"${p===prev?' selected':''}>${p}</option>`).join('');
-  });
+  const selA = document.getElementById('imp-per-a');
+  const selB = document.getElementById('imp-per-b');
+  if (!selA || !selB) return;
+
+  const prevA = selA.value, prevB = selB.value;
+  const opts = '<option value="">— Seleccionar —</option>' +
+    periodos.map(p => `<option value="${p}">${p}</option>`).join('');
+  selA.innerHTML = opts;
+  selB.innerHTML = opts;
+
+  if (periodos.length >= 2) {
+    selA.value = (prevA && periodos.includes(prevA)) ? prevA : periodos[0];
+    selB.value = (prevB && periodos.includes(prevB) && prevB !== selA.value) ? prevB : periodos[periodos.length - 1];
+  } else if (periodos.length === 1) {
+    selA.value = periodos[0];
+  }
 }
 
 function renderImpPreview(tipo, rows) {
@@ -8986,6 +9024,7 @@ function _impRenderCompVentas(el, dA, perA, dB, perB) {
     </tbody>
   </table></div>
   <div style="font-size:11px;color:var(--txt2);margin-top:8px">${claves.filter(c=>(mapA[c]?.monto_vendido||0)+(mapB[c]?.monto_vendido||0)>0).length} clientes · Verde = subió · Rojo = bajó</div>`;
+  renderImpHistChart(dA, perA, dB, perB);
 }
 
 function _impRenderCompSaldos(el, dA, perA, dB, perB) {
@@ -9511,6 +9550,181 @@ async function desconciliar(id){
   toast('Movimiento desconciliado');
 }
 // ─── FIN TESORERÍA ──────────────────────────────────────────
+
+// ─── GRÁFICOS DASHBOARD ─────────────────────────────────────
+const _dashCharts = {};
+function renderDashCharts() {
+  if (typeof Chart === 'undefined') return;
+  const COLORS = ['#1a7a52','#1a5fa8','#c47a00','#c0392b','#8e44ad','#16a085','#e67e22','#2980b9'];
+
+  // Ventas últimos 6 meses
+  const meses = [];
+  const hoy = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    meses.push({ key, label: d.toLocaleDateString('es-AR',{month:'short',year:'2-digit'}), total: 0 });
+  }
+  (_remitos||[]).forEach(r => {
+    const key = (r.fecha||'').substring(0, 7);
+    const m = meses.find(x => x.key === key);
+    if (m) m.total += (r.total || 0);
+  });
+  const ctxV = document.getElementById('dash-chart-ventas');
+  if (ctxV) {
+    _dashCharts.ventas?.destroy();
+    _dashCharts.ventas = new Chart(ctxV, {
+      type: 'line',
+      data: {
+        labels: meses.map(m => m.label),
+        datasets: [{ label: 'Ventas', data: meses.map(m => m.total),
+          borderColor: '#1a7a52', backgroundColor: 'rgba(26,122,82,.1)',
+          tension: .3, fill: true, pointRadius: 4, pointBackgroundColor: '#1a7a52' }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { y: { ticks: { callback: v => '$' + Math.round(v/1000) + 'k' } } }
+      }
+    });
+  }
+
+  // Participación por zona
+  const zonas = {};
+  (_remitos||[]).forEach(r => {
+    const cli = (_clientes||[]).find(c => c.id === r.cliente_id);
+    const z = cli?.zona || 'Sin zona';
+    zonas[z] = (zonas[z] || 0) + (r.total || 0);
+  });
+  const zonLabels = Object.keys(zonas).sort((a,b) => zonas[b]-zonas[a]).slice(0,8);
+  const ctxZ = document.getElementById('dash-chart-zonas');
+  if (ctxZ) {
+    _dashCharts.zonas?.destroy();
+    _dashCharts.zonas = new Chart(ctxZ, {
+      type: 'doughnut',
+      data: {
+        labels: zonLabels,
+        datasets: [{ data: zonLabels.map(z => zonas[z]),
+          backgroundColor: COLORS.slice(0, zonLabels.length), borderWidth: 1 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'right', labels: { font: { size: 11 }, boxWidth: 12 } } }
+      }
+    });
+  }
+}
+
+// ─── GRÁFICOS INFORMES ──────────────────────────────────────
+const _infCharts = {};
+function renderInfVentasChart(data) {
+  if (typeof Chart === 'undefined' || !data?.length) return;
+  const clientes = {};
+  data.forEach(r => { clientes[r.cliente] = (clientes[r.cliente]||0) + (r.total||0); });
+  const top10 = Object.entries(clientes).sort((a,b) => b[1]-a[1]).slice(0,10);
+  const wrap = document.getElementById('inf-chart-ventas-wrap');
+  if (wrap) wrap.style.display = 'block';
+  const ctx = document.getElementById('inf-chart-ventas-cli');
+  if (!ctx) return;
+  _infCharts.ventas?.destroy();
+  _infCharts.ventas = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: top10.map(([n]) => n.length > 22 ? n.substring(0,22)+'…' : n),
+      datasets: [{ label: 'Venta', data: top10.map(([,v]) => v),
+        backgroundColor: 'rgba(26,122,82,.75)', borderColor: '#1a7a52', borderWidth: 1 }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { callback: v => '$' + Math.round(v/1000) + 'k' } } }
+    }
+  });
+}
+
+function renderCMGChart(arr, totalCMG) {
+  if (typeof Chart === 'undefined' || !arr?.length) return;
+  const COLORS = ['#1a7a52','#1a5fa8','#c47a00','#c0392b','#8e44ad','#16a085','#e67e22','#2980b9','#27ae60','#f39c12'];
+  const top10 = arr.filter(x => x.cmg > 0).slice(0, 10);
+  if (!top10.length) return;
+  const wrap = document.getElementById('cmgp-chart-wrap');
+  if (wrap) wrap.style.display = 'block';
+  const ctx = document.getElementById('cmgp-chart');
+  if (!ctx) return;
+  _infCharts.cmgp?.destroy();
+  _infCharts.cmgp = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: top10.map(x => x.nom.length > 25 ? x.nom.substring(0,25)+'…' : x.nom),
+      datasets: [{ data: top10.map(x => Math.round(x.cmg)),
+        backgroundColor: COLORS.slice(0, top10.length), borderWidth: 1 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { font: { size: 11 }, boxWidth: 12 } },
+        tooltip: { callbacks: { label: c => `${c.label}: ${fmt(c.raw)} (${totalCMG>0?(c.raw/totalCMG*100).toFixed(1):'—'}%)` } }
+      }
+    }
+  });
+}
+
+function renderImpHistChart(dA, perA, dB, perB) {
+  if (typeof Chart === 'undefined') return;
+  const mapA = {}, mapB = {};
+  dA.forEach(r => { mapA[r.codigo_cliente] = r.monto_vendido; });
+  dB.forEach(r => { mapB[r.codigo_cliente] = r.monto_vendido; });
+  const allCodes = [...new Set([...Object.keys(mapA), ...Object.keys(mapB)])];
+  const top10 = allCodes.sort((a,b) => ((mapA[b]||0)+(mapB[b]||0))-((mapA[a]||0)+(mapB[a]||0))).slice(0,10);
+  const labels = top10.map(c => {
+    const r = dA.find(x=>x.codigo_cliente===c) || dB.find(x=>x.codigo_cliente===c);
+    const nom = (r?.nombre_cliente||c);
+    return nom.length > 22 ? nom.substring(0,22)+'…' : nom;
+  });
+  const wrap = document.getElementById('imp-chart-wrap');
+  if (wrap) wrap.style.display = 'block';
+  const ctx = document.getElementById('imp-chart-comparacion');
+  if (!ctx) return;
+  _infCharts.hist?.destroy();
+  _infCharts.hist = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: perA, data: top10.map(c => mapA[c]||0),
+          backgroundColor: 'rgba(26,122,82,.7)', borderColor: '#1a7a52', borderWidth: 1 },
+        { label: perB, data: top10.map(c => mapB[c]||0),
+          backgroundColor: 'rgba(26,95,168,.7)', borderColor: '#1a5fa8', borderWidth: 1 }
+      ]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'top' } },
+      scales: { x: { ticks: { callback: v => '$' + Math.round(v/1000) + 'k' } } }
+    }
+  });
+}
+
+// ─── ZONAS DESDE LOCALIDADES ─────────────────────────────────
+async function sincronizarZonasDesdeLocalidades() {
+  if (!_clientes?.length) { toast('Cargá los clientes primero', 'err'); return; }
+  const localidades = [...new Set((_clientes).map(c=>(c.localidad||'').trim()).filter(Boolean))].sort();
+  const codigosExistentes = new Set((_zonas||[]).map(z => z.codigo));
+  const nuevas = localidades.filter(loc => !codigosExistentes.has(loc));
+  if (!nuevas.length) { toast('✅ Todas las localidades ya tienen zona asociada'); return; }
+
+  const ok = confirm(`Se crearán ${nuevas.length} zona(s) nueva(s):\n${nuevas.join(', ')}\n\n¿Continuar?`);
+  if (!ok) return;
+
+  let ok2 = 0;
+  for (const loc of nuevas) {
+    const { error } = await sb.from('zonas').insert({ codigo: loc, descripcion: loc });
+    if (!error) ok2++;
+  }
+  await cargarZonas();
+  renderZonas();
+  toast(`✅ ${ok2} zona(s) creada(s): ${nuevas.slice(0,3).join(', ')}${nuevas.length>3?'…':''}`);
+}
 
 </script>
 </body>
