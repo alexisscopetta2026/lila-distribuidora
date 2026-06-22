@@ -1013,7 +1013,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="btn sm" onclick="toggleListaCobros()">✕ Cerrar</button>
     </div>
     <div class="tbl-wrap"><table class="tbl">
-      <thead><tr><th>Fecha</th><th>Cliente</th><th>Formas de pago</th><th>Reparto</th><th>Total</th><th>Vendedor</th><th></th></tr></thead>
+      <thead><tr><th>Fecha</th><th>Cliente</th><th>Formas de pago</th><th>Reparto</th><th>Total</th><th>Vendedor</th><th>Estado Transf.</th><th></th></tr></thead>
       <tbody id="cob-tbody"></tbody>
     </table></div>
     <div class="pg" id="cob-pg"></div>
@@ -1163,9 +1163,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <input id="cc-q" placeholder="Buscar por nombre o código..." oninput="renderCC();resetNav('cc-tbody')" onkeydown="navCC(event)" title="↑↓ navegar · Enter abrir · Esc volver">
     <select id="cc-f" onchange="renderCC()">
       <option value="">Todos</option>
-      <option value="deuda">Con deuda</option>
+      <option value="deuda">Con saldo</option>
+      <option value="ok">En cero</option>
       <option value="vencido">Vencidos</option>
-      <option value="ok">Al día</option>
     </select>
   </div>
   <div class="tbl-wrap"><table class="tbl">
@@ -3237,7 +3237,8 @@ function renderPedidos(){
       <div style="text-align:right"><div class="ccard-tot">${fmt(p.total)}</div><span class="b ${stBadge(p.estado)}">${p.estado.replace('_',' ')}</span></div>
     </div>
     <div class="ccard-acts">
-      ${p.estado==='pendiente'?`<button class="btn P sm" onclick="verPedido(${p.id})">👁 Ver</button><button class="btn D sm" onclick="elimPedido(${p.id})">🗑</button>`:''}
+      <button class="btn sm" onclick="verPedido(${p.id})">👁 Ver</button>
+      ${p.estado==='pendiente'?`<button class="btn D sm" onclick="elimPedido(${p.id})">🗑</button>`:''}
       ${p.estado==='remitado'?`<button class="btn sm" onclick="verRemito(${p.remito_id})">📄 Remito</button>`:''}
     </div>
   </div>`).join('');
@@ -4632,17 +4633,36 @@ function renderCobros(){
     if(r.transferencia>0)formas.push(`Transf:${fmt(r.transferencia)}`);
     if((r.cheque_propio||0)+(r.cheque_terceros||0)>0)formas.push(`Cheq:${fmt((r.cheque_propio||0)+(r.cheque_terceros||0))}`);
     if((r.ret_ganancias||0)+(r.ret_ing_brutos||0)+(r.ret_otras||0)>0)formas.push(`Ret:${fmt((r.ret_ganancias||0)+(r.ret_ing_brutos||0)+(r.ret_otras||0))}`);
+    const tieneTransf=(r.transferencia||0)>0;
+    const est=r.estado_transferencia||'pendiente';
+    const estBadge=!tieneTransf?'—':est==='validado'?'<span class="b bP">✅ Validado</span>':est==='rechazado'?'<span class="b bD">❌ Rechazado</span>':'<span class="b bW">⏳ Pendiente</span>';
+    const estAcciones=tieneTransf&&est==='pendiente'?`<button class="btn sm" style="background:var(--G);color:#fff;font-size:10px" onclick="validarTransf(${r.id})">✅</button><button class="btn sm D" style="font-size:10px" onclick="rechazarTransf(${r.id})">❌</button>`:'';
+    const compLink=r.comprobante_url?`<a href="${r.comprobante_url}" target="_blank" title="Ver comprobante" style="font-size:16px">📎</a>`:'';
     return `<tr>
       <td>${r.fecha}</td>
       <td style="font-weight:500">${r.cliente}</td>
-      <td style="font-size:11px;color:var(--txt2)">${formas.join(' · ')||r.forma||'—'}</td>
+      <td style="font-size:11px;color:var(--txt2)">${formas.join(' · ')||r.forma||'—'}${compLink}</td>
       <td style="font-size:11px;color:var(--txt2)">${r.reparto||'—'}</td>
       <td style="font-weight:600;color:var(--P)">${fmt(r.importe)}</td>
       <td>${r.vendedor||'—'}</td>
+      <td>${estBadge} ${estAcciones}</td>
       <td><button class="btn sm" onclick="imprimirRecibo(${r.id})">🖨️</button></td>
     </tr>`;
-  }).join(''):'<tr><td colspan="7"><div class="empty">Sin cobros</div></td></tr>';
+  }).join(''):'<tr><td colspan="8"><div class="empty">Sin cobros</div></td></tr>';
   pag('cob-pg',tot,_cobPg,p=>{_cobPg=p;renderCobros();});
+}
+async function validarTransf(id){
+  const {error}=await sb.from('cobros').update({estado_transferencia:'validado'}).eq('id',id);
+  if(error){toast('Error al validar','err');return;}
+  const c=_cobros.find(x=>x.id===id);if(c)c.estado_transferencia='validado';
+  renderCobros();toast('✅ Transferencia validada');
+}
+async function rechazarTransf(id){
+  if(!confirm('¿Rechazar esta transferencia? El cobro quedará marcado como rechazado.'))return;
+  const {error}=await sb.from('cobros').update({estado_transferencia:'rechazado'}).eq('id',id);
+  if(error){toast('Error al rechazar','err');return;}
+  const c=_cobros.find(x=>x.id===id);if(c)c.estado_transferencia='rechazado';
+  renderCobros();toast('❌ Transferencia rechazada');
 }
 function imprimirRecibo(id){
   const r=_cobros.find(x=>x.id===id);if(!r)return;
@@ -10120,22 +10140,25 @@ async function informeHistoricoChart(anioFiltro) {
 // ─── ZONAS DESDE LOCALIDADES ─────────────────────────────────
 async function sincronizarZonasDesdeLocalidades() {
   if (!_clientes?.length) { toast('Cargá los clientes primero', 'err'); return; }
+  await cargarZonas();
   const localidades = [...new Set((_clientes).map(c=>(c.localidad||'').trim()).filter(Boolean))].sort();
-  const codigosExistentes = new Set((_zonas||[]).map(z => z.codigo));
+  const codigosExistentes = new Set((_zonas||[]).map(z => String(z.codigo)));
   const nuevas = localidades.filter(loc => !codigosExistentes.has(loc));
-  if (!nuevas.length) { toast('✅ Todas las localidades ya tienen zona asociada'); return; }
+  if (!nuevas.length) { toast('✅ Todas las localidades ya tienen zona asociada'); renderZonas(); return; }
 
   const ok = confirm(`Se crearán ${nuevas.length} zona(s) nueva(s):\n${nuevas.join(', ')}\n\n¿Continuar?`);
   if (!ok) return;
 
-  let ok2 = 0;
+  let ok2 = 0, errs = 0;
   for (const loc of nuevas) {
     const { error } = await sb.from('zonas').insert({ codigo: loc, descripcion: loc });
-    if (!error) ok2++;
+    if (!error) ok2++; else { errs++; console.error('Error zona', loc, error); }
   }
   await cargarZonas();
+  go('p-zonas');
   renderZonas();
-  toast(`✅ ${ok2} zona(s) creada(s): ${nuevas.slice(0,3).join(', ')}${nuevas.length>3?'…':''}`);
+  if (errs) toast(`⚠️ ${ok2} creadas, ${errs} errores — revisá consola`, 'err');
+  else toast(`✅ ${ok2} zona(s) creada(s): ${nuevas.slice(0,3).join(', ')}${nuevas.length>3?'…':''}`);
 }
 
 </script>
