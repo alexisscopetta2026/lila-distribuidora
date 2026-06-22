@@ -754,13 +754,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <!-- Forma de cobro -->
       <div style="margin-bottom:14px">
         <div style="font-size:11px;font-weight:600;color:var(--txt2);text-transform:uppercase;margin-bottom:8px">Forma de cobro</div>
-        <div style="display:flex;gap:10px">
+        <div style="display:flex;gap:8px">
           <button id="cobm-btn-ef" onclick="selFormaCobMovil('efectivo')"
-            style="flex:1;padding:16px;border-radius:12px;border:2px solid var(--brd);background:#fff;font-size:16px;font-weight:600;cursor:pointer">
+            style="flex:1;padding:14px 6px;border-radius:12px;border:2px solid var(--brd);background:#fff;font-size:14px;font-weight:600;cursor:pointer">
             💵 Efectivo
           </button>
+          <button id="cobm-btn-tr" onclick="selFormaCobMovil('transferencia')"
+            style="flex:1;padding:14px 6px;border-radius:12px;border:2px solid var(--brd);background:#fff;font-size:14px;font-weight:600;cursor:pointer">
+            🏦 Transf.
+          </button>
           <button id="cobm-btn-ch" onclick="selFormaCobMovil('cheque')"
-            style="flex:1;padding:16px;border-radius:12px;border:2px solid var(--brd);background:#fff;font-size:16px;font-weight:600;cursor:pointer">
+            style="flex:1;padding:14px 6px;border-radius:12px;border:2px solid var(--brd);background:#fff;font-size:14px;font-weight:600;cursor:pointer">
             📋 Cheque
           </button>
         </div>
@@ -772,6 +776,29 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <input id="cobm-importe" type="number" placeholder="0" min="0"
           style="width:100%;padding:14px;border:2px solid var(--P);border-radius:12px;font-size:28px;font-weight:700;text-align:right;box-sizing:border-box"
           oninput="calcCobMovil()">
+      </div>
+
+      <!-- Comprobante transferencia (solo visible cuando se elige Transferencia) -->
+      <div id="cobm-comp-wrap" style="display:none;margin-bottom:14px;background:var(--bg2);border:2px solid var(--A);border-radius:12px;padding:12px">
+        <div style="font-size:11px;font-weight:600;color:var(--A);margin-bottom:8px">📎 COMPROBANTE DE TRANSFERENCIA</div>
+        <input type="file" id="cobm-comprobante" accept="image/*" capture="environment" style="display:none" onchange="prevComprobanteMov(this)">
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <button type="button" onclick="document.getElementById('cobm-comprobante').click()"
+            style="flex:1;padding:12px;background:var(--A);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer">
+            📷 Sacar foto
+          </button>
+          <button type="button" onclick="const i=document.getElementById('cobm-comprobante');i.removeAttribute('capture');i.click();setTimeout(()=>i.setAttribute('capture','environment'),500)"
+            style="flex:1;padding:12px;background:var(--bg);color:var(--A);border:2px solid var(--A);border-radius:8px;font-size:14px;font-weight:600;cursor:pointer">
+            🖼 Galería
+          </button>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span id="cobm-comp-nombre" style="font-size:12px;color:var(--txt2);flex:1">Sin comprobante</span>
+          <button type="button" id="cobm-comp-clear" onclick="clearComprobanteMov()" style="display:none;padding:4px 10px;background:var(--D);color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">✕</button>
+        </div>
+        <div id="cobm-comp-preview" style="display:none;margin-top:8px;text-align:center">
+          <img id="cobm-comp-img" style="max-width:100%;max-height:160px;border-radius:8px;border:2px solid var(--A);object-fit:contain">
+        </div>
       </div>
 
       <!-- Facturas pendientes -->
@@ -6918,6 +6945,24 @@ function verCCDesdeCobro(){
   histCliente(parseInt(cid));
 }
 
+function prevComprobanteMov(input){
+  const file=input.files[0];if(!file)return;
+  document.getElementById('cobm-comp-nombre').textContent=file.name;
+  document.getElementById('cobm-comp-clear').style.display='';
+  const reader=new FileReader();
+  reader.onload=e=>{
+    document.getElementById('cobm-comp-img').src=e.target.result;
+    document.getElementById('cobm-comp-preview').style.display='block';
+  };
+  reader.readAsDataURL(file);
+}
+function clearComprobanteMov(){
+  const inp=document.getElementById('cobm-comprobante');if(inp)inp.value='';
+  document.getElementById('cobm-comp-nombre').textContent='Sin comprobante';
+  document.getElementById('cobm-comp-clear').style.display='none';
+  document.getElementById('cobm-comp-preview').style.display='none';
+  const img=document.getElementById('cobm-comp-img');if(img)img.src='';
+}
 function limpiarCobMovil(){
   _cobMovilCliId=null;_cobMovilForma=null;
   const qEl=document.getElementById('cobm-cli-q');if(qEl)qEl.value='';
@@ -6930,7 +6975,9 @@ function limpiarCobMovil(){
   const obs=document.getElementById('cobm-obs');if(obs)obs.value='';
   const fw=document.getElementById('cobm-facturas-wrap');if(fw)fw.style.display='none';
   const rw=document.getElementById('cobm-resto-wrap');if(rw)rw.style.display='none';
-  ['cobm-btn-ef','cobm-btn-ch'].forEach(id=>{const b=document.getElementById(id);if(b){b.style.background='#fff';b.style.borderColor='var(--brd)';b.style.color='';}});
+  const cw=document.getElementById('cobm-comp-wrap');if(cw)cw.style.display='none';
+  clearComprobanteMov();
+  ['cobm-btn-ef','cobm-btn-tr','cobm-btn-ch'].forEach(id=>{const b=document.getElementById(id);if(b){b.style.background='#fff';b.style.borderColor='var(--brd)';b.style.color='';}});
   setTimeout(()=>document.getElementById('cobm-cli-q')?.focus(),100);
 }
 
@@ -6973,10 +7020,15 @@ function cobmImputarTodo(remId,monto){const inp=document.getElementById('cobm-im
 
 function selFormaCobMovil(forma){
   _cobMovilForma=forma;
-  ['cobm-btn-ef','cobm-btn-ch'].forEach(id=>{const b=document.getElementById(id);if(b){b.style.background='#fff';b.style.borderColor='var(--brd)';b.style.color='';}});
-  const key=forma==='efectivo'?'cobm-btn-ef':'cobm-btn-ch';
-  const btn=document.getElementById(key);
-  if(btn){btn.style.background='var(--P)';btn.style.borderColor='var(--P)';btn.style.color='#fff';}
+  ['cobm-btn-ef','cobm-btn-tr','cobm-btn-ch'].forEach(id=>{const b=document.getElementById(id);if(b){b.style.background='#fff';b.style.borderColor='var(--brd)';b.style.color='';}});
+  const keys={efectivo:'cobm-btn-ef',transferencia:'cobm-btn-tr',cheque:'cobm-btn-ch'};
+  const cols={efectivo:'var(--P)',transferencia:'var(--A)',cheque:'var(--W)'};
+  const btn=document.getElementById(keys[forma]);
+  const col=cols[forma]||'var(--P)';
+  if(btn){btn.style.background=col;btn.style.borderColor=col;btn.style.color='#fff';}
+  const cw=document.getElementById('cobm-comp-wrap');
+  if(cw)cw.style.display=forma==='transferencia'?'block':'none';
+  if(forma!=='transferencia')clearComprobanteMov();
 }
 
 function calcCobMovil(){
@@ -6994,7 +7046,7 @@ function calcCobMovil(){
 
 async function guardarCobMovil(){
   if(!_cobMovilCliId){alert('Seleccioná un cliente');return;}
-  if(!_cobMovilForma){alert('Elegí efectivo o cheque');return;}
+  if(!_cobMovilForma){alert('Elegí la forma de cobro');return;}
   const importe=parseFloat(document.getElementById('cobm-importe')?.value)||0;
   if(importe<=0){alert('Ingresá el importe');return;}
   const c=_clientes.find(x=>x.id===_cobMovilCliId);
@@ -7002,15 +7054,35 @@ async function guardarCobMovil(){
   const imputaciones=[];let totalImp=0;
   for(const inp of inputs){const remId=parseInt(inp.id.replace('cobm-imp-',''));const monto=parseFloat(inp.value)||0;if(monto>0){imputaciones.push({remito_id:remId,monto});totalImp+=monto;}}
   const resto=Math.round((importe-totalImp)*100)/100;
+
+  // Subir comprobante si se adjuntó uno (solo para transferencias)
+  let comprobante_url='';
+  if(_cobMovilForma==='transferencia'){
+    const compFile=document.getElementById('cobm-comprobante')?.files?.[0];
+    if(compFile){
+      const ext=compFile.name.split('.').pop()||'jpg';
+      const path=`cobros/${Date.now()}_${_cobMovilCliId}.${ext}`;
+      const {error:upErr}=await sb.storage.from('comprobantes').upload(path,compFile,{upsert:true});
+      if(!upErr){
+        const {data:urlData}=sb.storage.from('comprobantes').getPublicUrl(path);
+        comprobante_url=urlData?.publicUrl||'';
+      }else{
+        toast('No se pudo subir el comprobante: '+upErr.message,'err',5000);
+      }
+    }
+  }
+
   await sb.from('cobros').insert({
     cliente_id:_cobMovilCliId,cliente:c?.nombre||'?',
     fecha:new Date().toISOString().split('T')[0],
     forma:_cobMovilForma,importe,
     efectivo:_cobMovilForma==='efectivo'?importe:0,
+    transferencia:_cobMovilForma==='transferencia'?importe:0,
     cheque_terceros:_cobMovilForma==='cheque'?importe:0,
     vendedor:usuarioActual?.nombre||'',
     observaciones:document.getElementById('cobm-obs')?.value||'',
-    imputaciones,saldo_favor:resto>0?resto:0
+    imputaciones,saldo_favor:resto>0?resto:0,
+    comprobante_url
   });
   for(const imp of imputaciones){
     const rem=_remitos.find(r=>r.id===imp.remito_id);
