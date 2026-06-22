@@ -60,7 +60,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .nav-dropdown button:hover{background:rgba(255,255,255,.15);color:#fff}
 .nav-dropdown button.on{background:rgba(255,255,255,.2);color:#fff;font-weight:600}
 .body{flex:1;padding:14px;overflow-y:auto;min-width:0;scroll-behavior:smooth}
-.panel{display:none!important;width:100%;box-sizing:border-box}.panel.on{display:block!important;width:100%}#p-informes.on{display:flex!important;flex-direction:column;height:100%;overflow:hidden}
+.panel{display:none!important;width:100%;box-sizing:border-box}.panel.on{display:block!important;width:100%}#p-informes.on,#p-cuentas.on{display:flex!important;flex-direction:column;height:100%;overflow:hidden}
 
 /* Cards */
 .card{background:var(--bg);border:1px solid var(--brd);border-radius:10px;padding:14px;margin-bottom:12px}
@@ -1175,11 +1175,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <option value="vencido">Vencidos</option>
     </select>
   </div>
-  <div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>Cliente</th><th>Localidad</th><th>Zona</th><th>Vendedor</th><th>Último remito</th><th>Días</th><th>Saldo</th><th>Total comprado</th><th></th></tr></thead>
-    <tbody id="cc-tbody"></tbody>
-  </table></div>
-  <div class="pg" id="cc-pg"></div>
+  <div style="flex:1;overflow-y:auto;min-height:0">
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Cliente</th><th>Localidad</th><th>Zona</th><th>Vendedor</th><th>Último remito</th><th>Días</th><th>Saldo</th><th>Total comprado</th><th></th></tr></thead>
+      <tbody id="cc-tbody"></tbody>
+    </table></div>
+    <div class="pg" id="cc-pg"></div>
+  </div>
 </div>
 
 <!-- CLIENTES -->
