@@ -7509,28 +7509,63 @@ function verMisPedidosHoy(){
   ).sort((a,b)=>b.id-a.id);
   const panel=document.getElementById('p-pedido-movil');
   if(!panel)return;
+  const stBadge=s=>s==='pendiente'?`<span style="background:var(--WL);color:var(--W);border-radius:20px;padding:2px 8px;font-size:11px;font-weight:600">Pendiente</span>`:s==='en_carga'?`<span style="background:var(--AL);color:var(--A);border-radius:20px;padding:2px 8px;font-size:11px;font-weight:600">En carga</span>`:s==='remitado'?`<span style="background:var(--PL);color:var(--PD);border-radius:20px;padding:2px 8px;font-size:11px;font-weight:600">Remitado</span>`:'';
   panel.innerHTML=`
-    <div style="max-width:480px;padding:16px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-        <button onclick="go('vendedor-home')" style="background:none;border:none;font-size:20px;cursor:pointer">←</button>
-        <h2 style="font-size:16px;font-weight:700;color:var(--PD)">Mis pedidos de hoy</h2>
+    <div style="max-width:520px;padding:14px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+        <button onclick="go('vendedor-home')" style="background:none;border:none;font-size:22px;cursor:pointer;padding:8px;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center">←</button>
+        <div>
+          <h2 style="font-size:17px;font-weight:700;color:var(--PD);margin:0">📋 Mis pedidos de hoy</h2>
+          <div style="font-size:12px;color:var(--txt2)">${misPedidos.length} pedido${misPedidos.length!==1?'s':''} · ${hoy}</div>
+        </div>
       </div>
-      ${misPedidos.length?misPedidos.map(p=>`
-        <div style="background:var(--bg2);border-radius:8px;padding:12px;margin-bottom:8px;border-left:4px solid var(--P)">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div>
-              <div style="font-size:14px;font-weight:700">${p.cliente}</div>
-              <div style="font-size:11px;color:var(--txt2)">${p.items?.length||0} productos · ${p.visita||'Sin visita'}</div>
+      ${misPedidos.length?misPedidos.map(p=>{
+        const detalle=detalleHTML(p,false);
+        return `<div style="background:var(--bg);border:1.5px solid var(--brd);border-radius:12px;margin-bottom:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06)">
+          <!-- Cabecera clickeable -->
+          <div onclick="toggleDetallePedMovil(${p.id})" style="display:flex;justify-content:space-between;align-items:center;padding:14px;cursor:pointer;border-left:4px solid var(--P)">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.cliente}</div>
+              <div style="font-size:12px;color:var(--txt2);margin-top:2px">${p.items?.length||0} productos · ${p.localidad||''}${p.visita?' · '+p.visita:''}</div>
+              <div style="margin-top:4px">${stBadge(p.estado)}</div>
             </div>
-            <div style="font-size:16px;font-weight:700;color:var(--P)">${fmt(p.total)}</div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;margin-left:12px;flex-shrink:0">
+              <div style="font-size:18px;font-weight:700;color:var(--P)">${fmt(p.total)}</div>
+              <span id="ped-mov-chevron-${p.id}" style="font-size:18px;color:var(--txt2);transition:transform 0.2s">▼</span>
+            </div>
           </div>
-        </div>`).join('')
-      :'<div style="text-align:center;color:var(--txt2);padding:30px">Sin pedidos hoy</div>'}
-      <button onclick="abrirPedidoMovil()" style="width:100%;margin-top:10px;padding:14px;background:var(--P);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer">
+          <!-- Detalle expandible -->
+          <div id="ped-mov-det-${p.id}" style="display:none;border-top:1px solid var(--brd)">
+            <div style="padding:14px;font-size:13px">${detalle}</div>
+            ${p.estado==='pendiente'?`<div style="display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--brd)">
+              <button onclick="event.stopPropagation();elimPedidoMovil(${p.id})" style="flex:1;min-height:48px;background:var(--DL);color:var(--D);border:1.5px solid var(--D);border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+                🗑 Eliminar
+              </button>
+            </div>`:''}
+          </div>
+        </div>`;
+      }).join('')
+      :'<div style="text-align:center;color:var(--txt2);padding:40px 20px;font-size:14px">Sin pedidos cargados hoy</div>'}
+      <button onclick="abrirPedidoMovil()" style="width:100%;margin-top:6px;padding:16px;background:var(--P);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
         + Nuevo pedido
       </button>
     </div>`;
   go('pedido-movil');
+}
+function toggleDetallePedMovil(id){
+  const det=document.getElementById('ped-mov-det-'+id);
+  const chev=document.getElementById('ped-mov-chevron-'+id);
+  if(!det)return;
+  const open=det.style.display==='none';
+  det.style.display=open?'block':'none';
+  if(chev)chev.style.transform=open?'rotate(180deg)':'rotate(0deg)';
+}
+async function elimPedidoMovil(id){
+  if(!confirm('¿Eliminar este pedido?'))return;
+  await sb.from('pedidos').delete().eq('id',id);
+  await cargarPedidos();
+  verMisPedidosHoy();
+  toast('Pedido eliminado');
 }
 // ─── FIN PEDIDO MÓVIL ───
 // ─── GASTOS FIJOS ───
