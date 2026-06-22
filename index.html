@@ -241,6 +241,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button class="sidebar-group-btn" onclick="toggleSidebar('tesoreria')">💰 Tesorería <span id="sc-tesoreria">▶</span></button>
     <div class="sidebar-items">
       <button class="sidebar-item" onclick="go('cobranza')" data-p="cobranza">💰 Cobranza</button>
+      <button class="sidebar-item" onclick="go('tesoreria')" data-p="tesoreria">🏦 Tesorería</button>
       <button class="sidebar-item" onclick="contTabDesde('cheques')" data-p="contabilidad">📋 Cheques en cartera</button>
     </div>
   </div>
@@ -965,6 +966,138 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div><!-- fin cob-form-inline admin -->
 </div><!-- fin p-cobranza -->
 
+<!-- TESORERÍA -->
+<div class="panel" id="p-tesoreria">
+  <div class="sech"><h2>🏦 Tesorería</h2></div>
+  <!-- Tabs -->
+  <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;border-bottom:2px solid var(--brd);padding-bottom:10px">
+    <button id="tt-cobros" class="btn sm" onclick="tesoTab('cobros')">📋 Cobros</button>
+    <button id="tt-pagos" class="btn sm" onclick="tesoTab('pagos')">💸 Pagos prov.</button>
+    <button id="tt-caja" class="btn sm" onclick="tesoTab('caja')">🏧 Saldo de caja</button>
+    <button id="tt-concil" class="btn sm" onclick="tesoTab('concil')">🔍 Conciliación</button>
+  </div>
+
+  <!-- ── TAB COBROS ── -->
+  <div id="tp-cobros" style="display:none">
+    <div class="tb">
+      <label style="font-size:11px;color:var(--txt2);align-self:center">Desde</label>
+      <input type="date" id="tco-fd" onchange="renderTesCobros()" style="min-width:0">
+      <label style="font-size:11px;color:var(--txt2);align-self:center">Hasta</label>
+      <input type="date" id="tco-fh" onchange="renderTesCobros()" style="min-width:0">
+      <select id="tco-forma" onchange="renderTesCobros()">
+        <option value="">Todas las formas</option>
+        <option value="efectivo">Efectivo</option>
+        <option value="transf">Transferencia</option>
+        <option value="cheque">Cheque</option>
+      </select>
+      <input id="tco-q" placeholder="Buscar cliente..." oninput="renderTesCobros()" style="flex:1;min-width:100px" title="↑↓ navegar · Esc volver">
+    </div>
+    <div class="g4" id="tco-kpis" style="margin-bottom:12px"></div>
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Fecha</th><th>Cliente</th><th>Forma</th><th>Efectivo</th><th>Transf.</th><th>Cheque</th><th>Total</th><th>Vendedor</th></tr></thead>
+      <tbody id="tco-tbody"></tbody>
+    </table></div>
+    <div class="pg" id="tco-pg"></div>
+  </div>
+
+  <!-- ── TAB PAGOS PROVEEDORES ── -->
+  <div id="tp-pagos" style="display:none">
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--PD);margin-bottom:10px;text-transform:uppercase">Registrar pago a proveedor</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <div class="fg" style="width:110px"><label style="font-size:10px">FECHA</label>
+          <input type="date" id="pag-fecha" style="width:100%"></div>
+        <div class="fg" style="flex:2;min-width:150px"><label style="font-size:10px">PROVEEDOR</label>
+          <select id="pag-prov" style="width:100%"><option value="">Seleccionar...</option></select></div>
+        <div class="fg" style="width:130px"><label style="font-size:10px">IMPORTE ($)</label>
+          <input type="number" id="pag-importe" min="0" placeholder="0" style="width:100%;font-size:16px;font-weight:700"></div>
+        <div class="fg" style="width:140px"><label style="font-size:10px">FORMA DE PAGO</label>
+          <select id="pag-forma" style="width:100%">
+            <option value="efectivo">💵 Efectivo</option>
+            <option value="transferencia">🏦 Transferencia</option>
+            <option value="cheque">📋 Cheque</option>
+          </select></div>
+        <div class="fg" style="flex:2;min-width:150px"><label style="font-size:10px">CONCEPTO / N° FACTURA</label>
+          <input id="pag-concepto" placeholder="Ej: Factura 001-00123" style="width:100%"
+            onkeydown="if(event.key==='Enter')guardarPago()"></div>
+        <button class="btn P" onclick="guardarPago()" style="padding:9px 18px;font-weight:700">✓ Registrar</button>
+      </div>
+    </div>
+    <div class="tb">
+      <input id="pag-q" placeholder="Buscar proveedor..." oninput="renderTesPagos()" style="flex:1;min-width:120px">
+      <select id="pag-f-forma" onchange="renderTesPagos()">
+        <option value="">Todas las formas</option>
+        <option value="efectivo">Efectivo</option>
+        <option value="transferencia">Transferencia</option>
+        <option value="cheque">Cheque</option>
+      </select>
+    </div>
+    <div class="g4" id="tpag-kpis" style="margin-bottom:12px"></div>
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Fecha</th><th>Proveedor</th><th>Concepto</th><th>Forma</th><th>Importe</th><th></th></tr></thead>
+      <tbody id="tpag-tbody"></tbody>
+    </table></div>
+    <div class="pg" id="tpag-pg"></div>
+  </div>
+
+  <!-- ── TAB SALDO DE CAJA ── -->
+  <div id="tp-caja" style="display:none">
+    <div class="tb" style="margin-bottom:10px">
+      <button class="btn sm" onclick="cajaPeriodo('hoy')">Hoy</button>
+      <button class="btn sm" onclick="cajaPeriodo('semana')">Esta semana</button>
+      <button class="btn sm" onclick="cajaPeriodo('mes')">Este mes</button>
+      <button class="btn sm" onclick="cajaPeriodo('custom')">Personalizado</button>
+      <span id="caja-custom-rng" style="display:none;gap:6px;align-items:center">
+        <input type="date" id="caja-fd" style="padding:5px 8px;border:1px solid var(--brd);border-radius:6px;font-size:12px">
+        <input type="date" id="caja-fh" style="padding:5px 8px;border:1px solid var(--brd);border-radius:6px;font-size:12px">
+        <button class="btn sm P" onclick="renderTesCaja()">Aplicar</button>
+      </span>
+    </div>
+    <div id="caja-periodo-label" style="font-size:12px;color:var(--txt2);margin-bottom:12px"></div>
+    <div id="tp-caja-body"></div>
+  </div>
+
+  <!-- ── TAB CONCILIACIÓN BANCARIA ── -->
+  <div id="tp-concil" style="display:none">
+    <div class="card" style="margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:var(--PD);margin-bottom:10px;text-transform:uppercase">Cargar movimiento del extracto bancario</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <div class="fg" style="width:110px"><label style="font-size:10px">FECHA</label>
+          <input type="date" id="conc-fecha" style="width:100%"></div>
+        <div class="fg" style="flex:3;min-width:200px"><label style="font-size:10px">DESCRIPCIÓN</label>
+          <input id="conc-desc" placeholder="Ej: Transferencia de cliente..." style="width:100%"></div>
+        <div class="fg" style="width:140px"><label style="font-size:10px">IMPORTE ($)</label>
+          <input type="number" id="conc-importe" min="0" placeholder="0" style="width:100%;font-size:15px;font-weight:700"></div>
+        <div class="fg" style="width:150px"><label style="font-size:10px">TIPO</label>
+          <select id="conc-tipo" style="width:100%">
+            <option value="credito">⬆ Crédito (ingreso)</option>
+            <option value="debito">⬇ Débito (egreso)</option>
+          </select></div>
+        <button class="btn P" onclick="guardarMovBanc()" style="padding:9px 18px;font-weight:700">+ Agregar</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div>
+        <div style="font-size:12px;font-weight:700;color:var(--PD);margin-bottom:8px;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center">
+          🏦 Extracto bancario (pendientes)
+          <button class="btn sm P" onclick="autoConciliar()">⚡ Auto-conciliar</button>
+        </div>
+        <div id="conc-banco-list"></div>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:700;color:var(--PD);margin-bottom:8px;text-transform:uppercase">📋 Sistema (pendientes)</div>
+        <div id="conc-sistema-list"></div>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:12px;font-weight:700;color:var(--P);margin-bottom:8px;text-transform:uppercase;display:flex;align-items:center;gap:8px">
+        ✅ Conciliados
+        <span id="conc-count" style="background:var(--PL);color:var(--PD);border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600"></span>
+      </div>
+      <div id="conc-conciliados"></div>
+    </div>
+  </div>
+</div><!-- fin p-tesoreria -->
 
 <!-- CUENTAS CORRIENTES -->
 <div class="panel" id="p-cuentas">
@@ -2808,7 +2941,7 @@ const USUARIOS = [
 ];
 
 // Pantallas por rol
-const MENUS_ADMIN=['dash','pedidos','pedido-movil','carga','remitos','cobranza','cuentas','clientes','maestro-proveedores','productos','remito-rapido','nc','rendicion','stock','informes','comisiones','contrib-zona','gastos-fijos','contabilidad','exportar','importar-historico'];
+const MENUS_ADMIN=['dash','pedidos','pedido-movil','carga','remitos','cobranza','tesoreria','cuentas','clientes','maestro-proveedores','productos','remito-rapido','nc','rendicion','stock','informes','comisiones','contrib-zona','gastos-fijos','contabilidad','exportar','importar-historico'];
 const MENUS_VENDEDOR=['vendedor-home','pedidos','pedido-movil','cobranza','cuentas'];
 let usuarioActual = null;
 
@@ -6151,7 +6284,7 @@ function actualizarNavActivo(p){
   const grupos={
     'pedidos':'ventas','pedido-movil':'ventas','carga':'ventas','remitos':'ventas','remito-rapido':'ventas','nc':'ventas',
     'clientes':'maestros','cuentas':'maestros','productos':'maestros','stock':'maestros','maestro-proveedores':'maestros',
-    'cobranza':'tesoreria',
+    'cobranza':'tesoreria','tesoreria':'tesoreria',
     'contabilidad':'contabilidad',
     'informes':'informes','rendicion':'informes','comisiones':'informes','contrib-zona':'informes','gastos-fijos':'informes'
   };
@@ -7690,6 +7823,7 @@ function go(p){
   if(p==='gastos-fijos')initGastosFijos();
   if(p==='zonas')renderZonas();
   if(p==='importar-historico')initImportarHistorico();
+  if(p==='tesoreria')initTesoreria();
   if(p==='compras'){renderComprobantes();setTimeout(()=>{const q=document.getElementById('comp-q');if(q)q.focus();},100);}
   if(p==='remitos'){const f=document.getElementById('rem-grupo-fecha');if(f&&!f.value)f.value=new Date().toISOString().split('T')[0];}
   // Actualizar sidebar activo
@@ -7699,7 +7833,7 @@ function go(p){
   const grupoMap={
     'clientes':'maestros','cuentas':'maestros','productos':'maestros','stock':'maestros','maestro-proveedores':'maestros',
     'pedidos':'ventas','pedido-movil':'ventas','carga':'ventas','remitos':'ventas','remito-rapido':'ventas','nc':'ventas',
-    'cobranza':'tesoreria','contabilidad':'tesoreria',
+    'cobranza':'tesoreria','tesoreria':'tesoreria','contabilidad':'tesoreria',
     'informes':'informes','rendicion':'informes','comisiones':'informes','contrib-zona':'informes','gastos-fijos':'informes','importar-historico':'informes'
   };
   const g=grupoMap[p];
@@ -9047,6 +9181,336 @@ async function verVistaCruzada() {
     <span style="color:var(--D)">Rojo &gt;70% o sin ventas registradas</span>
   </div>`;
 }
+
+// ─── TESORERÍA ───────────────────────────────────────────────
+let _pagosProv=[];
+let _movBanc=[];
+let _tesoTabActual='cobros';
+let _cajaPer='mes';
+const _tesoPg={cobros:1,pagos:1};
+
+async function cargarPagosProv(){
+  const {data,error}=await sb.from('pagos_proveedores').select('*').order('fecha',{ascending:false});
+  if(error&&error.code==='42P01'){
+    toast('Tabla pagos_proveedores no existe. Crear en Supabase con el SQL del panel.','err',6000);
+    _pagosProv=[];return;
+  }
+  _pagosProv=data||[];
+}
+async function cargarMovBanc(){
+  const {data,error}=await sb.from('movimientos_bancarios').select('*').order('fecha',{ascending:false});
+  if(error&&error.code==='42P01'){
+    toast('Tabla movimientos_bancarios no existe. Crear en Supabase con el SQL del panel.','err',6000);
+    _movBanc=[];return;
+  }
+  _movBanc=data||[];
+}
+
+async function initTesoreria(){
+  if(!_pagosProv.length)await cargarPagosProv();
+  if(!_movBanc.length)await cargarMovBanc();
+  // Poblar select de proveedores
+  const sel=document.getElementById('pag-prov');
+  if(sel&&_proveedores.length){
+    const cur=sel.value;
+    sel.innerHTML='<option value="">Seleccionar...</option>'+
+      _proveedores.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
+    if(cur)sel.value=cur;
+  }
+  // Defaults de fecha
+  const hoy=new Date().toISOString().split('T')[0];
+  const pagF=document.getElementById('pag-fecha');if(pagF&&!pagF.value)pagF.value=hoy;
+  const concF=document.getElementById('conc-fecha');if(concF&&!concF.value)concF.value=hoy;
+  // Default para rango de cobros: mes actual
+  const tcoFd=document.getElementById('tco-fd');const tcoFh=document.getElementById('tco-fh');
+  if(tcoFh&&!tcoFh.value)tcoFh.value=hoy;
+  if(tcoFd&&!tcoFd.value){const d=new Date();tcoFd.value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;}
+  tesoTab(_tesoTabActual);
+}
+
+function tesoTab(tab){
+  _tesoTabActual=tab;
+  ['cobros','pagos','caja','concil'].forEach(t=>{
+    const tp=document.getElementById('tp-'+t);
+    const btn=document.getElementById('tt-'+t);
+    if(tp)tp.style.display=t===tab?'block':'none';
+    if(btn){btn.classList.toggle('P',t===tab);}
+  });
+  if(tab==='cobros')renderTesCobros();
+  else if(tab==='pagos')renderTesPagos();
+  else if(tab==='caja'){cajaPeriodo(_cajaPer);}
+  else if(tab==='concil')renderTesConcil();
+}
+
+// ── Tab Cobros ──
+function renderTesCobros(){
+  const q=(document.getElementById('tco-q')?.value||'').toLowerCase();
+  const fd=document.getElementById('tco-fd')?.value||'';
+  const fh=document.getElementById('tco-fh')?.value||'';
+  const forma=document.getElementById('tco-forma')?.value||'';
+  let data=_cobros.filter(c=>{
+    if(q&&!(c.cliente||'').toLowerCase().includes(q))return false;
+    if(fd&&c.fecha<fd)return false;
+    if(fh&&c.fecha>fh)return false;
+    if(forma&&!(c.forma||'').includes(forma))return false;
+    return true;
+  });
+  data.sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  const totEf=data.reduce((a,c)=>a+(c.efectivo||0),0);
+  const totTr=data.reduce((a,c)=>a+(c.transferencia||0),0);
+  const totCh=data.reduce((a,c)=>a+(c.cheque_terceros||0)+(c.cheque_propio||0),0);
+  const totImp=data.reduce((a,c)=>a+(c.importe||0),0);
+  document.getElementById('tco-kpis').innerHTML=`
+    <div class="stat"><div class="n">${fmt(totEf)}</div><div class="l">💵 Efectivo</div></div>
+    <div class="stat"><div class="n" style="color:var(--A)">${fmt(totTr)}</div><div class="l">🏦 Transferencias</div></div>
+    <div class="stat"><div class="n" style="color:var(--W)">${fmt(totCh)}</div><div class="l">📋 Cheques recibidos</div></div>
+    <div class="stat"><div class="n">${fmt(totImp)}</div><div class="l">Total cobrado (${data.length})</div></div>`;
+  const PP2=25,pg=_tesoPg.cobros,sl=data.slice((pg-1)*PP2,pg*PP2);
+  document.getElementById('tco-tbody').innerHTML=sl.length?sl.map(r=>`<tr>
+    <td>${r.fecha}</td>
+    <td style="font-weight:500">${r.cliente||'—'}</td>
+    <td style="font-size:11px">${(r.forma||'').split('+').map(f=>f==='efectivo'?'💵 Ef':f==='transf'?'🏦 Tr':f==='cheque'?'📋 Ch':f).join(' · ')||'—'}</td>
+    <td style="color:var(--P)">${(r.efectivo||0)>0?fmt(r.efectivo):'—'}</td>
+    <td style="color:var(--A)">${(r.transferencia||0)>0?fmt(r.transferencia):'—'}</td>
+    <td style="color:var(--W)">${((r.cheque_terceros||0)+(r.cheque_propio||0))>0?fmt((r.cheque_terceros||0)+(r.cheque_propio||0)):'—'}</td>
+    <td style="font-weight:700">${fmt(r.importe||0)}</td>
+    <td style="color:var(--txt2);font-size:12px">${r.vendedor||'—'}</td>
+  </tr>`).join(''):'<tr><td colspan="8"><div class="empty">Sin cobros para el período seleccionado</div></td></tr>';
+  pag('tco-pg',data.length,pg,p=>{_tesoPg.cobros=p;renderTesCobros();});
+}
+
+// ── Tab Pagos Proveedores ──
+async function guardarPago(){
+  const prov=document.getElementById('pag-prov').value;
+  const imp=parseFloat(document.getElementById('pag-importe').value)||0;
+  const fecha=document.getElementById('pag-fecha').value;
+  const forma=document.getElementById('pag-forma').value;
+  const concepto=(document.getElementById('pag-concepto').value||'').trim();
+  if(!prov){alert('Seleccioná un proveedor');return;}
+  if(!imp){alert('Ingresá un importe');return;}
+  if(!fecha){alert('Ingresá la fecha');return;}
+  const provNom=_proveedores.find(x=>x.id==prov)?.nombre||'?';
+  const btn=document.querySelector('#tp-pagos .btn.P');
+  if(btn){btn.textContent='Guardando...';btn.disabled=true;}
+  const {error}=await sb.from('pagos_proveedores').insert({
+    fecha,proveedor_id:parseInt(prov),proveedor:provNom,importe:imp,forma,concepto
+  });
+  if(btn){btn.textContent='✓ Registrar';btn.disabled=false;}
+  if(error){alert('Error: '+error.message);return;}
+  await cargarPagosProv();
+  document.getElementById('pag-importe').value='';
+  document.getElementById('pag-concepto').value='';
+  renderTesPagos();
+  toast('Pago registrado');
+}
+
+function renderTesPagos(){
+  const q=(document.getElementById('pag-q')?.value||'').toLowerCase();
+  const forma=document.getElementById('pag-f-forma')?.value||'';
+  let data=_pagosProv.filter(p=>{
+    if(q&&!(p.proveedor||'').toLowerCase().includes(q))return false;
+    if(forma&&p.forma!==forma)return false;
+    return true;
+  });
+  data.sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  const totEf=data.filter(p=>p.forma==='efectivo').reduce((a,p)=>a+(p.importe||0),0);
+  const totTr=data.filter(p=>p.forma==='transferencia').reduce((a,p)=>a+(p.importe||0),0);
+  const totCh=data.filter(p=>p.forma==='cheque').reduce((a,p)=>a+(p.importe||0),0);
+  const totAll=totEf+totTr+totCh;
+  document.getElementById('tpag-kpis').innerHTML=`
+    <div class="stat"><div class="n">${fmt(totEf)}</div><div class="l">💵 Efectivo</div></div>
+    <div class="stat"><div class="n" style="color:var(--A)">${fmt(totTr)}</div><div class="l">🏦 Transferencias</div></div>
+    <div class="stat"><div class="n" style="color:var(--W)">${fmt(totCh)}</div><div class="l">📋 Cheques emitidos</div></div>
+    <div class="stat"><div class="n" style="color:var(--D)">${fmt(totAll)}</div><div class="l">Total pagado (${data.length})</div></div>`;
+  const PP2=25,pg=_tesoPg.pagos||1,sl=data.slice((pg-1)*PP2,pg*PP2);
+  document.getElementById('tpag-tbody').innerHTML=sl.length?sl.map(p=>`<tr>
+    <td>${p.fecha}</td>
+    <td style="font-weight:600">${p.proveedor||'—'}</td>
+    <td>${p.concepto||'—'}</td>
+    <td>${p.forma==='efectivo'?'💵 Efectivo':p.forma==='transferencia'?'🏦 Transf.':p.forma==='cheque'?'📋 Cheque':p.forma||'—'}</td>
+    <td style="font-weight:700;color:var(--D)">${fmt(p.importe||0)}</td>
+    <td><button class="btn sm D" onclick="eliminarPago(${p.id})">🗑</button></td>
+  </tr>`).join(''):'<tr><td colspan="6"><div class="empty">Sin pagos registrados</div></td></tr>';
+  pag('tpag-pg',data.length,pg,p=>{_tesoPg.pagos=p;renderTesPagos();});
+}
+
+async function eliminarPago(id){
+  if(!confirm('¿Eliminar este pago?'))return;
+  await sb.from('pagos_proveedores').delete().eq('id',id);
+  await cargarPagosProv();renderTesPagos();
+  toast('Pago eliminado');
+}
+
+// ── Tab Saldo de Caja ──
+function cajaPeriodo(per){
+  _cajaPer=per;
+  const hoy=new Date();
+  const pad=n=>String(n).padStart(2,'0');
+  const d2s=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  let fd,fh=d2s(hoy);
+  if(per==='hoy'){fd=d2s(hoy);}
+  else if(per==='semana'){const d=new Date(hoy);d.setDate(hoy.getDate()-((hoy.getDay()+6)%7));fd=d2s(d);}
+  else if(per==='mes'){fd=`${hoy.getFullYear()}-${pad(hoy.getMonth()+1)}-01`;}
+  else if(per==='custom'){
+    document.getElementById('caja-custom-rng').style.display='flex';
+    return;
+  }
+  document.getElementById('caja-custom-rng').style.display='none';
+  document.getElementById('caja-fd').value=fd;
+  document.getElementById('caja-fh').value=fh;
+  renderTesCaja();
+}
+
+function renderTesCaja(){
+  const fd=document.getElementById('caja-fd')?.value||'';
+  const fh=document.getElementById('caja-fh')?.value||'';
+  const lbl=fd===fh?fd:`${fd} → ${fh}`;
+  document.getElementById('caja-periodo-label').textContent=`Período: ${lbl||'(todos)'}`;
+  const cobs=_cobros.filter(c=>(!fd||c.fecha>=fd)&&(!fh||c.fecha<=fh));
+  const cobEf=cobs.reduce((a,c)=>a+(c.efectivo||0),0);
+  const cobTr=cobs.reduce((a,c)=>a+(c.transferencia||0),0);
+  const cobCh=cobs.reduce((a,c)=>a+(c.cheque_terceros||0)+(c.cheque_propio||0),0);
+  const cobTot=cobEf+cobTr+cobCh;
+  const pags=_pagosProv.filter(p=>(!fd||p.fecha>=fd)&&(!fh||p.fecha<=fh));
+  const pagEf=pags.filter(p=>p.forma==='efectivo').reduce((a,p)=>a+(p.importe||0),0);
+  const pagTr=pags.filter(p=>p.forma==='transferencia').reduce((a,p)=>a+(p.importe||0),0);
+  const pagCh=pags.filter(p=>p.forma==='cheque').reduce((a,p)=>a+(p.importe||0),0);
+  const pagTot=pagEf+pagTr+pagCh;
+  const saldoNet=cobTot-pagTot;
+  const colNet=saldoNet>=0?'var(--P)':'var(--D)';
+  const bgNet=saldoNet>=0?'var(--PL)':'var(--DL)';
+  const row2=(lbl2,val,color)=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--brd);font-size:13px"><span>${lbl2}</span><span style="font-weight:700;color:${color}">${fmt(val)}</span></div>`;
+  const sCard=(lbl2,val)=>{const c=val>=0?'var(--P)':'var(--D)';const bg=val>=0?'var(--PL)':'var(--DL)';
+    return `<div style="background:${bg};border-radius:8px;padding:10px 12px;text-align:center"><div style="font-size:16px;font-weight:700;color:${c}">${fmt(val)}</div><div style="font-size:11px;color:var(--txt2);margin-top:2px">${lbl2}</div></div>`;};
+  document.getElementById('tp-caja-body').innerHTML=`
+  <div class="g4" style="margin-bottom:14px">
+    <div class="stat"><div class="n">${fmt(cobTot)}</div><div class="l">Total cobrado</div></div>
+    <div class="stat"><div class="n" style="color:var(--D)">${fmt(pagTot)}</div><div class="l">Total pagado a prov.</div></div>
+    <div class="stat" style="background:${bgNet};border-color:${colNet}"><div class="n" style="color:${colNet}">${fmt(saldoNet)}</div><div class="l">Saldo neto del período</div></div>
+    <div class="stat"><div class="n" style="color:var(--txt2)">${cobs.length} cob. / ${pags.length} pag.</div><div class="l">Cantidad de movimientos</div></div>
+  </div>
+  <div class="g2" style="margin-bottom:14px">
+    <div class="card">
+      <div style="font-size:12px;font-weight:700;color:var(--PD);margin-bottom:8px">📥 Cobros por medio</div>
+      ${row2('💵 Efectivo',cobEf,'var(--P)')}
+      ${row2('🏦 Transferencias',cobTr,'var(--A)')}
+      ${row2('📋 Cheques recibidos',cobCh,'var(--W)')}
+      <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;font-weight:700"><span>Total</span><span style="color:var(--P)">${fmt(cobTot)}</span></div>
+    </div>
+    <div class="card">
+      <div style="font-size:12px;font-weight:700;color:var(--D);margin-bottom:8px">📤 Pagos por medio</div>
+      ${row2('💵 Efectivo',pagEf,'var(--D)')}
+      ${row2('🏦 Transferencias',pagTr,'var(--D)')}
+      ${row2('📋 Cheques emitidos',pagCh,'var(--D)')}
+      <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;font-weight:700"><span>Total</span><span style="color:var(--D)">${fmt(pagTot)}</span></div>
+    </div>
+  </div>
+  <div class="card">
+    <div style="font-size:12px;font-weight:700;color:var(--PD);margin-bottom:10px">⚖ Saldo neto por medio de pago</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+      ${sCard('💵 Efectivo',cobEf-pagEf)}
+      ${sCard('🏦 Transferencias',cobTr-pagTr)}
+      ${sCard('📋 Cheques',cobCh-pagCh)}
+    </div>
+  </div>`;
+}
+
+// ── Tab Conciliación Bancaria ──
+async function guardarMovBanc(){
+  const fecha=document.getElementById('conc-fecha').value;
+  const desc=(document.getElementById('conc-desc').value||'').trim();
+  const imp=parseFloat(document.getElementById('conc-importe').value)||0;
+  const tipo=document.getElementById('conc-tipo').value;
+  if(!fecha||!imp){alert('Fecha e importe son requeridos');return;}
+  const {error}=await sb.from('movimientos_bancarios').insert({fecha,descripcion:desc,importe:imp,tipo,conciliado:false});
+  if(error){alert('Error: '+error.message);return;}
+  await cargarMovBanc();
+  document.getElementById('conc-importe').value='';
+  document.getElementById('conc-desc').value='';
+  renderTesConcil();
+  toast('Movimiento del extracto agregado');
+}
+
+function renderTesConcil(){
+  const pendBanc=_movBanc.filter(m=>!m.conciliado);
+  const conciliados=_movBanc.filter(m=>m.conciliado);
+  // Movimientos del sistema pendientes de conciliar
+  const conciliadosCobIds=new Set(_movBanc.filter(m=>m.conciliado&&m.conciliado_tipo==='cobro').map(m=>m.conciliado_id));
+  const conciliadosPagIds=new Set(_movBanc.filter(m=>m.conciliado&&m.conciliado_tipo==='pago').map(m=>m.conciliado_id));
+  const sisCredPend=_cobros.filter(c=>(c.transferencia||0)>0&&!conciliadosCobIds.has(c.id));
+  const sisDebPend=_pagosProv.filter(p=>p.forma==='transferencia'&&!conciliadosPagIds.has(p.id));
+  // Extracto pendiente
+  const itemBanc=(m)=>`<tr>
+    <td>${m.fecha}</td><td style="font-size:11px">${m.descripcion||'—'}</td>
+    <td>${m.tipo==='credito'?'<span class="b bP">⬆ Crédito</span>':'<span class="b bD">⬇ Débito</span>'}</td>
+    <td style="font-weight:700">${fmt(m.importe)}</td>
+    <td><button class="btn sm D" title="Eliminar" onclick="eliminarMovBanc(${m.id})">🗑</button></td></tr>`;
+  document.getElementById('conc-banco-list').innerHTML=pendBanc.length
+    ?`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Fecha</th><th>Descripción</th><th>Tipo</th><th>Importe</th><th></th></tr></thead><tbody>${pendBanc.map(itemBanc).join('')}</tbody></table></div>`
+    :'<div style="font-size:12px;color:var(--P);padding:8px">✅ Sin movimientos pendientes en el extracto</div>';
+  // Sistema pendiente
+  const allSis=[
+    ...sisCredPend.map(c=>({fecha:c.fecha,desc:c.cliente||'?',tipo:'credito',imp:c.transferencia})),
+    ...sisDebPend.map(p=>({fecha:p.fecha,desc:p.proveedor||'?',tipo:'debito',imp:p.importe}))
+  ].sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  document.getElementById('conc-sistema-list').innerHTML=allSis.length
+    ?`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Fecha</th><th>Descripción</th><th>Tipo</th><th>Importe</th></tr></thead><tbody>${allSis.map(s=>`<tr><td>${s.fecha}</td><td style="font-size:11px">${s.desc}</td><td>${s.tipo==='credito'?'<span class="b bA">⬆ Cobro Tr.</span>':'<span class="b bD">⬇ Pago Tr.</span>'}</td><td style="font-weight:700">${fmt(s.imp)}</td></tr>`).join('')}</tbody></table></div>`
+    :'<div style="font-size:12px;color:var(--P);padding:8px">✅ Sin movimientos pendientes en el sistema</div>';
+  // Conciliados
+  const cnt=document.getElementById('conc-count');
+  if(cnt)cnt.textContent=conciliados.length;
+  document.getElementById('conc-conciliados').innerHTML=conciliados.length
+    ?`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Fecha banco</th><th>Descripción</th><th>Tipo</th><th>Importe</th><th>Origen sistema</th><th></th></tr></thead><tbody>${conciliados.map(m=>{
+      let origen='';
+      if(m.conciliado_tipo==='cobro'){const c=_cobros.find(x=>x.id===m.conciliado_id);origen=c?`Cobro ${c.cliente} (${c.fecha})`:'?';}
+      else if(m.conciliado_tipo==='pago'){const p=_pagosProv.find(x=>x.id===m.conciliado_id);origen=p?`Pago ${p.proveedor} (${p.fecha})`:'?';}
+      return `<tr><td>${m.fecha}</td><td style="font-size:11px">${m.descripcion||'—'}</td>
+        <td>${m.tipo==='credito'?'<span class="b bP">⬆</span>':'<span class="b bD">⬇</span>'}</td>
+        <td style="font-weight:700">${fmt(m.importe)}</td>
+        <td style="font-size:12px;color:var(--P)">${origen}</td>
+        <td><button class="btn sm" title="Desconciliar" onclick="desconciliar(${m.id})">↩</button></td></tr>`;
+    }).join('')}</tbody></table></div>`
+    :'<div style="font-size:12px;color:var(--txt2);padding:8px">No hay movimientos conciliados aún</div>';
+}
+
+async function autoConciliar(){
+  const pendBanc=_movBanc.filter(m=>!m.conciliado);
+  if(!pendBanc.length){toast('No hay movimientos pendientes en el extracto');return;}
+  const conciliadosCobIds=new Set(_movBanc.filter(m=>m.conciliado&&m.conciliado_tipo==='cobro').map(m=>m.conciliado_id));
+  const conciliadosPagIds=new Set(_movBanc.filter(m=>m.conciliado&&m.conciliado_tipo==='pago').map(m=>m.conciliado_id));
+  let cant=0;
+  for(const mov of pendBanc){
+    if(mov.tipo==='credito'){
+      const match=_cobros.find(c=>(c.transferencia||0)===mov.importe&&c.fecha===mov.fecha&&!conciliadosCobIds.has(c.id));
+      if(match){
+        await sb.from('movimientos_bancarios').update({conciliado:true,conciliado_id:match.id,conciliado_tipo:'cobro'}).eq('id',mov.id);
+        conciliadosCobIds.add(match.id);cant++;
+      }
+    }else{
+      const match=_pagosProv.find(p=>p.importe===mov.importe&&p.fecha===mov.fecha&&p.forma==='transferencia'&&!conciliadosPagIds.has(p.id));
+      if(match){
+        await sb.from('movimientos_bancarios').update({conciliado:true,conciliado_id:match.id,conciliado_tipo:'pago'}).eq('id',mov.id);
+        conciliadosPagIds.add(match.id);cant++;
+      }
+    }
+  }
+  await cargarMovBanc();renderTesConcil();
+  toast(cant?`✅ ${cant} movimiento${cant!==1?'s':''} conciliado${cant!==1?'s':''}`:'Sin coincidencias exactas (misma fecha + mismo importe)');
+}
+
+async function eliminarMovBanc(id){
+  if(!confirm('¿Eliminar este movimiento del extracto?'))return;
+  await sb.from('movimientos_bancarios').delete().eq('id',id);
+  await cargarMovBanc();renderTesConcil();
+  toast('Movimiento eliminado');
+}
+
+async function desconciliar(id){
+  await sb.from('movimientos_bancarios').update({conciliado:false,conciliado_id:null,conciliado_tipo:null}).eq('id',id);
+  await cargarMovBanc();renderTesConcil();
+  toast('Movimiento desconciliado');
+}
+// ─── FIN TESORERÍA ──────────────────────────────────────────
 
 </script>
 </body>
