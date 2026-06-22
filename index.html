@@ -3047,7 +3047,7 @@ let usuarioActual = null;
 let _clientes=[], _productos=[], _pedidos=[], _remitos=[], _cobros=[], _cargas=[];
 let _items=[], _proTemp=null;
 let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
-const PP=20;
+const PP=200;
 
 // ─── LOGIN ───
 // ─── LOGIN AUTOMÁTICO POR URL ───
@@ -3223,7 +3223,7 @@ function renderDash(){
 function renderPedidos(){
   const q=(document.getElementById('ped-q').value||'').toLowerCase();
   const est=document.getElementById('ped-est').value;
-  let data=_pedidos.filter(p=>(!q||(p.cliente||'').toLowerCase().includes(q))&&(!est||p.estado===est));
+  let data=_pedidos.filter(p=>(!q||(p.cliente||'').toLowerCase().includes(q)||String(p.id).includes(q)||(p.localidad||'').toLowerCase().includes(q)||(p.vendedor||'').toLowerCase().includes(q))&&(!est||p.estado===est));
   const el=document.getElementById('ped-lista');
   if(!data.length){el.innerHTML='<div class="empty">Sin pedidos</div>';return;}
   const stBadge=s=>s==='pendiente'?'bW':s==='en_carga'?'bA':s==='remitado'?'bP':'bG';
@@ -3752,7 +3752,7 @@ function renderRemitos(){
   const fh=document.getElementById('rem-fh')?.value||'';
   let data=_remitos.filter(r=>{
     if(r.anulado)return false;
-    if(q&&!(r.cliente||'').toLowerCase().includes(q))return false;
+    if(q&&!((r.cliente||'').toLowerCase().includes(q)||('r-'+String(r.id).padStart(4,'0')).includes(q)||String(r.id).includes(q)||(r.localidad||'').toLowerCase().includes(q)))return false;
     if(est==='parcial'){if(!(r.saldo_pendiente>0&&r.saldo_pendiente<r.total&&!r.cobrado))return false;}
     else if(est!==''&&String(r.cobrado)!==est)return false;
     if(fd&&r.fecha<fd)return false;
@@ -4623,7 +4623,7 @@ async function guardarCobro(){
 function renderCobros(){
   const q=(document.getElementById('cob-q').value||'').toLowerCase();
   const f=document.getElementById('cob-f').value;
-  let data=_cobros.filter(c=>(!q||(c.cliente||'').toLowerCase().includes(q))&&(!f||(c.forma||'').includes(f)));
+  let data=_cobros.filter(c=>(!q||(c.cliente||'').toLowerCase().includes(q)||(c.fecha||'').includes(q)||(c.reparto||'').toLowerCase().includes(q)||(c.vendedor||'').toLowerCase().includes(q))&&(!f||(c.forma||'').includes(f)));
   const tot=data.length,sl=data.slice((_cobPg-1)*PP,_cobPg*PP);
   const tbody=document.getElementById('cob-tbody');
   tbody.innerHTML=sl.length?sl.map(r=>{
@@ -4837,7 +4837,7 @@ function renderClientes(){
     locs.forEach(l=>{const o=document.createElement('option');o.value=l;o.textContent=l;selLoc.appendChild(o);});
   }
   let data=_clientes.filter(c=>
-    (!q||(c.nombre||'').toLowerCase().includes(q)||(c.telefono||'').includes(q)||(c.localidad||'').toLowerCase().includes(q))&&
+    (!q||(c.nombre||'').toLowerCase().includes(q)||(c.telefono||'').includes(q)||(c.localidad||'').toLowerCase().includes(q)||(c.codigo||'').toString().includes(q)||(c.cuit||'').includes(q))&&
     (!zon||c.zona===zon)&&
     (!loc||(c.localidad||'')=== loc)
   );
@@ -8305,7 +8305,7 @@ function navProvTabla(e){navTablaGen(e,'prov-tbody','tr',r=>{const b=r.querySele
 function renderProveedores(){
   resetNav('prov-tbody');
   const q = (document.getElementById('prov-q')?.value||'').toLowerCase();
-  const data = _proveedores.filter(p => !q || (p.nombre||'').toLowerCase().includes(q));
+  const data = _proveedores.filter(p => !q || (p.nombre||'').toLowerCase().includes(q)||(p.cuit||'').includes(q)||(p.codigo||'').toString().includes(q)||(p.contacto||'').toLowerCase().includes(q));
   const tbody = document.getElementById('prov-tbody');
   if(!tbody) return;
   tbody.innerHTML = data.length ? data.map(p => `<tr>
