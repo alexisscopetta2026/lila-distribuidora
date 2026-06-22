@@ -889,6 +889,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
             <input id="cob-transferencia" type="number" value="0" min="0" oninput="calcTotalCobro()" placeholder="Transferencia $"
               style="width:100%;padding:7px 8px;border:2px solid var(--A);border-radius:6px;font-size:16px;font-weight:700;text-align:right"
               onkeydown="if(event.key==='Tab'||event.key==='Enter'){event.preventDefault();focusImprimerInput();}">
+            <!-- Comprobante de transferencia -->
+            <div style="margin-top:8px;background:var(--bg);border:1px solid var(--brd);border-radius:8px;padding:8px">
+              <div style="font-size:10px;font-weight:600;color:var(--txt2);margin-bottom:6px">📎 COMPROBANTE DE TRANSFERENCIA (opcional)</div>
+              <input type="file" id="cob-comprobante" accept="image/*" capture="environment" style="display:none" onchange="prevComprobante(this)">
+              <div style="display:flex;gap:6px;align-items:center">
+                <button type="button" class="btn sm A" onclick="document.getElementById('cob-comprobante').click()" style="font-size:12px;padding:7px 12px;font-weight:600">📷 Sacar foto</button>
+                <button type="button" class="btn sm" onclick="document.getElementById('cob-comprobante').removeAttribute('capture');document.getElementById('cob-comprobante').click();document.getElementById('cob-comprobante').setAttribute('capture','environment')" style="font-size:12px;padding:7px 10px">🖼 Galería</button>
+                <span id="cob-comp-nombre" style="font-size:11px;color:var(--txt2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Sin comprobante</span>
+                <button type="button" class="btn sm D" id="cob-comp-clear" style="display:none;padding:4px 8px;font-size:11px" onclick="clearComprobante()">✕</button>
+              </div>
+              <div id="cob-comp-preview" style="display:none;margin-top:8px;text-align:center">
+                <img id="cob-comp-img" style="max-width:100%;max-height:140px;border-radius:6px;border:2px solid var(--A);object-fit:contain">
+              </div>
+            </div>
           </div>
           <div id="cob-bloque-ch" style="display:none;margin-bottom:4px">
             <div style="background:var(--WL);border:1px solid var(--W);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:7px">
@@ -4296,7 +4310,26 @@ function limpiarModalCobro(){
   });
   const codEl=document.getElementById('cob-cli-cod');if(codEl)codEl.style.borderColor='';
   _cobRestoSaldoFavor=0;
+  clearComprobante();
   setTimeout(()=>{const f=document.getElementById('cob-cli-cod');if(f)f.focus();},100);
+}
+function prevComprobante(input){
+  const file=input.files[0];if(!file)return;
+  document.getElementById('cob-comp-nombre').textContent=file.name;
+  document.getElementById('cob-comp-clear').style.display='';
+  const reader=new FileReader();
+  reader.onload=e=>{
+    document.getElementById('cob-comp-img').src=e.target.result;
+    document.getElementById('cob-comp-preview').style.display='block';
+  };
+  reader.readAsDataURL(file);
+}
+function clearComprobante(){
+  const inp=document.getElementById('cob-comprobante');if(inp)inp.value='';
+  document.getElementById('cob-comp-nombre').textContent='Sin comprobante';
+  document.getElementById('cob-comp-clear').style.display='none';
+  document.getElementById('cob-comp-preview').style.display='none';
+  const img=document.getElementById('cob-comp-img');if(img)img.src='';
 }
 function dropCliCob(){
   const q=(document.getElementById('cob-cli-q').value||'').toLowerCase();
@@ -4488,6 +4521,23 @@ async function guardarCobro(){
     if(monto>0)imputaciones.push({remito_id:remId,monto});
   }
 
+  // Subir comprobante de transferencia si existe
+  let comprobante_url='';
+  if(tr>0){
+    const compFile=document.getElementById('cob-comprobante')?.files?.[0];
+    if(compFile){
+      const ext=compFile.name.split('.').pop()||'jpg';
+      const path=`cobros/${Date.now()}_${cid}.${ext}`;
+      const {error:upErr}=await sb.storage.from('comprobantes').upload(path,compFile,{upsert:true});
+      if(!upErr){
+        const {data:urlData}=sb.storage.from('comprobantes').getPublicUrl(path);
+        comprobante_url=urlData?.publicUrl||'';
+      }else{
+        toast('No se pudo subir el comprobante: '+upErr.message,'err',5000);
+      }
+    }
+  }
+
   // Guardar cobro
   await sb.from('cobros').insert({
     cliente_id:parseInt(cid),cliente:c?.nombre||'?',
@@ -4505,7 +4555,8 @@ async function guardarCobro(){
     vendedor:document.getElementById('cob-ven-nom')?.value||'',
     observaciones:document.getElementById('cob-obs2')?.value||'',
     imputaciones:imputaciones,
-    saldo_favor:_cobRestoSaldoFavor||0
+    saldo_favor:_cobRestoSaldoFavor||0,
+    comprobante_url
   }).select().single();
 
   // Actualizar saldo_pendiente de cada remito imputado
@@ -9518,24 +9569,26 @@ function renderTesConcil(){
     :'<div style="font-size:12px;color:var(--P);padding:8px">✅ Sin movimientos pendientes en el extracto</div>';
   // Sistema pendiente
   const allSis=[
-    ...sisCredPend.map(c=>({fecha:c.fecha,desc:c.cliente||'?',tipo:'credito',imp:c.transferencia})),
-    ...sisDebPend.map(p=>({fecha:p.fecha,desc:p.proveedor||'?',tipo:'debito',imp:p.importe}))
+    ...sisCredPend.map(c=>({fecha:c.fecha,desc:c.cliente||'?',tipo:'credito',imp:c.transferencia,comp:c.comprobante_url||''})),
+    ...sisDebPend.map(p=>({fecha:p.fecha,desc:p.proveedor||'?',tipo:'debito',imp:p.importe,comp:''}))
   ].sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  const _compThumb=url=>url?`<a href="${url}" target="_blank" title="Ver comprobante"><img src="${url}" style="height:38px;border-radius:4px;cursor:pointer;object-fit:cover;border:1px solid var(--A)" onerror="this.parentNode.innerHTML='📎'"></a>`:'—';
   document.getElementById('conc-sistema-list').innerHTML=allSis.length
-    ?`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Fecha</th><th>Descripción</th><th>Tipo</th><th>Importe</th></tr></thead><tbody>${allSis.map(s=>`<tr><td>${s.fecha}</td><td style="font-size:11px">${s.desc}</td><td>${s.tipo==='credito'?'<span class="b bA">⬆ Cobro Tr.</span>':'<span class="b bD">⬇ Pago Tr.</span>'}</td><td style="font-weight:700">${fmt(s.imp)}</td></tr>`).join('')}</tbody></table></div>`
+    ?`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Fecha</th><th>Descripción</th><th>Tipo</th><th>Importe</th><th>Comprobante</th></tr></thead><tbody>${allSis.map(s=>`<tr><td>${s.fecha}</td><td style="font-size:11px">${s.desc}</td><td>${s.tipo==='credito'?'<span class="b bA">⬆ Cobro Tr.</span>':'<span class="b bD">⬇ Pago Tr.</span>'}</td><td style="font-weight:700">${fmt(s.imp)}</td><td>${_compThumb(s.comp)}</td></tr>`).join('')}</tbody></table></div>`
     :'<div style="font-size:12px;color:var(--P);padding:8px">✅ Sin movimientos pendientes en el sistema</div>';
   // Conciliados
   const cnt=document.getElementById('conc-count');
   if(cnt)cnt.textContent=conciliados.length;
   document.getElementById('conc-conciliados').innerHTML=conciliados.length
-    ?`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Fecha banco</th><th>Descripción</th><th>Tipo</th><th>Importe</th><th>Origen sistema</th><th></th></tr></thead><tbody>${conciliados.map(m=>{
-      let origen='';
-      if(m.conciliado_tipo==='cobro'){const c=_cobros.find(x=>x.id===m.conciliado_id);origen=c?`Cobro ${c.cliente} (${c.fecha})`:'?';}
+    ?`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Fecha banco</th><th>Descripción</th><th>Tipo</th><th>Importe</th><th>Origen sistema</th><th>Comp.</th><th></th></tr></thead><tbody>${conciliados.map(m=>{
+      let origen='',comp='';
+      if(m.conciliado_tipo==='cobro'){const c=_cobros.find(x=>x.id===m.conciliado_id);origen=c?`Cobro ${c.cliente} (${c.fecha})`:'?';comp=c?.comprobante_url||'';}
       else if(m.conciliado_tipo==='pago'){const p=_pagosProv.find(x=>x.id===m.conciliado_id);origen=p?`Pago ${p.proveedor} (${p.fecha})`:'?';}
       return `<tr><td>${m.fecha}</td><td style="font-size:11px">${m.descripcion||'—'}</td>
         <td>${m.tipo==='credito'?'<span class="b bP">⬆</span>':'<span class="b bD">⬇</span>'}</td>
         <td style="font-weight:700">${fmt(m.importe)}</td>
         <td style="font-size:12px;color:var(--P)">${origen}</td>
+        <td>${comp?`<a href="${comp}" target="_blank" title="Ver comprobante"><img src="${comp}" style="height:32px;border-radius:3px;object-fit:cover;border:1px solid var(--brd)" onerror="this.parentNode.innerHTML='📎'"></a>`:'—'}</td>
         <td><button class="btn sm" title="Desconciliar" onclick="desconciliar(${m.id})">↩</button></td></tr>`;
     }).join('')}</tbody></table></div>`
     :'<div style="font-size:12px;color:var(--txt2);padding:8px">No hay movimientos conciliados aún</div>';
