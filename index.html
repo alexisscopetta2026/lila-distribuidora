@@ -1782,7 +1782,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <div style="font-weight:700;margin-bottom:2px">📜 Evolución histórica — datos FoxPro</div>
           <div id="inf-hist-status" style="font-size:11px;color:var(--txt2)">Cargando datos importados...</div>
         </div>
-        <button class="btn P" onclick="informeHistoricoChart()" style="padding:8px 18px;font-weight:700">🔄 Actualizar</button>
+        <button class="btn P" onclick="_histData=null;_histGastos=null;informeHistoricoChart()" style="padding:8px 18px;font-weight:700">🔄 Actualizar</button>
       </div>
       <!-- Filtro de año -->
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
@@ -9735,23 +9735,38 @@ function renderImpHistChart(dA, perA, dB, perB) {
 }
 
 // ─── GRÁFICO HISTÓRICO FOXPRO ────────────────────────────────
-let _histData = null; // cache de datos importados
+let _histData = null;    // cache importaciones_resultado
+let _histGastos = null;  // cache gastos de contabilidad
 
 async function informeHistoricoChart(anioFiltro) {
   if (typeof Chart === 'undefined') return;
   const statusEl = document.getElementById('inf-hist-status');
   const set = t => { if (statusEl) statusEl.textContent = t; };
 
-  set('Cargando datos importados...');
+  set('Cargando datos...');
 
-  // Cargar desde Supabase (solo la primera vez o al actualizar)
-  if (!_histData) {
-    const { data, error } = await sb.from('importaciones_resultado')
-      .select('periodo, venta_neta, costo, diferencia');
-    if (error && error.code === '42P01') { set('Tabla importaciones_resultado no existe. Importá datos primero.'); return; }
-    if (!data?.length) { set('Sin datos importados. Importá archivos FoxPro desde Importar Histórico.'); return; }
-    _histData = data;
+  // Cargar ambas fuentes en paralelo (solo la primera vez)
+  if (!_histData || !_histGastos) {
+    const [resImp, resGas] = await Promise.all([
+      sb.from('importaciones_resultado').select('periodo, venta_neta, costo, diferencia'),
+      sb.from('gastos').select('fecha, importe')
+    ]);
+    if (resImp.error && resImp.error.code === '42P01') {
+      set('Tabla importaciones_resultado no existe. Importá datos primero.'); return;
+    }
+    if (!resImp.data?.length) {
+      set('Sin datos importados. Importá archivos FoxPro desde Importar Histórico.'); return;
+    }
+    _histData   = resImp.data;
+    _histGastos = resGas.data || [];
   }
+
+  // Gastos agrupados por mes (YYYY-MM)
+  const gastosPorMes = {};
+  _histGastos.forEach(g => {
+    const mes = (g.fecha || '').substring(0, 7);
+    if (mes) gastosPorMes[mes] = (gastosPorMes[mes] || 0) + (g.importe || 0);
+  });
 
   // Botones de filtro de año
   const años = [...new Set(_histData.map(r => (r.periodo||'').substring(0,4)).filter(Boolean))].sort();
@@ -9767,24 +9782,28 @@ async function informeHistoricoChart(anioFiltro) {
   // Filtrar por año si aplica
   const datos = anioFiltro ? _histData.filter(r => (r.periodo||'').startsWith(anioFiltro)) : _histData;
 
-  // Agrupar por período
+  // Agrupar importaciones por período
   const byPer = {};
   datos.forEach(r => {
     const p = r.periodo;
     if (!p) return;
     if (!byPer[p]) byPer[p] = { venta: 0, costo: 0, cmg: 0 };
-    byPer[p].venta += (r.venta_neta || 0);
-    byPer[p].costo += (r.costo || 0);
-    byPer[p].cmg   += (r.diferencia || 0);
+    byPer[p].venta += (r.venta_neta  || 0);
+    byPer[p].costo += (r.costo       || 0);
+    byPer[p].cmg   += (r.diferencia  || 0);
   });
 
   const periodos = Object.keys(byPer).sort();
   if (!periodos.length) { set('Sin datos para el período seleccionado.'); return; }
 
-  const ventas = periodos.map(p => byPer[p].venta);
-  const costos = periodos.map(p => byPer[p].costo);
-  const cmgs   = periodos.map(p => byPer[p].cmg);
-  const pcts   = periodos.map(p => byPer[p].venta > 0 ? byPer[p].cmg / byPer[p].venta * 100 : 0);
+  const ventas   = periodos.map(p => byPer[p].venta);
+  const costos   = periodos.map(p => byPer[p].costo);
+  const cmgs     = periodos.map(p => byPer[p].cmg);
+  const gastos   = periodos.map(p => gastosPorMes[p] || 0);
+  const netos    = periodos.map((p, i) => cmgs[i] - gastos[i]);
+  const pctNeto  = periodos.map((p, i) => ventas[i] > 0 ? netos[i] / ventas[i] * 100 : 0);
+
+  const hayGastos = gastos.some(g => g > 0);
 
   const labels = periodos.map(p => {
     const [y, m] = p.split('-');
@@ -9792,12 +9811,17 @@ async function informeHistoricoChart(anioFiltro) {
     return new Date(+y, +m-1, 1).toLocaleDateString('es-AR', { month:'short', year:'2-digit' });
   });
 
-  set(`${periodos.length} período${periodos.length!==1?'s':''} · ${periodos[0]} → ${periodos[periodos.length-1]}`);
+  const periMin = periodos[0], periMax = periodos[periodos.length-1];
+  set(`${periodos.length} período${periodos.length!==1?'s':''} · ${periMin} → ${periMax}${!hayGastos?' · (sin gastos registrados en Contabilidad para este rango)':''}`);
 
   // Renderizar gráfico
   const ctx = document.getElementById('inf-hist-chart');
   if (!ctx) return;
   _infCharts.historico?.destroy();
+
+  const pctLabel = hayGastos ? 'Resultado % (s/venta)' : 'CMG % (s/venta)';
+  const pctData  = hayGastos ? pctNeto : periodos.map((p,i) => ventas[i]>0 ? cmgs[i]/ventas[i]*100 : 0);
+
   _infCharts.historico = new Chart(ctx, {
     type: 'line',
     data: {
@@ -9806,27 +9830,39 @@ async function informeHistoricoChart(anioFiltro) {
         {
           label: 'Venta neta',
           data: ventas,
-          borderColor: '#1a5fa8', backgroundColor: 'rgba(26,95,168,.07)',
-          tension: .3, pointRadius: 4, fill: false, yAxisID: 'y', borderWidth: 2
+          borderColor: '#1a5fa8', tension: .3, pointRadius: 4,
+          fill: false, yAxisID: 'y', borderWidth: 2
         },
         {
-          label: 'Costo',
+          label: 'Costo mercadería',
           data: costos,
-          borderColor: '#c0392b', backgroundColor: 'rgba(192,57,43,.07)',
-          tension: .3, pointRadius: 4, fill: false, yAxisID: 'y', borderWidth: 2
+          borderColor: '#c0392b', tension: .3, pointRadius: 4,
+          fill: false, yAxisID: 'y', borderWidth: 2
         },
         {
           label: 'CMG ($)',
           data: cmgs,
-          borderColor: '#1a7a52', backgroundColor: 'rgba(26,122,82,.07)',
-          tension: .3, pointRadius: 5, fill: false, yAxisID: 'y', borderWidth: 2.5
+          borderColor: '#1a7a52', tension: .3, pointRadius: 4,
+          fill: false, yAxisID: 'y', borderWidth: 2
+        },
+        ...(hayGastos ? [{
+          label: 'Gastos (Contabilidad)',
+          data: gastos,
+          borderColor: '#8e44ad', tension: .3, pointRadius: 4,
+          fill: false, yAxisID: 'y', borderWidth: 2, borderDash: [5, 3]
         },
         {
-          label: 'Margen %',
-          data: pcts,
-          borderColor: '#c47a00', backgroundColor: 'rgba(196,122,0,.07)',
-          tension: .3, pointRadius: 4, fill: false, yAxisID: 'y2',
-          borderWidth: 2, borderDash: [7, 4]
+          label: 'Resultado neto',
+          data: netos,
+          borderColor: '#c47a00', backgroundColor: 'rgba(196,122,0,.08)',
+          tension: .3, pointRadius: 5, fill: true, yAxisID: 'y', borderWidth: 3
+        }] : []),
+        {
+          label: pctLabel,
+          data: pctData,
+          borderColor: hayGastos ? '#c47a00' : '#888',
+          tension: .3, pointRadius: 3, fill: false,
+          yAxisID: 'y2', borderWidth: 1.5, borderDash: [6, 4]
         }
       ]
     },
@@ -9834,10 +9870,10 @@ async function informeHistoricoChart(anioFiltro) {
       responsive: true, maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { position: 'top', labels: { usePointStyle: true, pointStyleWidth: 14 } },
+        legend: { position: 'top', labels: { usePointStyle: true, pointStyleWidth: 12, font: { size: 11 } } },
         tooltip: {
           callbacks: {
-            label: c => c.dataset.label === 'Margen %'
+            label: c => c.dataset.yAxisID === 'y2'
               ? `  ${c.dataset.label}: ${c.raw.toFixed(1)}%`
               : `  ${c.dataset.label}: ${fmt(c.raw)}`
           }
@@ -9847,12 +9883,11 @@ async function informeHistoricoChart(anioFiltro) {
         x: { grid: { color: 'rgba(0,0,0,.04)' } },
         y: {
           type: 'linear', position: 'left',
-          ticks: { callback: v => '$' + (v>=1e6 ? (v/1e6).toFixed(1)+'M' : Math.round(v/1000)+'k') },
+          ticks: { callback: v => '$' + (Math.abs(v)>=1e6 ? (v/1e6).toFixed(1)+'M' : Math.round(v/1000)+'k') },
           grid: { color: 'rgba(0,0,0,.06)' }
         },
         y2: {
           type: 'linear', position: 'right',
-          min: 0,
           ticks: { callback: v => v.toFixed(0)+'%' },
           grid: { drawOnChartArea: false }
         }
@@ -9860,17 +9895,25 @@ async function informeHistoricoChart(anioFiltro) {
     }
   });
 
-  // KPIs resumen del período filtrado
-  const totVenta = ventas.reduce((a,v)=>a+v,0);
-  const totCosto = costos.reduce((a,v)=>a+v,0);
-  const totCMG   = cmgs.reduce((a,v)=>a+v,0);
-  const avgPct   = totVenta > 0 ? totCMG/totVenta*100 : 0;
-  const kpisEl   = document.getElementById('inf-hist-kpis');
+  // KPIs resumen
+  const totVenta  = ventas.reduce((a,v)=>a+v,0);
+  const totCosto  = costos.reduce((a,v)=>a+v,0);
+  const totCMG    = cmgs.reduce((a,v)=>a+v,0);
+  const totGastos = gastos.reduce((a,v)=>a+v,0);
+  const totNeto   = totCMG - totGastos;
+  const pctNetoTot = totVenta > 0 ? totNeto/totVenta*100 : 0;
+  const kpisEl = document.getElementById('inf-hist-kpis');
   if (kpisEl) kpisEl.innerHTML = `
-    <div class="stat"><div class="n" style="font-size:16px">${fmt(totVenta)}</div><div class="l">Venta total</div></div>
-    <div class="stat"><div class="n" style="font-size:16px;color:var(--D)">${fmt(totCosto)}</div><div class="l">Costo total</div></div>
-    <div class="stat"><div class="n" style="font-size:16px;color:var(--P)">${fmt(totCMG)}</div><div class="l">CMG total</div></div>
-    <div class="stat"><div class="n" style="font-size:16px;color:${avgPct>=20?'var(--P)':avgPct>=10?'var(--W)':'var(--D)'}">${avgPct.toFixed(1)}%</div><div class="l">Margen promedio</div></div>`;
+    <div class="stat"><div class="n" style="font-size:15px">${fmt(totVenta)}</div><div class="l">Venta total</div></div>
+    <div class="stat"><div class="n" style="font-size:15px;color:var(--D)">${fmt(totCosto)}</div><div class="l">Costo mercadería</div></div>
+    <div class="stat"><div class="n" style="font-size:15px;color:var(--P)">${fmt(totCMG)}</div><div class="l">CMG total</div></div>
+    ${hayGastos ? `
+    <div class="stat"><div class="n" style="font-size:15px;color:#8e44ad">${fmt(totGastos)}</div><div class="l">Gastos período</div></div>
+    <div class="stat"><div class="n" style="font-size:15px;font-weight:800;color:${totNeto>=0?'var(--P)':'var(--D)'}">${fmt(totNeto)}</div><div class="l">Resultado neto</div></div>
+    <div class="stat"><div class="n" style="font-size:15px;color:${pctNetoTot>=10?'var(--P)':pctNetoTot>=0?'var(--W)':'var(--D)'}">${pctNetoTot.toFixed(1)}%</div><div class="l">Margen neto</div></div>
+    ` : `
+    <div class="stat"><div class="n" style="font-size:15px;color:var(--W)">—</div><div class="l" style="color:var(--W)">Sin gastos en Contabilidad</div></div>
+    `}`;
 
   // Tabla detalle por período
   const tablaEl = document.getElementById('inf-hist-tabla');
@@ -9881,19 +9924,24 @@ async function informeHistoricoChart(anioFiltro) {
         <thead><tr>
           <th>Período</th>
           <th style="text-align:right">Venta neta</th>
-          <th style="text-align:right">Costo</th>
+          <th style="text-align:right">Costo merc.</th>
           <th style="text-align:right">CMG $</th>
-          <th style="text-align:right">Margen %</th>
+          ${hayGastos ? '<th style="text-align:right">Gastos</th><th style="text-align:right">Resultado neto</th><th style="text-align:right">Margen neto %</th>' : '<th style="text-align:right">CMG %</th>'}
         </tr></thead>
         <tbody>
           ${periodos.map((p,i)=>{
-            const pct=pcts[i]; const color=pct>=20?'var(--P)':pct>=10?'var(--W)':'var(--D)';
+            const pn = hayGastos ? pctNeto[i] : (ventas[i]>0?cmgs[i]/ventas[i]*100:0);
+            const color = pn>=10?'var(--P)':pn>=0?'var(--W)':'var(--D)';
             return `<tr>
               <td style="font-weight:600">${p}</td>
               <td style="text-align:right">${fmt(ventas[i])}</td>
               <td style="text-align:right;color:var(--txt2)">${fmt(costos[i])}</td>
-              <td style="text-align:right;font-weight:600;color:var(--P)">${fmt(cmgs[i])}</td>
-              <td style="text-align:right;font-weight:700;color:${color}">${pct.toFixed(1)}%</td>
+              <td style="text-align:right;color:var(--P)">${fmt(cmgs[i])}</td>
+              ${hayGastos
+                ? `<td style="text-align:right;color:#8e44ad">${gastos[i]?fmt(gastos[i]):'—'}</td>
+                   <td style="text-align:right;font-weight:700;color:${color}">${fmt(netos[i])}</td>
+                   <td style="text-align:right;font-weight:700;color:${color}">${pn.toFixed(1)}%</td>`
+                : `<td style="text-align:right;font-weight:700;color:${color}">${pn.toFixed(1)}%</td>`}
             </tr>`;
           }).join('')}
         </tbody>
