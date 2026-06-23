@@ -459,7 +459,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 
 <!-- POPUP cantidad producto móvil -->
-<div id="pm-popup-bg" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:flex-end;justify-content:center">
+<div id="pm-popup-bg" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1300;align-items:flex-end;justify-content:center">
   <div style="background:#fff;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;box-sizing:border-box">
     <div id="pm-popup-nombre" style="font-size:15px;font-weight:700;color:var(--PD);margin-bottom:4px"></div>
     <div id="pm-popup-precio" style="font-size:13px;color:var(--txt2);margin-bottom:16px"></div>
@@ -7332,11 +7332,14 @@ function toggleMarcaMovil(marca,key){
 function abrirPopupMovil(prodId){
   const p=_productos.find(x=>x.id===prodId);if(!p)return;
   _pmProdActual=p;
-  const enCarrito=_pmCarrito.find(x=>x.id===prodId);
+  // En modo edición buscar en _editPedMovil.items; en modo nuevo en _pmCarrito
+  const existente=_editPedMovil
+    ? _editPedMovil.items.find(x=>x.id===prodId)
+    : _pmCarrito.find(x=>x.id===prodId);
   document.getElementById('pm-popup-nombre').textContent=p.nombre;
   document.getElementById('pm-popup-precio').textContent=fmt(p.precio||0)+' '+(p.unidad||'');
-  document.getElementById('pm-cant').value=enCarrito?enCarrito.cant:1;
-  document.getElementById('pm-dto').value=enCarrito?enCarrito.dto:(p.descuento||0);
+  document.getElementById('pm-cant').value=existente?existente.cant:1;
+  document.getElementById('pm-dto').value=existente?existente.dto:(p.descuento||0);
   const bg=document.getElementById('pm-popup-bg');
   bg.style.display='flex';
   setTimeout(()=>document.getElementById('pm-cant').select(),50);
@@ -7357,11 +7360,30 @@ function agregarAlCarrito(){
   if(!_pmProdActual)return;
   const cant=parseFloat(document.getElementById('pm-cant').value)||0;
   const dto=parseFloat(document.getElementById('pm-dto').value)||0;
+  const precio=_pmProdActual.precio||0;
+
+  if(_editPedMovil){
+    // Modo edición: actualizar _editPedMovil.items
+    cerrarPopupMovil();
+    const idx=_editPedMovil.items.findIndex(x=>x.id===_pmProdActual.id);
+    if(cant<=0){
+      if(idx>=0) _editPedMovil.items.splice(idx,1);
+    } else {
+      const item={id:_pmProdActual.id,nom:_pmProdActual.nombre,un:_pmProdActual.unidad||'un',cant,precio,dto,iva:_pmProdActual.iva||21};
+      if(idx>=0) _editPedMovil.items[idx]=item; else _editPedMovil.items.push(item);
+    }
+    const busq=document.getElementById('epm-busq');
+    const drop=document.getElementById('epm-drop');
+    if(busq)busq.value='';
+    if(drop)drop.style.display='none';
+    renderEditPedidoMovil();
+    return;
+  }
+
+  // Modo nuevo pedido: actualizar _pmCarrito
   if(cant<=0){
-    // Quitar del carrito
     _pmCarrito=_pmCarrito.filter(x=>x.id!==_pmProdActual.id);
   } else {
-    const precio=_pmProdActual.precio||0;
     const neto=precio*cant*(1-dto/100);
     const idx=_pmCarrito.findIndex(x=>x.id===_pmProdActual.id);
     const item={id:_pmProdActual.id,nom:_pmProdActual.nombre,precio,cant,dto,un:_pmProdActual.unidad||'',neto};
@@ -7369,7 +7391,7 @@ function agregarAlCarrito(){
   }
   cerrarPopupMovil();
   actualizarCarritoBar();
-  cargarMarcasMovil(); // refrescar badges y productos
+  cargarMarcasMovil();
 }
 
 function actualizarCarritoBar(){
@@ -7701,25 +7723,20 @@ function filtrarAgregarMovil(){
   const q=(document.getElementById('epm-busq')?.value||'').toLowerCase().trim();
   const drop=document.getElementById('epm-drop');if(!drop)return;
   if(!q){drop.style.display='none';return;}
-  const res=_productos.filter(p=>(p.nombre||'').toLowerCase().includes(q)||(p.codigo||'').toString().includes(q)).slice(0,8);
+  const res=_productos.filter(p=>p.activo!==false&&((p.nombre||'').toLowerCase().includes(q)||(p.codigo||'').toString().includes(q))).slice(0,10);
   if(!res.length){drop.style.display='none';return;}
-  drop.innerHTML=res.map(p=>`
-    <div onclick="agregarProdEditMovil(${p.id})"
-      style="padding:12px 14px;font-size:16px;border-bottom:1px solid var(--brd);cursor:pointer;min-height:48px;display:flex;align-items:center;gap:8px">
-      <span style="flex:1;font-weight:600">${p.nombre}</span>
-      <span style="font-size:13px;color:var(--txt2)">${fmt(p.precio)}</span>
-    </div>`).join('');
+  drop.innerHTML=res.map(p=>{
+    const enEdit=_editPedMovil?.items.find(x=>x.id===p.id);
+    return `<div onclick="abrirPopupMovil(${p.id})"
+      style="padding:12px 14px;font-size:16px;border-bottom:1px solid var(--brd);cursor:pointer;min-height:52px;display:flex;align-items:center;gap:10px;background:${enEdit?'var(--PL)':''}">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.nombre}</div>
+        ${enEdit?`<div style="font-size:12px;color:var(--P);font-weight:600">✓ ${enEdit.cant} ${p.unidad||''} en pedido</div>`:''}
+      </div>
+      <span style="font-size:14px;font-weight:700;color:var(--PD);flex-shrink:0">${fmt(p.precio)}</span>
+    </div>`;
+  }).join('');
   drop.style.display='block';
-}
-
-function agregarProdEditMovil(prodId){
-  const p=_productos.find(x=>x.id===prodId);if(!p)return;
-  const ex=_editPedMovil.items.find(i=>i.id===prodId);
-  if(ex){ex.cant+=1;}
-  else{_editPedMovil.items.push({id:p.id,nom:p.nombre,un:p.unidad||'un',cant:1,precio:p.precio||0,dto:0,iva:p.iva||21});}
-  document.getElementById('epm-busq').value='';
-  document.getElementById('epm-drop').style.display='none';
-  renderEditPedidoMovil();
 }
 
 async function guardarEditPedidoMovil(){
