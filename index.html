@@ -3942,7 +3942,7 @@ function imprimirHojaCarga(){
       const esPeso=(it.un||'').toLowerCase()==='kg';
       return '<tr>'
         +'<td style="padding:4px 6px;border:1px solid #ccc;text-align:center;color:#777;font-size:11px">'+(j+1)+'</td>'
-        +'<td style="padding:4px 6px;border:1px solid #ccc;font-weight:500;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+it.nom+'</td>'
+        +'<td style="padding:4px 6px;border:1px solid #ccc;font-weight:500">'+it.nom+'</td>'
         +'<td style="padding:4px 6px;border:1px solid #ccc;text-align:center">'+it.cant+'</td>'
         +'<td style="padding:4px 6px;border:1px solid #ccc;text-align:center;color:#555">'+( it.un||'')+'</td>'
         +'<td style="padding:4px 6px;border:1px solid #ccc;text-align:center;letter-spacing:2px">'+(esPeso?'_________':'—')+'</td>'
@@ -3954,14 +3954,13 @@ function imprimirHojaCarga(){
         +(i+1)+'. '+(c.codigo||p.cliente_id||'')+' — '+p.cliente
         +'<span style="float:right;font-size:11px;font-weight:400">'+(c.direccion||'')+' '+(p.localidad||'')+'</span>'
       +'</div>'
-      +'<table style="width:100%;border-collapse:collapse;table-layout:fixed">'
-        +'<colgroup><col style="width:28px"><col><col style="width:58px"><col style="width:48px"><col style="width:108px"></colgroup>'
+      +'<table style="width:100%;border-collapse:collapse">'
         +'<thead><tr style="background:#e8f5e9">'
-          +'<th style="padding:4px 6px;border:1px solid #ccc;text-align:center">#</th>'
+          +'<th style="padding:4px 6px;border:1px solid #ccc;text-align:center;width:5%">#</th>'
           +'<th style="padding:4px 6px;border:1px solid #ccc;text-align:left">Producto</th>'
-          +'<th style="padding:4px 6px;border:1px solid #ccc;text-align:center">Cant.</th>'
-          +'<th style="padding:4px 6px;border:1px solid #ccc;text-align:center">Unid.</th>'
-          +'<th style="padding:4px 6px;border:1px solid #ccc;text-align:center">Peso real (kg)</th>'
+          +'<th style="padding:4px 6px;border:1px solid #ccc;text-align:center;width:12%">Cant.</th>'
+          +'<th style="padding:4px 6px;border:1px solid #ccc;text-align:center;width:9%">Unid.</th>'
+          +'<th style="padding:4px 6px;border:1px solid #ccc;text-align:center;width:22%">Peso real (kg)</th>'
         +'</tr></thead>'
         +'<tbody>'+filasProd+'</tbody>'
       +'</table>'
@@ -4178,8 +4177,9 @@ function imprimirHojaRutaGrupal(){
   if(ven)rems=rems.filter(r=>(r.vendedor||'').toLowerCase().includes(ven));
   if(!rems.length){alert('No hay remitos para esa fecha'+(ven?' y vendedor':''));return;}
 
-  // Deduplicar por ID (evita duplicados si hay registros repetidos en la base)
+  // Deduplicar: 1) por ID, 2) por cliente+items+total (duplicados lógicos con distinto ID)
   rems=[...new Map(rems.map(r=>[r.id,r])).values()];
+  {const seen=new Set();rems=rems.filter(r=>{const k=String(r.cliente_id||r.cliente)+'|'+(r.items||[]).length+'|'+r.total;return seen.has(k)?false:(seen.add(k),true);});}
   // Ordenar por localidad y cliente
   rems=rems.slice().sort((a,b)=>(a.localidad||'').localeCompare(b.localidad||'')||(a.cliente||'').localeCompare(b.cliente||''));
   const totalGeneral=rems.reduce((a,r)=>a+(r.total||0),0);
