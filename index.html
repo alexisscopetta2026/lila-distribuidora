@@ -3056,6 +3056,7 @@ let usuarioActual = null;
 // ─── ESTADO LOCAL ───
 let _clientes=[], _productos=[], _pedidos=[], _remitos=[], _cobros=[], _cargas=[];
 let _items=[], _proTemp=null;
+let _pendingContTab=null;
 let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
@@ -6507,8 +6508,8 @@ document.addEventListener('click',e=>{
   if(!e.target.closest('.nav-group')&&!e.target.closest('#nav-floating-dropdown'))cerrarNavDropdown();
 });
 function contTabDesde(tab){
+  _pendingContTab=tab;
   go('contabilidad');
-  setTimeout(()=>contTab(tab),50);
 }
 // Actualizar menú activo según panel
 function actualizarNavActivo(p){
@@ -8292,7 +8293,7 @@ function go(p){
     if(s&&usuarioActual)s.textContent='Hola, '+usuarioActual.nombre+'!';
     if(f)f.textContent=new Date().toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'});
   }
-  if(p==='contabilidad')contTab('gastos');
+  if(p==='contabilidad'){contTab(_pendingContTab||'gastos');_pendingContTab=null;}
   if(p==='nc')renderNCs();
   if(p==='cuentas'){setTimeout(()=>{const q=document.getElementById('cc-q');if(q)q.focus();},100);}
   if(p==='clientes'){setTimeout(()=>{const q=document.getElementById('cli-q');if(q)q.focus();},100);}
