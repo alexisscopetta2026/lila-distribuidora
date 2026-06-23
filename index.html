@@ -169,6 +169,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   #print-area{position:fixed;top:0;left:0;width:100%;padding:15px;font-size:12px}
   @page{size:A4 portrait;margin:10mm}
 }
+@keyframes slideUpBanner{from{transform:translateY(100%)}to{transform:translateY(0)}}
 </style>
 </head>
 <body>
@@ -3058,10 +3059,47 @@ let _items=[], _proTemp=null;
 let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
+// ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
+const APP_VERSION = '20260623-1';
+let _versionTag = null;
+let _versionCheckTimer = null;
+
+async function _fetchVersionTag(){
+  try {
+    const r = await fetch(location.pathname, {method:'HEAD', cache:'no-store'});
+    return r.headers.get('etag') || r.headers.get('last-modified') || null;
+  } catch(e){ return null; }
+}
+
+async function initVersionCheck(){
+  _versionTag = await _fetchVersionTag();
+  if(_versionCheckTimer) clearInterval(_versionCheckTimer);
+  _versionCheckTimer = setInterval(async ()=>{
+    if(document.getElementById('update-banner')) return;
+    const tag = await _fetchVersionTag();
+    if(tag && _versionTag && tag !== _versionTag) _mostrarBannerUpdate();
+  }, 5 * 60 * 1000);
+}
+
+function _mostrarBannerUpdate(){
+  if(document.getElementById('update-banner')) return;
+  const d = document.createElement('div');
+  d.id = 'update-banner';
+  d.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9990;background:#1a3c5e;color:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 -3px 20px rgba(0,0,0,0.32);font-family:inherit;animation:slideUpBanner .35s ease';
+  d.innerHTML = `<div style="font-size:15px;font-weight:600;line-height:1.3">🔄 Hay una versión nueva disponible</div><button onclick="actualizarApp()" style="background:#fff;color:#1a3c5e;border:none;border-radius:8px;padding:10px 20px;font-size:15px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap">Actualizar</button>`;
+  document.body.appendChild(d);
+}
+
+function actualizarApp(){
+  location.href = location.pathname + '?_v=' + Date.now();
+}
+
 // ─── LOGIN ───
 // ─── LOGIN AUTOMÁTICO POR URL ───
 (function(){
   const params = new URLSearchParams(window.location.search);
+  // Limpiar param _v (cache-bust post-actualización) sin afectar el historial
+  if(params.get('_v')) history.replaceState(null,'',location.pathname);
   const v = params.get('v');
   if(v){
     const found = USUARIOS.find(x => x.user === v.toLowerCase() || (x.vendedor||'').toLowerCase() === v.toLowerCase());
@@ -3104,9 +3142,10 @@ function doLogin(){
   
   // Si es vendedor, ir directo a pedidos
   if(found.rol==='vendedor'){
-    cargarTodo().then(()=>go('vendedor-home'));
+    cargarTodo().then(()=>{initVersionCheck();go('vendedor-home');});
   } else {
     cargarTodo().then(()=>{
+      initVersionCheck();
       // Limpiar estado del sidebar
       document.querySelectorAll('.sidebar-group').forEach(g=>{
         g.classList.remove('open','active');
@@ -3152,20 +3191,16 @@ async function cargarTodo(){
   if(!document.querySelector('.panel.on'))go('dash');
 }
 async function cargarClientes(){
-  // Cargar clientes con límite alto — filtrar por vendedor directo en Supabase si aplica
-  let qCli = sb.from('clientes').select('*').order('nombre').limit(2000);
-  if(usuarioActual?.rol==='vendedor' && usuarioActual.vendedor){
-    qCli = sb.from('clientes').select('*').ilike('vendedor','%'+usuarioActual.vendedor+'%').order('nombre').limit(2000);
-  }
-  const {data}=await qCli;
-  // Vendedor ve solo sus clientes
-  _clientes=usuarioActual.vendedor?(data||[]).filter(c=>(c.vendedor||'').toLowerCase().includes(usuarioActual.vendedor.toLowerCase())):data||[];
+  // Cargar todos los clientes — el filtro por vendedor se hace en JS para incluir sin-vendedor
+  const {data}=await sb.from('clientes').select('*').order('nombre').limit(2000);
+  // Vendedor ve sus clientes + los que no tienen vendedor asignado (para no perder ninguno)
+  _clientes=usuarioActual.vendedor?(data||[]).filter(c=>{const v=c.vendedor||'';return v===''||v.toLowerCase().includes(usuarioActual.vendedor.toLowerCase());}):data||[];
 }
 async function cargarProductos(){const {data}=await sb.from('productos').select('*').order('nombre');_productos=data||[];}
 async function cargarPedidos(){
   const {data}=await sb.from('pedidos').select('*').order('created_at',{ascending:false});
-  // Vendedor ve solo sus pedidos
-  _pedidos=usuarioActual.vendedor?(data||[]).filter(p=>(p.vendedor||'').toLowerCase().includes(usuarioActual.vendedor.toLowerCase())):data||[];
+  // Vendedor ve sus pedidos + los que no tienen vendedor asignado
+  _pedidos=usuarioActual.vendedor?(data||[]).filter(p=>{const v=p.vendedor||'';return v===''||v.toLowerCase().includes(usuarioActual.vendedor.toLowerCase());}):data||[];
 }
 async function cargarRemitos(){const {data}=await sb.from('remitos').select('*').order('created_at',{ascending:false});_remitos=data||[];}
 async function cargarCobros(){const {data}=await sb.from('cobros').select('*').order('created_at',{ascending:false});_cobros=data||[];}
@@ -7600,17 +7635,42 @@ async function elimPedidoMovil(id){
   toast('Pedido eliminado');
 }
 
-// ── Edición de pedido en la vista móvil ──
+// ── Edición de pedido en la vista móvil — bottom sheet ──
 function editarPedidoMovil(pedId){
   const p=_pedidos.find(x=>x.id===pedId);if(!p)return;
   _editPedMovil={id:pedId,items:JSON.parse(JSON.stringify(p.items||[]))};
+  const cl=document.getElementById('epm-sheet-cliente');
+  if(cl)cl.textContent=p.cliente||'';
+  const busq=document.getElementById('epm-busq');
+  if(busq)busq.value='';
+  const drop=document.getElementById('epm-drop');
+  if(drop)drop.style.display='none';
   renderEditPedidoMovil();
+  abrirBottomSheetEditar();
+}
+
+function abrirBottomSheetEditar(){
+  const backdrop=document.getElementById('epm-backdrop');
+  const sheet=document.getElementById('epm-sheet');
+  if(!backdrop||!sheet)return;
+  backdrop.style.opacity='1';
+  backdrop.style.pointerEvents='all';
+  sheet.style.transform='translateY(0)';
+  document.body.style.overflow='hidden';
+}
+
+function cerrarBottomSheetEditar(){
+  const backdrop=document.getElementById('epm-backdrop');
+  const sheet=document.getElementById('epm-sheet');
+  if(!backdrop||!sheet)return;
+  backdrop.style.opacity='0';
+  backdrop.style.pointerEvents='none';
+  sheet.style.transform='translateY(100%)';
+  document.body.style.overflow='';
 }
 
 function renderEditPedidoMovil(){
-  const {id,items}=_editPedMovil;
-  const inner=document.getElementById('ped-mov-det-inner-'+id);
-  if(!inner)return;
+  const {items}=_editPedMovil;
   const filas=items.map((it,i)=>`
     <div style="display:flex;align-items:center;min-height:56px;padding:8px 0;border-bottom:1px solid var(--brd);gap:10px">
       <div style="flex:1;min-width:0">
@@ -7626,27 +7686,8 @@ function renderEditPedidoMovil(){
         ✕
       </button>
     </div>`).join('');
-
-  inner.innerHTML=`
-    <div style="font-size:14px;font-weight:700;color:var(--A);margin-bottom:10px">✏️ Editando pedido</div>
-    <div id="epm-items">${filas}</div>
-    <div id="epm-total" style="text-align:right;font-size:18px;font-weight:700;color:var(--P);padding:10px 0 4px"></div>
-    <!-- Agregar producto -->
-    <div style="margin:10px 0;border-top:1px solid var(--brd);padding-top:10px">
-      <div style="font-size:14px;font-weight:600;color:var(--txt2);margin-bottom:6px">Agregar producto</div>
-      <input id="epm-busq" type="text" inputmode="text" placeholder="Escribí el nombre..." autocomplete="off"
-        oninput="filtrarAgregarMovil()"
-        style="width:100%;height:48px;font-size:16px;border:1.5px solid var(--brd);border-radius:10px;padding:0 12px;box-sizing:border-box">
-      <div id="epm-drop" style="display:none;border:1.5px solid var(--brd);border-radius:10px;margin-top:4px;background:var(--bg);max-height:200px;overflow-y:auto"></div>
-    </div>
-    <div style="display:flex;gap:8px;margin-top:6px">
-      <button onclick="guardarEditPedidoMovil()" style="flex:2;min-height:52px;background:var(--P);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer">
-        ✓ Guardar cambios
-      </button>
-      <button onclick="cancelarEditPedidoMovil()" style="flex:1;min-height:52px;background:var(--bg2);color:var(--txt);border:1.5px solid var(--brd);border-radius:10px;font-size:15px;cursor:pointer">
-        Cancelar
-      </button>
-    </div>`;
+  const epmItems=document.getElementById('epm-items');
+  if(epmItems)epmItems.innerHTML=filas;
   actualizarTotalEditMovil();
 }
 
@@ -7689,26 +7730,23 @@ async function guardarEditPedidoMovil(){
   tot=Math.round(tot*100)/100;
   const {error}=await sb.from('pedidos').update({items:filtrados,total:tot}).eq('id',id);
   if(error){toast('Error al guardar','err');return;}
-  await cargarPedidos();
+  cerrarBottomSheetEditar();
   _editPedMovil=null;
+  await cargarPedidos();
   toast('✅ Pedido actualizado');
   verMisPedidosHoy();
   // Reabrir el detalle del pedido editado
   setTimeout(()=>{
     const det=document.getElementById('ped-mov-det-'+id);
     const chev=document.getElementById('ped-mov-chevron-'+id);
-    if(det){det.style.display='block';}
+    if(det)det.style.display='block';
     if(chev)chev.style.transform='rotate(180deg)';
   },50);
 }
 
 function cancelarEditPedidoMovil(){
-  const id=_editPedMovil?.id;
   _editPedMovil=null;
-  if(!id)return;
-  const p=_pedidos.find(x=>x.id===id);
-  const inner=document.getElementById('ped-mov-det-inner-'+id);
-  if(inner&&p)inner.innerHTML=detalleMovilHTML(p);
+  cerrarBottomSheetEditar();
 }
 // ─── FIN PEDIDO MÓVIL ───
 // ─── GASTOS FIJOS ───
@@ -10443,5 +10481,40 @@ async function leerFacturaConIA(input){
 }
 
 </script>
+
+<!-- ── Bottom sheet: edición de pedido móvil ── -->
+<div id="epm-backdrop"
+     onclick="cancelarEditPedidoMovil()"
+     style="position:fixed;inset:0;background:rgba(0,0,0,0.52);z-index:1200;opacity:0;pointer-events:none;transition:opacity 0.28s"></div>
+<div id="epm-sheet"
+     style="position:fixed;bottom:0;left:0;right:0;height:75%;background:var(--bg);border-radius:20px 20px 0 0;z-index:1201;transform:translateY(100%);transition:transform 0.35s cubic-bezier(0.32,0.72,0,1);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 -6px 32px rgba(0,0,0,0.22)">
+  <!-- Drag handle -->
+  <div style="display:flex;justify-content:center;padding:10px 0 6px;flex-shrink:0">
+    <div style="width:44px;height:5px;background:#c8c8c8;border-radius:3px"></div>
+  </div>
+  <!-- Cabecera -->
+  <div style="padding:0 16px 10px;flex-shrink:0;border-bottom:1px solid var(--brd)">
+    <div style="font-size:16px;font-weight:700;color:var(--A)">✏️ Editando pedido</div>
+    <div id="epm-sheet-cliente" style="font-size:13px;color:var(--txt2);margin-top:2px"></div>
+  </div>
+  <!-- Contenido scrollable -->
+  <div style="flex:1;overflow-y:auto;padding:0 16px;-webkit-overflow-scrolling:touch">
+    <div id="epm-items"></div>
+    <div id="epm-total" style="text-align:right;font-size:18px;font-weight:700;color:var(--P);padding:10px 0 4px"></div>
+    <!-- Agregar producto -->
+    <div style="margin:10px 0 20px;border-top:1px solid var(--brd);padding-top:12px">
+      <div style="font-size:14px;font-weight:600;color:var(--txt2);margin-bottom:6px">Agregar producto</div>
+      <input id="epm-busq" type="text" inputmode="text" placeholder="Escribí el nombre..." autocomplete="off"
+        oninput="filtrarAgregarMovil()"
+        style="width:100%;height:48px;font-size:16px;border:1.5px solid var(--brd);border-radius:10px;padding:0 12px;box-sizing:border-box">
+      <div id="epm-drop" style="display:none;border:1.5px solid var(--brd);border-radius:10px;margin-top:4px;background:var(--bg);max-height:180px;overflow-y:auto"></div>
+    </div>
+  </div>
+  <!-- Botones fijos abajo -->
+  <div style="display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--brd);flex-shrink:0">
+    <button onclick="guardarEditPedidoMovil()" style="flex:2;min-height:52px;background:var(--P);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer">✓ Guardar cambios</button>
+    <button onclick="cancelarEditPedidoMovil()" style="flex:1;min-height:52px;background:var(--bg2);color:var(--txt);border:1.5px solid var(--brd);border-radius:10px;font-size:15px;cursor:pointer">Cancelar</button>
+  </div>
+</div>
 </body>
 </html>
