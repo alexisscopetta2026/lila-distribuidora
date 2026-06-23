@@ -3157,12 +3157,14 @@ function doLogin(){
       });
       document.querySelectorAll('.sidebar-item,.sidebar-dash').forEach(b=>b.classList.remove('on'));
       const dashBtn=document.querySelector('.sidebar-dash[data-p="dash"]');
-      if(dashBtn){
-        dashBtn.classList.add('on');
-        dashBtn.setAttribute('tabindex','0');
-        setTimeout(()=>{dashBtn.focus();},400);
-      }
+      if(dashBtn){dashBtn.classList.add('on');}
       go('dash');
+      // Foco automático en sidebar: primero en Dashboard, luego en el primer grupo
+      setTimeout(()=>{
+        const firstGroup=document.querySelector('#sidebar .sidebar-group-btn');
+        const focusTarget=firstGroup||dashBtn;
+        if(focusTarget){focusTarget.setAttribute('tabindex','0');focusTarget.focus();}
+      },500);
     });
   }
 }
