@@ -4081,75 +4081,91 @@ function imprimirRemito(){
             _clientes.find(x=>String(x.codigo)===String(d.cliente_id))||{};
   const dir=d.lugar_entrega||d.direccion||cli.direccion||cli.domicilio||'';
   const tel=d.telefono||cli.telefono||cli.celular||'';
+  const condPago=d.condicion_pago??cli.condicion_pago;
+  const condTexto=condPago?condPago+' días':'Contado';
   let sub=0,dtoT=0,tot=0;
   const rows=(d.items||[]).map(it=>{
+    const prod=_productos.find(p=>p.id===it.id||p.nombre===it.nom)||{};
     const base=it.precio*it.cant,dtoA=base*((it.dto||0)/100),neto=base-dtoA;
     sub+=base;dtoT+=dtoA;tot+=neto;
+    const esKg=(it.un||'').toLowerCase()==='kg';
     return '<tr>'
-      +'<td style="padding:4px 6px;border:1px solid #ccc;font-size:11px">'+it.nom+'</td>'
-      +'<td style="padding:4px 6px;border:1px solid #ccc;text-align:center;font-size:11px">'+fmtN(it.cant,2)+' '+(it.un||'')+'</td>'
-      +'<td style="padding:4px 6px;border:1px solid #ccc;text-align:right;font-size:11px">'+fmt(it.precio)+'</td>'
-      +'<td style="padding:4px 6px;border:1px solid #ccc;text-align:center;font-size:11px">'+((it.dto||0)||'—')+(it.dto?'%':'')+'</td>'
-      +'<td style="padding:4px 6px;border:1px solid #ccc;text-align:right;font-weight:600;font-size:11px">'+fmt(neto)+'</td>'
+      +'<td style="padding:5px 6px;border:1px solid #ccc;text-align:center;font-size:11px;white-space:nowrap">'+fmtN(it.cant,2)+' '+(it.un||'')+'</td>'
+      +'<td style="padding:5px 6px;border:1px solid #ccc;font-size:11px">'+it.nom+'</td>'
+      +'<td style="padding:5px 6px;border:1px solid #ccc;text-align:center;font-size:10px;color:#666">'+(prod.codigo||'—')+'</td>'
+      +'<td style="padding:5px 6px;border:1px solid #ccc;text-align:center;font-size:11px">'+(esKg?fmtN(it.cant,2):'—')+'</td>'
+      +'<td style="padding:5px 6px;border:1px solid #ccc;text-align:right;font-size:11px">'+fmt(it.precio)+'</td>'
+      +'<td style="padding:5px 6px;border:1px solid #ccc;text-align:center;font-size:11px">'+((it.dto||0)||'—')+(it.dto?'%':'')+'</td>'
+      +'<td style="padding:5px 6px;border:1px solid #ccc;text-align:right;font-weight:600;font-size:11px">'+fmt(neto)+'</td>'
       +'</tr>';
   }).join('');
 
-  // Bloque HTML de un remito (reutilizable para las dos copias)
   const bloque=(etiqueta)=>`
-    <div style="padding:8px 0 6px 0">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1a7a52;padding-bottom:6px;margin-bottom:8px">
+    <div style="padding:10px 0 8px 0;min-height:48%">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2.5px solid #1a7a52;padding-bottom:8px;margin-bottom:10px">
         <div>
-          <div style="font-size:13px;font-weight:700;color:#1a7a52">🌸 Distribuidora Lila</div>
-          <div style="font-size:9px;color:#777">Sistema de distribución</div>
+          <div style="font-size:15px;font-weight:800;color:#1a7a52">🌸 Distribuidora Lila</div>
+          <div style="font-size:9px;color:#888;margin-top:2px">Distribución mayorista</div>
         </div>
-        <div style="text-align:center;flex:1">
-          <div style="font-size:18px;font-weight:800;color:#1a7a52">${num}</div>
-          <div style="font-size:9px;color:#1a7a52;font-weight:600">${etiqueta}</div>
+        <div style="text-align:center;flex:1;padding:0 10px">
+          <div style="font-size:22px;font-weight:800;color:#1a7a52;letter-spacing:1px">${num}</div>
+          <div style="font-size:10px;color:#fff;font-weight:700;background:#1a7a52;padding:3px 12px;border-radius:12px;display:inline-block;margin-top:3px;letter-spacing:.5px">${etiqueta}</div>
         </div>
-        <div style="text-align:right">
-          <div style="font-size:11px;font-weight:600">${d.fecha}</div>
-          ${d.vendedor?`<div style="font-size:9px;color:#555">${d.vendedor}</div>`:''}
+        <div style="text-align:right;min-width:110px">
+          <div style="font-size:12px;font-weight:700">${d.fecha}</div>
+          ${d.vendedor?`<div style="font-size:11px;color:#1a7a52;font-weight:600;margin-top:2px">Vendedor: ${d.vendedor}</div>`:''}
+          <div style="font-size:10px;color:#555;margin-top:2px">Cond.: <b>${condTexto}</b></div>
         </div>
       </div>
-      <div style="background:#f8f8f8;border:1px solid #ddd;border-radius:4px;padding:6px 10px;margin-bottom:8px">
-        <div style="font-weight:700;font-size:12px">${d.cliente}</div>
-        ${dir?'<div style="color:#555;font-size:10px;margin-top:2px">'+dir+'</div>':''}
-        <div style="color:#555;font-size:10px">${d.localidad||''} · Zona ${d.zona||'-'}${tel?' · Tel: '+tel:''}</div>
-        ${d.lugar_entrega?'<div style="color:#c07000;font-weight:600;font-size:10px">📍 Entrega: '+d.lugar_entrega+'</div>':''}
+      <div style="background:#f4f8f6;border:1.5px solid #c8e6d5;border-radius:5px;padding:8px 12px;margin-bottom:10px">
+        <div style="font-weight:700;font-size:13px;color:#1a1a1a">${d.cliente}</div>
+        ${dir?'<div style="color:#555;font-size:10px;margin-top:3px">📍 '+dir+'</div>':''}
+        <div style="color:#666;font-size:10px;margin-top:2px">${d.localidad||''}${d.zona?' · Zona '+d.zona:''}${tel?' · Tel: '+tel:''}</div>
       </div>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:6px">
-        <thead><tr style="background:#f0f0f0">
-          <th style="padding:4px 6px;border:1px solid #ccc;font-size:10px;text-align:left">Producto</th>
-          <th style="padding:4px 6px;border:1px solid #ccc;font-size:10px">Cant.</th>
-          <th style="padding:4px 6px;border:1px solid #ccc;font-size:10px;text-align:right">P.Unit</th>
-          <th style="padding:4px 6px;border:1px solid #ccc;font-size:10px">Dto</th>
-          <th style="padding:4px 6px;border:1px solid #ccc;font-size:10px;text-align:right">Total</th>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:8px;table-layout:fixed">
+        <colgroup>
+          <col style="width:58px"><col><col style="width:46px"><col style="width:44px"><col style="width:70px"><col style="width:42px"><col style="width:74px">
+        </colgroup>
+        <thead><tr style="background:#e8f5ef">
+          <th style="padding:5px 6px;border:1px solid #b2d8c4;font-size:10px;text-align:center">Cant.</th>
+          <th style="padding:5px 6px;border:1px solid #b2d8c4;font-size:10px;text-align:left">Producto</th>
+          <th style="padding:5px 6px;border:1px solid #b2d8c4;font-size:10px;text-align:center">Código</th>
+          <th style="padding:5px 6px;border:1px solid #b2d8c4;font-size:10px;text-align:center">Kilos</th>
+          <th style="padding:5px 6px;border:1px solid #b2d8c4;font-size:10px;text-align:right">P.Unit</th>
+          <th style="padding:5px 6px;border:1px solid #b2d8c4;font-size:10px;text-align:center">Dto %</th>
+          <th style="padding:5px 6px;border:1px solid #b2d8c4;font-size:10px;text-align:right">Total</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      ${dtoT>0?'<div style="font-size:10px;color:#777;text-align:right">Descuento: '+fmt(dtoT)+'</div>':''}
-      <div style="text-align:right;font-size:14px;font-weight:700;color:#1a7a52;margin-top:4px">Total: ${fmt(tot)}</div>
-      ${(d.observaciones||d.obs)?'<div style="font-size:10px;color:#555;border-top:1px solid #eee;padding-top:4px;margin-top:4px">Obs: '+(d.observaciones||d.obs)+'</div>':''}
-      <div style="margin-top:8px;display:flex;justify-content:space-between;font-size:10px;color:#555">
-        <span>Firma: _______________________</span>
-        <span>Aclaración: _______________________</span>
+      <div style="text-align:right;border-top:1.5px solid #ccc;padding-top:6px;margin-top:2px">
+        <div style="font-size:11px;color:#555">Total sin descuento: <b>${fmt(sub)}</b></div>
+        ${dtoT>0?'<div style="font-size:11px;color:#b05000">Descuento: <b>− '+fmt(dtoT)+'</b></div>':''}
+        <div style="font-size:16px;font-weight:800;color:#1a7a52;margin-top:4px">Neto a pagar: ${fmt(tot)}</div>
+      </div>
+      ${(d.observaciones||d.obs)?'<div style="font-size:10px;color:#555;border-top:1px solid #ddd;padding-top:5px;margin-top:6px">Obs: '+(d.observaciones||d.obs)+'</div>':''}
+      <div style="margin-top:10px;display:flex;justify-content:space-between;font-size:10px;color:#555;border-top:1px solid #ddd;padding-top:8px">
+        <span>Firma: ___________________________</span>
+        <span>Aclaración: ___________________________</span>
       </div>
     </div>`;
 
   const w=window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html><head><title>${num}</title>
     <style>
-      body{font-family:Arial,sans-serif;margin:0;padding:6mm;color:#000}
-      @page{size:A4 portrait;margin:6mm}
-      @media print{.no-print{display:none}}
-      .copia{width:100%;box-sizing:border-box}
-      .corte{border-top:1px dashed #999;margin:6px 0;text-align:center;font-size:9px;color:#999;letter-spacing:2px}
+      *{box-sizing:border-box}
+      body{font-family:Arial,sans-serif;margin:0;padding:8mm;color:#000}
+      @page{size:A4 portrait;margin:8mm}
+      @media print{.no-print{display:none}body{padding:0}}
+      .pagina{width:100%;display:flex;flex-direction:column;min-height:calc(100vh - 16mm)}
+      .corte{border-top:1.5px dashed #aaa;margin:8px 0;text-align:center;font-size:9px;color:#aaa;letter-spacing:3px;padding:2px 0}
     </style></head><body>
-    <div class="copia">${bloque('ORIGINAL — CLIENTE')}</div>
-    <div class="corte">✂ &nbsp; CORTAR &nbsp; ✂</div>
-    <div class="copia">${bloque('DUPLICADO — EMPRESA')}</div>
-    <div class="no-print" style="text-align:center;margin-top:12px">
-      <button onclick="window.print()" style="padding:8px 24px;background:#1a7a52;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨️ Imprimir</button>
+    <div class="pagina">
+      ${bloque('ORIGINAL — CLIENTE')}
+      <div class="corte">✂ &nbsp;&nbsp; CORTAR &nbsp;&nbsp; ✂</div>
+      ${bloque('DUPLICADO — EMPRESA')}
+    </div>
+    <div class="no-print" style="text-align:center;margin-top:14px">
+      <button onclick="window.print()" style="padding:9px 28px;background:#1a7a52;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">🖨️ Imprimir</button>
     </div>
     </body></html>`);
   w.document.close();
