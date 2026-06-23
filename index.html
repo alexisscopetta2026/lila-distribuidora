@@ -3941,11 +3941,11 @@ function imprimirHojaCarga(){
     const filasProd=(p.items||[]).map((it,j)=>{
       const esPeso=(it.un||'').toLowerCase()==='kg';
       return '<tr>'
-        +'<td style="padding:5px 8px;border:1px solid #ccc;text-align:center;color:#777;font-size:11px">'+(j+1)+'</td>'
-        +'<td style="padding:5px 8px;border:1px solid #ccc;font-weight:500">'+it.nom+'</td>'
-        +'<td style="padding:5px 8px;border:1px solid #ccc;text-align:center">'+it.cant+'</td>'
-        +'<td style="padding:5px 8px;border:1px solid #ccc;text-align:center;color:#555">'+( it.un||'')+'</td>'
-        +'<td style="padding:5px 8px;border:1px solid #ccc;text-align:center">'+(esPeso?'___________':'—')+'</td>'
+        +'<td style="padding:4px 6px;border:1px solid #ccc;text-align:center;color:#777;font-size:11px">'+(j+1)+'</td>'
+        +'<td style="padding:4px 6px;border:1px solid #ccc;font-weight:500;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+it.nom+'</td>'
+        +'<td style="padding:4px 6px;border:1px solid #ccc;text-align:center">'+it.cant+'</td>'
+        +'<td style="padding:4px 6px;border:1px solid #ccc;text-align:center;color:#555">'+( it.un||'')+'</td>'
+        +'<td style="padding:4px 6px;border:1px solid #ccc;text-align:center;letter-spacing:2px">'+(esPeso?'_________':'—')+'</td>'
         +'</tr>';
     }).join('');
 
@@ -3954,13 +3954,14 @@ function imprimirHojaCarga(){
         +(i+1)+'. '+(c.codigo||p.cliente_id||'')+' — '+p.cliente
         +'<span style="float:right;font-size:11px;font-weight:400">'+(c.direccion||'')+' '+(p.localidad||'')+'</span>'
       +'</div>'
-      +'<table style="width:100%;border-collapse:collapse">'
+      +'<table style="width:100%;border-collapse:collapse;table-layout:fixed">'
+        +'<colgroup><col style="width:28px"><col><col style="width:58px"><col style="width:48px"><col style="width:108px"></colgroup>'
         +'<thead><tr style="background:#e8f5e9">'
-          +'<th style="padding:4px 8px;border:1px solid #ccc;width:30px;text-align:center">#</th>'
-          +'<th style="padding:4px 8px;border:1px solid #ccc;text-align:left">Producto</th>'
-          +'<th style="padding:4px 8px;border:1px solid #ccc;width:60px;text-align:center">Cant.</th>'
-          +'<th style="padding:4px 8px;border:1px solid #ccc;width:50px;text-align:center">Unid.</th>'
-          +'<th style="padding:4px 8px;border:1px solid #ccc;width:110px;text-align:center">Peso real (kg)</th>'
+          +'<th style="padding:4px 6px;border:1px solid #ccc;text-align:center">#</th>'
+          +'<th style="padding:4px 6px;border:1px solid #ccc;text-align:left">Producto</th>'
+          +'<th style="padding:4px 6px;border:1px solid #ccc;text-align:center">Cant.</th>'
+          +'<th style="padding:4px 6px;border:1px solid #ccc;text-align:center">Unid.</th>'
+          +'<th style="padding:4px 6px;border:1px solid #ccc;text-align:center">Peso real (kg)</th>'
         +'</tr></thead>'
         +'<tbody>'+filasProd+'</tbody>'
       +'</table>'
@@ -4161,6 +4162,8 @@ function imprimirHojaRutaGrupal(){
   if(ven)rems=rems.filter(r=>(r.vendedor||'').toLowerCase().includes(ven));
   if(!rems.length){alert('No hay remitos para esa fecha'+(ven?' y vendedor':''));return;}
 
+  // Deduplicar por ID (evita duplicados si hay registros repetidos en la base)
+  rems=[...new Map(rems.map(r=>[r.id,r])).values()];
   // Ordenar por localidad y cliente
   rems=rems.slice().sort((a,b)=>(a.localidad||'').localeCompare(b.localidad||'')||(a.cliente||'').localeCompare(b.cliente||''));
   const totalGeneral=rems.reduce((a,r)=>a+(r.total||0),0);
@@ -4168,99 +4171,102 @@ function imprimirHojaRutaGrupal(){
 
   // Bloques detalle por remito
   const bloques=rems.map((r,i)=>{
-    const cli=_clientes.find(x=>String(x.id)===String(r.cliente_id))||_clientes.find(x=>(x.nombre||"").toLowerCase()===(r.cliente||"").toLowerCase())||_clientes.find(x=>(r.cliente||"").toLowerCase().includes((x.nombre||"").toLowerCase().split(" ")[0]))||{};
+    const cli=_clientes.find(x=>String(x.id)===String(r.cliente_id))||_clientes.find(x=>(x.nombre||'').toLowerCase()===(r.cliente||'').toLowerCase())||{};
     const dir=r.lugar_entrega||r.direccion||cli.direccion||cli.domicilio||'';
-    const tel=r.telefono||cli.telefono||cli.celular||cli.tel||"";
+    const tel=r.telefono||cli.telefono||cli.celular||'';
     let tot=0;
     const filas=(r.items||[]).map(it=>{
       const neto=it.precio*it.cant*(1-(it.dto||0)/100);tot+=neto;
       return '<tr>'
-        +'<td style="padding:4px 7px;border:1px solid #ccc">'+it.nom+'</td>'
-        +'<td style="padding:4px 7px;border:1px solid #ccc;text-align:center">'+it.cant+' '+(it.un||'')+'</td>'
-        +'<td style="padding:4px 7px;border:1px solid #ccc;text-align:right">'+fmt(it.precio)+'</td>'
-        +((it.dto||0)>0?'<td style="padding:4px 7px;border:1px solid #ccc;text-align:center">'+it.dto+'%</td>':'<td style="padding:4px 7px;border:1px solid #ccc;text-align:center">—</td>')
-        +'<td style="padding:4px 7px;border:1px solid #ccc;text-align:right;font-weight:600">'+fmt(neto)+'</td>'
+        +'<td style="padding:3px 6px;border:1px solid #ccc;font-size:11px">'+it.nom+'</td>'
+        +'<td style="padding:3px 6px;border:1px solid #ccc;text-align:center;font-size:11px;white-space:nowrap">'+it.cant+' '+(it.un||'')+'</td>'
+        +'<td style="padding:3px 6px;border:1px solid #ccc;text-align:right;font-size:11px">'+fmt(it.precio)+'</td>'
+        +((it.dto||0)>0?'<td style="padding:3px 6px;border:1px solid #ccc;text-align:center;font-size:11px">'+it.dto+'%</td>':'<td style="padding:3px 6px;border:1px solid #ccc;text-align:center;color:#aaa;font-size:11px">—</td>')
+        +'<td style="padding:3px 6px;border:1px solid #ccc;text-align:right;font-weight:600;font-size:11px">'+fmt(neto)+'</td>'
         +'</tr>';
     }).join('');
-    return '<div style="margin-bottom:18px;page-break-inside:avoid;border:1px solid #ccc;border-radius:4px;overflow:hidden">'
-      +'<div style="background:#1a7a52;color:#fff;padding:6px 10px;display:flex;justify-content:space-between;align-items:center">'
-        +'<span style="font-weight:700;font-size:13px">'+(i+1)+'. R-'+String(r.id).padStart(4,'0')+' — '+r.cliente+'</span>'
-        +'<span style="font-size:11px;font-weight:400">'+(dir?dir+' · ':'')+r.localidad+(tel?' · 📞 '+tel:'')+'</span>'
+    const obs=r.observaciones||'';
+    return '<div style="margin-bottom:12px;page-break-inside:avoid;border:1.5px solid #ccc;border-radius:4px;overflow:hidden">'
+      +'<div style="background:#1a7a52;color:#fff;padding:5px 9px;display:flex;justify-content:space-between;align-items:center">'
+        +'<span style="font-weight:700;font-size:12px">'+(i+1)+'. R-'+String(r.id).padStart(4,'0')+' — '+r.cliente+'</span>'
+        +'<span style="font-size:10px;font-weight:400;opacity:0.9">'+(dir?dir+' · ':'')+r.localidad+(tel?' · '+tel:'')+'</span>'
       +'</div>'
-      +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
+      +'<table style="width:100%;border-collapse:collapse;table-layout:fixed">'
+        +'<colgroup><col><col style="width:70px"><col style="width:68px"><col style="width:34px"><col style="width:72px"></colgroup>'
         +'<thead><tr style="background:#e8f5e9">'
-          +'<th style="padding:4px 7px;border:1px solid #ccc;text-align:left">Producto</th>'
-          +'<th style="padding:4px 7px;border:1px solid #ccc;text-align:center">Cant.</th>'
-          +'<th style="padding:4px 7px;border:1px solid #ccc;text-align:right">P.Unit</th>'
-          +'<th style="padding:4px 7px;border:1px solid #ccc;text-align:center">Dto</th>'
-          +'<th style="padding:4px 7px;border:1px solid #ccc;text-align:right">Total</th>'
+          +'<th style="padding:3px 6px;border:1px solid #ccc;text-align:left;font-size:11px">Producto</th>'
+          +'<th style="padding:3px 6px;border:1px solid #ccc;text-align:center;font-size:11px">Cant.</th>'
+          +'<th style="padding:3px 6px;border:1px solid #ccc;text-align:right;font-size:11px">P.Unit</th>'
+          +'<th style="padding:3px 6px;border:1px solid #ccc;text-align:center;font-size:11px">Dto</th>'
+          +'<th style="padding:3px 6px;border:1px solid #ccc;text-align:right;font-size:11px">Total</th>'
         +'</tr></thead>'
         +'<tbody>'+filas+'</tbody>'
       +'</table>'
-      +'<div style="display:flex;justify-content:space-between;padding:5px 10px;background:#fafafa;border-top:1px solid #ccc;font-size:12px">'
-        +'<span style="color:#555">'+(r.observaciones?'Obs: '+r.observaciones:'')+'</span>'
-        +'<span style="font-weight:700;color:#1a7a52">Total: '+fmt(tot)+'</span>'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 9px;background:#fafafa;border-top:1px solid #ccc;font-size:11px;gap:12px">'
+        +'<span style="color:#444;flex:1">Obs: '+(obs||'<span style="color:#bbb">___________________________________</span>')+'</span>'
+        +'<span style="white-space:nowrap">Cobrado: <b>$_______________</b></span>'
+        +'<span style="font-weight:700;color:#1a7a52;white-space:nowrap">Total: '+fmt(tot)+'</span>'
       +'</div>'
     +'</div>';
   }).join('');
 
-  // Tabla resumen final
+  // Tabla resumen
   const resumen=rems.map((r,i)=>{
     const cli=_clientes.find(x=>String(x.id)===String(r.cliente_id))||{};
     const dir=r.lugar_entrega||r.direccion||cli.direccion||'';
     return '<tr style="'+(i%2===0?'':'background:#f9f9f9')+'">'
-      +'<td style="padding:5px 7px;border:1px solid #ccc;text-align:center;color:#777;font-size:11px">'+(i+1)+'</td>'
-      +'<td style="padding:5px 7px;border:1px solid #ccc;font-size:11px;color:#555">R-'+String(r.id).padStart(4,'0')+'</td>'
-      +'<td style="padding:5px 7px;border:1px solid #ccc;font-weight:600">'+r.cliente+'</td>'
-      +'<td style="padding:5px 7px;border:1px solid #ccc;font-size:11px;color:#555">'+dir+'</td>'
-      +'<td style="padding:5px 7px;border:1px solid #ccc;font-size:11px">'+r.localidad+'</td>'
-      +'<td style="padding:5px 7px;border:1px solid #ccc;text-align:right;font-weight:600">'+fmt(r.total)+'</td>'
-      +'<td style="padding:5px 7px;border:1px solid #ccc;text-align:center">'+( r.cobrado?'✅':'☐')+'</td>'
+      +'<td style="padding:4px 6px;border:1px solid #ccc;text-align:center;color:#777;font-size:10px">'+(i+1)+'</td>'
+      +'<td style="padding:4px 6px;border:1px solid #ccc;font-size:10px;color:#555;white-space:nowrap">R-'+String(r.id).padStart(4,'0')+'</td>'
+      +'<td style="padding:4px 6px;border:1px solid #ccc;font-weight:600;font-size:11px">'+r.cliente+'</td>'
+      +'<td style="padding:4px 6px;border:1px solid #ccc;font-size:10px;color:#555">'+dir+'</td>'
+      +'<td style="padding:4px 6px;border:1px solid #ccc;font-size:10px">'+r.localidad+'</td>'
+      +'<td style="padding:4px 6px;border:1px solid #ccc;text-align:right;font-weight:600;font-size:11px">'+fmt(r.total)+'</td>'
+      +'<td style="padding:4px 6px;border:1px solid #ccc;font-size:11px">$___________</td>'
     +'</tr>';
   }).join('');
 
   const w=window.open('','_blank');
-  w.document.write('<!DOCTYPE html><html><head><title>Hoja de Ruta Grupal — '+fecha+'</title>'
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Hoja de Ruta — '+fecha+'</title>'
     +'<style>'
-    +'body{font-family:Arial,sans-serif;padding:15px;color:#000;font-size:12px;margin:0}'
+    +'*{box-sizing:border-box}'
+    +'body{font-family:Arial,sans-serif;padding:10mm;color:#000;font-size:11px;margin:0;line-height:1.3}'
     +'@page{size:A4 portrait;margin:10mm}'
-    +'@media print{.no-print{display:none}}'
+    +'@media print{.no-print{display:none}body{padding:0}}'
     +'</style></head><body>'
-    // Header
-    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1a7a52;padding-bottom:8px;margin-bottom:14px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1a7a52;padding-bottom:6px;margin-bottom:10px">'
       +'<div>'
-        +'<div style="font-size:16px;font-weight:700;color:#1a7a52">🌸 DISTRIBUIDORA LILA — Hoja de Ruta</div>'
-        +'<div style="font-size:12px;margin-top:3px"><b>Fecha:</b> '+fecha+' &nbsp;&nbsp; <b>Vendedor:</b> '+vendedorTitulo+'</div>'
+        +'<div style="font-size:15px;font-weight:700;color:#1a7a52">DISTRIBUIDORA LILA — Hoja de Ruta</div>'
+        +'<div style="font-size:11px;margin-top:2px"><b>Fecha:</b> '+fecha+' &nbsp; <b>Vendedor:</b> '+vendedorTitulo+' &nbsp; <b>Paradas:</b> '+rems.length+'</div>'
       +'</div>'
-      +'<div style="text-align:right;font-size:11px;color:#777">'
-        +'<div>'+rems.length+' remitos</div>'
-        +'<div style="font-size:15px;font-weight:700;color:#1a7a52;margin-top:4px">'+fmt(totalGeneral)+'</div>'
+      +'<div style="text-align:right">'
+        +'<div style="font-size:13px;font-weight:700;color:#1a7a52">'+fmt(totalGeneral)+'</div>'
+        +'<div style="font-size:10px;color:#777">total general</div>'
       +'</div>'
     +'</div>'
-    // Resumen primero
-    +'<div style="font-weight:600;font-size:13px;margin-bottom:6px;color:#1a7a52">📋 Resumen</div>'
-    +'<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:18px">'
+    +'<div style="font-weight:700;font-size:11px;margin-bottom:4px;color:#1a7a52">RESUMEN</div>'
+    +'<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:12px;table-layout:fixed">'
+      +'<colgroup><col style="width:24px"><col style="width:46px"><col><col style="width:110px"><col style="width:80px"><col style="width:72px"><col style="width:90px"></colgroup>'
       +'<thead><tr style="background:#e8e8e8">'
-        +'<th style="padding:5px 7px;border:1px solid #ccc;width:28px;text-align:center">Nro</th>'
-        +'<th style="padding:5px 7px;border:1px solid #ccc;width:55px">Remito</th>'
-        +'<th style="padding:5px 7px;border:1px solid #ccc;text-align:left">Cliente</th>'
-        +'<th style="padding:5px 7px;border:1px solid #ccc;text-align:left">Dirección</th>'
-        +'<th style="padding:5px 7px;border:1px solid #ccc;text-align:left">Localidad</th>'
-        +'<th style="padding:5px 7px;border:1px solid #ccc;text-align:right;width:90px">Total</th>'
-        +'<th style="padding:5px 7px;border:1px solid #ccc;text-align:center;width:35px">✓</th>'
+        +'<th style="padding:4px 5px;border:1px solid #ccc;text-align:center">Nro</th>'
+        +'<th style="padding:4px 5px;border:1px solid #ccc">Remito</th>'
+        +'<th style="padding:4px 5px;border:1px solid #ccc;text-align:left">Cliente</th>'
+        +'<th style="padding:4px 5px;border:1px solid #ccc;text-align:left">Dirección</th>'
+        +'<th style="padding:4px 5px;border:1px solid #ccc;text-align:left">Localidad</th>'
+        +'<th style="padding:4px 5px;border:1px solid #ccc;text-align:right">Total</th>'
+        +'<th style="padding:4px 5px;border:1px solid #ccc;text-align:left">Cobrado $</th>'
       +'</tr></thead>'
       +'<tbody>'+resumen+'</tbody>'
       +'<tfoot><tr style="background:#e8f5e9;font-weight:700">'
-        +'<td colspan="5" style="padding:6px 7px;border:1px solid #ccc;text-align:right">TOTAL</td>'
-        +'<td style="padding:6px 7px;border:1px solid #ccc;text-align:right;color:#1a7a52;font-size:14px">'+fmt(totalGeneral)+'</td>'
+        +'<td colspan="5" style="padding:5px 6px;border:1px solid #ccc;text-align:right;font-size:11px">TOTAL GENERAL</td>'
+        +'<td style="padding:5px 6px;border:1px solid #ccc;text-align:right;color:#1a7a52;font-size:13px">'+fmt(totalGeneral)+'</td>'
         +'<td style="border:1px solid #ccc"></td>'
       +'</tr></tfoot>'
     +'</table>'
-    // Detalle por remito
-    +'<div style="font-weight:600;font-size:13px;margin-bottom:8px;color:#1a7a52">📄 Detalle por cliente</div>'
+    +'<div style="font-weight:700;font-size:11px;margin-bottom:6px;color:#1a7a52">DETALLE POR CLIENTE</div>'
     +bloques
+    +'<div style="border-top:2px solid #1a7a52;margin-top:10px;padding-top:6px;text-align:right;font-size:13px;font-weight:700;color:#1a7a52">TOTAL GENERAL: '+fmt(totalGeneral)+'</div>'
     +'<div class="no-print" style="text-align:center;margin-top:16px">'
-      +'<button onclick="window.print()" style="padding:8px 24px;background:#1a7a52;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨️ Imprimir</button>'
+      +'<button onclick="window.print()" style="padding:8px 24px;background:#1a7a52;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">Imprimir</button>'
     +'</div>'
     +'</body></html>');
   w.document.close();
