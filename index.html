@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<!-- v20260623181500 --><title>Distribuidora Lila — Sistema de Gestión</title>
+<!-- v20260624100000 --><title>Distribuidora Lila — Sistema de Gestión</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -3084,7 +3084,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260623-2';
+const APP_VERSION = '20260624-1';
 let _versionTag = null;
 let _versionCheckTimer = null;
 
@@ -8261,11 +8261,9 @@ function navTablaGen(e,listId,selector,enterFn){
   if(_tblNav[listId]===undefined)_tblNav[listId]=-1;
   let idx=_tblNav[listId];
   if(e.key==='ArrowDown'||e.key==='Tab'){
-    e.preventDefault();idx=Math.min(idx+1,items.length-1);
+    e.preventDefault();idx=(idx+1)%items.length;
   }else if(e.key==='ArrowUp'){
-    e.preventDefault();
-    if(idx<=0){_tblNav[listId]=-1;_navMark(items,-1);return;}
-    idx--;
+    e.preventDefault();idx=(idx-1+items.length)%items.length;
   }else if(e.key==='Enter'&&idx>=0&&enterFn){
     e.preventDefault();enterFn(items[idx]);
     _tblNav[listId]=-1;_navMark(items,-1);return;
@@ -8470,8 +8468,10 @@ document.addEventListener('keydown', function(e){
     f3Abrir();
   }
   if(e.key === 'Escape'){
-    const modal = document.getElementById('f3-modal');
-    if(modal && modal.style.display !== 'none') f3Cerrar();
+    const f3 = document.getElementById('f3-modal');
+    if(f3 && f3.style.display !== 'none'){f3Cerrar();return;}
+    const openModal = document.querySelector('.mbg.on');
+    if(openModal){cerrar(openModal.id);return;}
   }
 });
 
