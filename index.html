@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<!-- v20260624100000 --><title>Distribuidora Lila — Sistema de Gestión</title>
+<!-- v20260624140000 --><title>Distribuidora Lila — Sistema de Gestión</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -2600,6 +2600,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="fg"><label>Email</label><input id="prov-email" style="width:100%" placeholder="email@proveedor.com"></div>
       <div class="fg"><label>Condición pago</label><input id="prov-condicion" style="width:100%" placeholder="Ej: 30 días"></div>
       <div class="fg"><label>Plazo de pago (días)</label><input type="number" id="prov-plazo" style="width:100%" placeholder="30" min="0"></div>
+      <div class="fg"><label>Condición fiscal</label>
+        <select id="prov-cond-fiscal" style="width:100%" onchange="togglePctFactura()">
+          <option value="factura_todo">Factura todo (descuenta IVA)</option>
+          <option value="no_factura">No factura (costo sin IVA)</option>
+          <option value="factura_parcial">Factura parcial (% que factura)</option>
+        </select>
+      </div>
+      <div class="fg" id="prov-pct-wrap" style="display:none"><label>% que factura</label>
+        <input type="number" id="prov-pct-factura" style="width:100%" min="1" max="99" step="1" placeholder="Ej: 50">
+      </div>
       <div class="fg"><label>Cuenta contable por defecto</label>
         <select id="prov-cuenta" style="width:100%">
           <option value="">— Sin cuenta por defecto —</option>
@@ -3142,7 +3152,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260624-3';
+const APP_VERSION = '20260624-4';
 let _versionTag = null;
 let _versionCheckTimer = null;
 
@@ -8736,7 +8746,14 @@ function abrirProveedor(){
   ['prov-nom','prov-cuit','prov-contacto','prov-tel','prov-email','prov-condicion','prov-plazo','prov-obs'].forEach(id => {
     const el = document.getElementById(id); if(el) el.value = '';
   });
+  document.getElementById('prov-cond-fiscal').value='factura_todo';
+  document.getElementById('prov-pct-factura').value='';
+  document.getElementById('prov-pct-wrap').style.display='none';
   document.getElementById('m-proveedor').classList.add('on');
+}
+function togglePctFactura(){
+  const v=document.getElementById('prov-cond-fiscal').value;
+  document.getElementById('prov-pct-wrap').style.display=v==='factura_parcial'?'':'none';
 }
 function editarProveedor(id){
   const p = _proveedores.find(x => x.id === id); if(!p) return;
@@ -8751,6 +8768,9 @@ function editarProveedor(id){
   document.getElementById('prov-plazo').value = p.plazo_pago_dias!=null?p.plazo_pago_dias:'';
   document.getElementById('prov-obs').value = p.observaciones||'';
   document.getElementById('prov-cuenta').value = p.cuenta_defecto||'';
+  document.getElementById('prov-cond-fiscal').value = p.condicion_fiscal||'factura_todo';
+  document.getElementById('prov-pct-factura').value = p.pct_factura||'';
+  document.getElementById('prov-pct-wrap').style.display = (p.condicion_fiscal==='factura_parcial')?'':'none';
   document.getElementById('m-proveedor').classList.add('on');
 }
 async function guardarProveedor(){
@@ -8767,6 +8787,8 @@ async function guardarProveedor(){
     plazo_pago_dias: document.getElementById('prov-plazo').value!==''?parseInt(document.getElementById('prov-plazo').value):null,
     cuenta_defecto: document.getElementById('prov-cuenta').value,
     observaciones: document.getElementById('prov-obs').value.trim(),
+    condicion_fiscal: document.getElementById('prov-cond-fiscal').value,
+    pct_factura: document.getElementById('prov-pct-factura').value!==''?parseFloat(document.getElementById('prov-pct-factura').value):null,
   };
   if(editId){ await sb.from('proveedores').update(obj).eq('id', editId); }
   else { await sb.from('proveedores').insert(obj); }
@@ -9123,6 +9145,16 @@ async function abrirComprobante(){
   setTimeout(()=>document.getElementById('comp-prov-id').focus(), 100);
 }
 
+function calcCostoReal(costoFacturado, condFiscal, pctFact){
+  if(condFiscal==='no_factura') return costoFacturado;
+  if(condFiscal==='factura_parcial'){
+    const part=(pctFact||50)/100;
+    return costoFacturado*part/1.21 + costoFacturado*(1-part);
+  }
+  // factura_todo (default)
+  return costoFacturado/1.21;
+}
+
 function selProvComp(){
   const id = document.getElementById('comp-prov-id').value;
   const prov = _proveedores.find(p => String(p.id) === String(id));
@@ -9142,6 +9174,14 @@ function selProvComp(){
   if(prov.cuenta_defecto){
     document.getElementById('comp-cuenta').value = prov.cuenta_defecto;
   }
+  // Mostrar condición fiscal
+  let cfTexto='', cfColor='var(--txt2)';
+  if(prov.condicion_fiscal==='no_factura'){cfTexto='⚠️ No factura — el precio ingresado es el costo real (sin descontar IVA)';cfColor='var(--W)';}
+  else if(prov.condicion_fiscal==='factura_parcial'){cfTexto=`📋 Factura parcial (${prov.pct_factura||'?'}%) — se calculará costo real ponderado`;cfColor='var(--A)';}
+  else{cfTexto='✅ Factura todo — el costo real = precio ÷ 1.21';cfColor='var(--P)';}
+  let cfBadge=document.getElementById('comp-cf-badge');
+  if(!cfBadge){cfBadge=document.createElement('div');cfBadge.id='comp-cf-badge';cfBadge.style.cssText='padding:6px 14px;font-size:11px;border-radius:6px;margin:4px 18px 0;background:var(--bg2)';document.getElementById('comp-ia-status').insertAdjacentElement('afterend',cfBadge);}
+  cfBadge.style.color=cfColor;cfBadge.style.display='block';cfBadge.textContent=cfTexto;
 }
 
 function calcVencimiento(){
@@ -9218,7 +9258,9 @@ async function guardarComprobante(){
     }
   }
   
-  // Procesar productos: actualizar stock + costos
+  // Procesar productos: actualizar stock + costos reales (con lógica IVA del proveedor)
+  const condFiscal = prov?.condicion_fiscal || 'factura_todo';
+  const pctFact = prov?.pct_factura || 100;
   const costoRows=[...document.querySelectorAll('.comp-costo-row')];
   let costosCambiados=0, stockActualizado=0;
   const items=[];
@@ -9227,15 +9269,22 @@ async function guardarComprobante(){
     if(!prodId)continue;
     const prod=_productos.find(x=>String(x.id)===String(prodId));
     if(!prod)continue;
-    const nuevoCosto=parseFloat(row.querySelector('.comp-costo-val')?.value)||0;
+    const precioFacturado=parseFloat(row.querySelector('.comp-costo-val')?.value)||0;
     const cantidad=parseFloat(row.querySelector('.comp-costo-cant')?.value)||0;
-    if(nuevoCosto<=0&&cantidad<=0)continue;
+    if(precioFacturado<=0&&cantidad<=0)continue;
 
     const upd={};
-    if(nuevoCosto>0){
-      upd.costo=nuevoCosto;
+    if(precioFacturado>0){
+      const costoReal=calcCostoReal(precioFacturado, condFiscal, pctFact);
+      // Costo promedio ponderado: (stock_actual × costo_actual + cant_nueva × costo_real) / (stock_actual + cant_nueva)
+      const stockActual=prod.stock||0;
+      const costoActual=prod.costo||costoReal;
+      const costoPromedio=stockActual>0&&cantidad>0
+        ?Math.round((stockActual*costoActual+cantidad*costoReal)/(stockActual+cantidad)*100)/100
+        :Math.round(costoReal*100)/100;
+      upd.costo=costoPromedio;
       const margen=prod.margen_objetivo||30;
-      upd.precio=margen>0&&margen<100?Math.ceil(nuevoCosto/(1-margen/100)):prod.precio;
+      upd.precio=margen>0&&margen<100?Math.ceil(costoPromedio/(1-margen/100)):prod.precio;
       costosCambiados++;
     }
     if(cantidad>0){
@@ -9248,8 +9297,8 @@ async function guardarComprobante(){
       producto_nom:prod.nombre||'',
       codigo:prod.codigo||'',
       cantidad,
-      costo_unitario:nuevoCosto,
-      subtotal:cantidad*nuevoCosto
+      costo_unitario:upd.costo||0,
+      subtotal:cantidad*(upd.costo||0)
     });
   }
 
@@ -9316,10 +9365,19 @@ function mostrarPrecioSugComp(inp){
   const prodId=row.dataset.prodId;
   const prod=_productos.find(x=>String(x.id)===String(prodId));
   const margen=prod?.margen_objetivo||30;
-  const costo=parseFloat(inp.value)||0;
-  const sug=costo>0&&margen>0&&margen<100?Math.ceil(costo/(1-margen/100)):0;
+  const precioFact=parseFloat(inp.value)||0;
+  const provId=document.getElementById('comp-prov-id')?.value;
+  const prov=_proveedores.find(p=>String(p.id)===String(provId));
+  const costoReal=precioFact>0?calcCostoReal(precioFact,prov?.condicion_fiscal||'factura_todo',prov?.pct_factura||100):0;
+  const sug=costoReal>0&&margen>0&&margen<100?Math.ceil(costoReal/(1-margen/100)):0;
   const el=row.querySelector('.comp-precio-sug');
-  if(el)el.textContent=sug>0?`→ Precio: ${fmt(sug)}`:'';
+  if(el){
+    if(costoReal>0&&costoReal!==precioFact){
+      el.innerHTML=`<span style="color:var(--txt2);font-size:10px">Real: ${fmt(costoReal)}</span>${sug>0?`<br>→ ${fmt(sug)}`:''}`;
+    } else {
+      el.textContent=sug>0?`→ ${fmt(sug)}`:'';
+    }
+  }
 }
 
 async function pagarComprobante(id){
