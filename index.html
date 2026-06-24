@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<!-- v20260624140000 --><title>Distribuidora Lila — Sistema de Gestión</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<!-- v20260624181500 --><title>Distribuidora Lila — Sistema de Gestión</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -1421,7 +1424,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button id="cont-tab-asientos" class="btn sm" onclick="contTab('asientos')" style="font-size:13px">📖 Asientos</button>
     <button id="cont-tab-mayor" class="btn sm" onclick="contTab('mayor')" style="font-size:13px">📊 Mayor</button>
     <button id="cont-tab-resultado" class="btn sm" onclick="contTab('resultado')" style="font-size:13px">💹 Resultado</button>
-    <button id="cont-tab-cheques" class="btn sm" onclick="contTab('cheques')" style="font-size:13px">📋 Cheques en cartera</button>
   </div>
 
   <!-- SECCIÓN GASTOS -->
@@ -1487,14 +1489,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </div>
     </div>
     <div id="res-cuerpo"></div>
-  </div>
-
-  <!-- SECCIÓN CHEQUES EN CARTERA -->
-  <div id="cont-cheques" style="display:none">
-    <div style="padding:20px;color:var(--txt2);font-size:14px">
-      Los cheques en cartera están en
-      <button class="btn P sm" onclick="go('cheques')" style="margin-left:6px">💰 Tesorería → Cheques</button>
-    </div>
   </div>
 
 </div>
@@ -3152,13 +3146,13 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260624-4';
+const APP_VERSION = '20260624-5';
 let _versionTag = null;
 let _versionCheckTimer = null;
 
 async function _fetchVersionTag(){
   try {
-    const r = await fetch(location.pathname, {method:'HEAD', cache:'no-store'});
+    const r = await fetch(location.pathname + '?_vc=' + Date.now(), {method:'HEAD', cache:'no-store'});
     return r.headers.get('etag') || r.headers.get('last-modified') || null;
   } catch(e){ return null; }
 }
@@ -6640,7 +6634,7 @@ function actualizarNavActivo(p){
 }
 // ─── FIN MENÚ DESPLEGABLE ───
 function contTab(tab){
-  ['gastos','asientos','mayor','resultado','cheques'].forEach(t=>{
+  ['gastos','asientos','mayor','resultado'].forEach(t=>{
     const el=document.getElementById('cont-'+t);
     if(el)el.style.display=t===tab?'block':'none';
     const btn=document.getElementById('cont-tab-'+t);
@@ -6661,7 +6655,6 @@ function contTab(tab){
     if(desde&&!desde.value)desde.value=hoy.getFullYear()+'-01-01';
     if(hasta&&!hasta.value)hasta.value=hoy.toISOString().split('T')[0];
   }
-  if(tab==='cheques')renderChequesCartera();
 }
 
 function renderMayor(){
