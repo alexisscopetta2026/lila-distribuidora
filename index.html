@@ -1239,14 +1239,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
   <div class="tb">
     <input id="pro-q" placeholder="Nombre, código..." oninput="renderProductos();resetNav('pro-tbody')" onkeydown="navProductos(event)" title="↑↓ navegar · Enter abrir · Esc volver">
-    <select id="pro-cat" onchange="renderProductos()">
+    <select id="pro-cat" onchange="poblarSubcats('pro-cat','pro-subcat');renderProductos()">
       <option value="">Todas las categorías</option>
-      <option value="FIAMBRES">Fiambres</option>
-      <option value="LACTEOS">Lácteos</option>
-      <option value="OTROS">Otros</option>
+      ${Object.keys(CATS).map(c=>`<option value="${c}">${c}</option>`).join('')}
+    </select>
+    <select id="pro-subcat" onchange="renderProductos()" disabled>
+      <option value="">Todas las subcategorías</option>
     </select>
     <select id="pro-prov" onchange="renderProductos()"><option value="">Todos los proveedores</option></select>
-    <select id="pro-rubro" onchange="renderProductos()"><option value="">Todos los rubros</option></select>
   </div>
   <div class="tbl-wrap"><table class="tbl">
     <thead><tr><th>Código</th><th>Nombre</th><th>Proveedor</th><th>Unidad</th><th>Costo</th><th>Precio vta</th><th>Margen real</th><th>Margen obj</th><th>Estado</th><th>Stock</th><th></th></tr></thead>
@@ -1798,6 +1798,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="fr">
         <div class="fg"><label>Desde</label><input type="date" id="cmgp-desde"></div>
         <div class="fg"><label>Hasta</label><input type="date" id="cmgp-hasta"></div>
+        <div class="fg"><label>Categoría</label>
+          <select id="cmgp-cat" style="width:100%" onchange="poblarSubcats('cmgp-cat','cmgp-subcat')">
+            <option value="">Todas</option>
+            ${Object.keys(CATS).map(c=>`<option value="${c}">${c}</option>`).join('')}
+          </select>
+        </div>
+        <div class="fg"><label>Subcategoría</label>
+          <select id="cmgp-subcat" style="width:100%" disabled><option value="">Todas</option></select>
+        </div>
         <div class="fg" style="justify-content:flex-end"><label>&nbsp;</label>
           <button class="btn P" onclick="informeCMGProductos()" style="width:100%">Calcular</button>
         </div>
@@ -1843,6 +1852,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="fr" style="margin-bottom:10px">
         <div class="fg"><label>Período ventas (desde)</label><input type="date" id="prec-desde"></div>
         <div class="fg"><label>Período ventas (hasta)</label><input type="date" id="prec-hasta"></div>
+        <div class="fg"><label>Categoría</label>
+          <select id="prec-cat" style="width:100%" onchange="poblarSubcats('prec-cat','prec-subcat')">
+            <option value="">Todas</option>
+            ${Object.keys(CATS).map(c=>`<option value="${c}">${c}</option>`).join('')}
+          </select>
+        </div>
+        <div class="fg"><label>Subcategoría</label>
+          <select id="prec-subcat" style="width:100%" disabled><option value="">Todas</option></select>
+        </div>
         <div class="fg" style="justify-content:flex-end"><label>&nbsp;</label>
           <button class="btn P" onclick="informePrecios()" style="width:100%">Analizar</button>
         </div>
@@ -2192,8 +2210,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <option value="bandeja">
       </datalist>
     </div>
-    <div class="fg"><label>Línea</label><input id="pro-linea" style="width:100%" placeholder="Línea"></div>
-    <div class="fg"><label>Rubro</label><input id="pro-rubro-input" style="width:100%" placeholder="FIAMBRES / LACTEOS"></div>
+    <div class="fg"><label>Categoría</label>
+      <select id="pro-cat-modal" style="width:100%" onchange="poblarSubcats('pro-cat-modal','pro-subcat-modal')">
+        <option value="">— Sin categoría —</option>
+        ${Object.keys(CATS).map(c=>`<option value="${c}">${c}</option>`).join('')}
+      </select>
+    </div>
+    <div class="fg"><label>Subcategoría</label>
+      <select id="pro-subcat-modal" style="width:100%" disabled>
+        <option value="">— Sin subcategoría —</option>
+      </select>
+    </div>
     <div class="fg"><label>Costo</label><input type="number" id="pro-costo" value="0" step="0.01" style="width:100%" oninput="recalcPrecioSugerido()"></div>
     <div class="fg"><label>Margen objetivo %</label><input type="number" id="pro-margen" value="30" min="0" max="99" step="0.5" style="width:100%" oninput="recalcPrecioSugerido()"></div>
     <div class="fg" style="grid-column:1/-1">
@@ -3083,6 +3110,25 @@ const USUARIOS = [
   {user:'david',    pass:'david2024',  nombre:'David',  rol:'vendedor', vendedor:'David'},
 ];
 
+// ─── CATEGORÍAS DE PRODUCTOS ───
+const CATS={
+  'Fiambres':['Jamones','Salames','Mortadelas','Bondiolas','Otros fiambres'],
+  'Quesos':['Barra','Cremoso','Pategras','Port Salut','Especiales'],
+  'Lácteos':['Yogur','Crema','Manteca','Otros lácteos'],
+  'Condimentos':['Salsas','Especias','Aderezos'],
+  'Conservas':['Latas','Encurtidos','Otros'],
+  'Snacks':['Papas fritas','Golosinas','Otros'],
+  'Congelados':['Papas','Otros congelados'],
+  'Otros':[]
+};
+function poblarSubcats(catSelId,subcatSelId){
+  const cat=document.getElementById(catSelId)?.value||'';
+  const sel=document.getElementById(subcatSelId);if(!sel)return;
+  const subs=CATS[cat]||[];
+  sel.innerHTML='<option value="">Todas las subcategorías</option>'+subs.map(s=>`<option value="${s}">${s}</option>`).join('');
+  sel.disabled=!subs.length;
+}
+
 // Pantallas por rol
 const MENUS_ADMIN=['dash','pedidos','pedido-movil','carga','remitos','cobranza','tesoreria','cheques','cuentas','clientes','maestro-proveedores','productos','remito-rapido','nc','rendicion','stock','informes','comisiones','contrib-zona','gastos-fijos','contabilidad','exportar','importar-historico'];
 const MENUS_VENDEDOR=['vendedor-home','pedidos','pedido-movil','cobranza','cuentas'];
@@ -3096,7 +3142,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260624-2';
+const APP_VERSION = '20260624-3';
 let _versionTag = null;
 let _versionCheckTimer = null;
 
@@ -5054,20 +5100,14 @@ function pedRapido(id){go('pedidos');abrirPedido();setTimeout(()=>selCli(id),100
 function renderProductos(){
   const q=(document.getElementById('pro-q').value||'').toLowerCase();
   const cat=document.getElementById('pro-cat')?.value||'';
+  const subcat=document.getElementById('pro-subcat')?.value||'';
   const prov=document.getElementById('pro-prov')?.value||'';
-  const rubro=document.getElementById('pro-rubro')?.value||'';
-  // Poblar rubros dinámicamente
-  const selRubro=document.getElementById('pro-rubro');
-  if(selRubro && selRubro.options.length<=1){
-    const rubros=[...new Set(_productos.map(p=>p.rubro||'').filter(Boolean))].sort();
-    rubros.forEach(r=>{const o=document.createElement('option');o.value=r;o.textContent=r;selRubro.appendChild(o);});
-  }
   let data=_productos.filter(p=>{
     const okQ=!q||(p.nombre||'').toLowerCase().includes(q)||(p.codigo||'').toString().includes(q)||(p.proveedor_nom||'').toLowerCase().includes(q);
-    const okRubro=!rubro||(p.rubro||'')===rubro;
-    const okC=!cat||(p.rubro||'').toUpperCase()===cat;
+    const okC=!cat||(p.rubro||'')===cat;
+    const okSC=!subcat||(p.linea||'')===subcat;
     const okP=!prov||(p.proveedor_nom||'')===prov;
-    return okQ&&okC&&okP&&okRubro;
+    return okQ&&okC&&okSC&&okP;
   });
   const tot=data.length,sl=data.slice((_proPg-1)*PP,_proPg*PP);
   const tbody=document.getElementById('pro-tbody');
@@ -5112,7 +5152,10 @@ function usarPrecioSugerido(){
 function abrirProducto(){
   document.getElementById('pro-edit-id').value='';
   document.getElementById('m-pro-title').textContent='Nuevo producto';
-  ['pro-cod','pro-nom','pro-unidad','pro-linea','pro-rubro-input'].forEach(id=>document.getElementById(id).value='');
+  ['pro-cod','pro-nom','pro-unidad'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('pro-cat-modal').value='';
+  document.getElementById('pro-subcat-modal').innerHTML='<option value="">— Sin subcategoría —</option>';
+  document.getElementById('pro-subcat-modal').disabled=true;
   ['pro-costo','pro-precio','pro-stock','pro-dto'].forEach(id=>document.getElementById(id).value='0');
   document.getElementById('pro-iva').value='21';
   document.getElementById('pro-margen').value='30';
@@ -5131,8 +5174,9 @@ function editarProducto(id){
   document.getElementById('pro-unidad').value=p.unidad||'';
   document.getElementById('pro-stock').value=p.stock||0;
   document.getElementById('pro-dto').value=p.descuento||0;
-  document.getElementById('pro-linea').value=p.linea||'';
-  document.getElementById('pro-rubro-input').value=p.rubro||'';
+  document.getElementById('pro-cat-modal').value=p.rubro||'';
+  poblarSubcats('pro-cat-modal','pro-subcat-modal');
+  document.getElementById('pro-subcat-modal').value=p.linea||'';
   document.getElementById('pro-margen').value=p.margen_objetivo||30;
   recalcPrecioSugerido();
   document.getElementById('m-producto').classList.add('on');
@@ -5148,8 +5192,8 @@ async function guardarProducto(){
     unidad:document.getElementById('pro-unidad').value.trim(),
     stock:parseFloat(document.getElementById('pro-stock').value)||0,
     descuento:parseFloat(document.getElementById('pro-dto').value)||0,
-    linea:document.getElementById('pro-linea').value.trim(),
-    rubro:document.getElementById('pro-rubro-input').value.trim(),
+    rubro:document.getElementById('pro-cat-modal').value,
+    linea:document.getElementById('pro-subcat-modal').value,
     margen_objetivo:parseFloat(document.getElementById('pro-margen').value)||0};
   if(editId){await sb.from('productos').update(obj).eq('id',editId);}
   else{await sb.from('productos').insert(obj);}
@@ -6966,7 +7010,9 @@ async function informePrecios(){
   }));
 
   // Construir tabla por producto
-  const prods=_productos.filter(p=>p.precio>0);
+  const precCat=document.getElementById('prec-cat')?.value||'';
+  const precSubcat=document.getElementById('prec-subcat')?.value||'';
+  const prods=_productos.filter(p=>p.precio>0&&(!precCat||(p.rubro||'')===precCat)&&(!precSubcat||(p.linea||'')===precSubcat));
   const rows=prods.map(p=>{
     const costo=p.costo||0;const precio=p.precio||0;
     const mReal=precio>0?((precio-costo)/precio*100):0;
@@ -8799,6 +8845,8 @@ async function eliminarZona(id){
 async function informeCMGProductos(){
   const desde = document.getElementById('cmgp-desde').value;
   const hasta = document.getElementById('cmgp-hasta').value;
+  const cmgCat = document.getElementById('cmgp-cat')?.value||'';
+  const cmgSubcat = document.getElementById('cmgp-subcat')?.value||'';
   const el = document.getElementById('cmgp-res');
   el.innerHTML = '<div class="loading">Calculando...</div>';
 
@@ -8811,6 +8859,8 @@ async function informeCMGProductos(){
     (r.items||[]).forEach(it => {
       const nom = it.nom||'Sin nombre';
       const prod = _productos.find(p => p.id === it.id || p.nombre === nom);
+      if(cmgCat && (prod?.rubro||'') !== cmgCat) return;
+      if(cmgSubcat && (prod?.linea||'') !== cmgSubcat) return;
       const costo = prod?.costo || 0;
       const precio = it.precio || 0;
       const cant = it.cant || 0;
