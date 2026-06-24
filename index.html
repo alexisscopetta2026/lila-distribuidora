@@ -1249,7 +1249,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <select id="pro-rubro" onchange="renderProductos()"><option value="">Todos los rubros</option></select>
   </div>
   <div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>Código</th><th>Nombre</th><th>Proveedor</th><th>Costo</th><th>Precio vta</th><th>Margen real</th><th>Margen obj</th><th>Estado</th><th>Stock</th><th></th></tr></thead>
+    <thead><tr><th>Código</th><th>Nombre</th><th>Proveedor</th><th>Unidad</th><th>Costo</th><th>Precio vta</th><th>Margen real</th><th>Margen obj</th><th>Estado</th><th>Stock</th><th></th></tr></thead>
     <tbody id="pro-tbody"></tbody>
   </table></div>
   <div class="pg" id="pro-pg"></div>
@@ -2179,7 +2179,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <select id="pro-iva" style="width:100%"><option value="21">21%</option><option value="10.5">10.5%</option><option value="0">0%</option></select>
     </div>
     <div class="fg" style="grid-column:1/-1"><label>Nombre</label><input id="pro-nom" style="width:100%" placeholder="Nombre del producto"></div>
-    <div class="fg"><label>Unidad</label><input id="pro-unidad" style="width:100%" placeholder="Kg / Un / Docena"></div>
+    <div class="fg"><label>Unidad</label>
+      <input id="pro-unidad" style="width:100%" placeholder="Kg / Un / Docena" list="pro-unidad-list" autocomplete="off">
+      <datalist id="pro-unidad-list">
+        <option value="kg">
+        <option value="un">
+        <option value="docena">
+        <option value="pack">
+        <option value="lt">
+        <option value="gr">
+        <option value="caja">
+        <option value="bandeja">
+      </datalist>
+    </div>
     <div class="fg"><label>Línea</label><input id="pro-linea" style="width:100%" placeholder="Línea"></div>
     <div class="fg"><label>Rubro</label><input id="pro-rubro-input" style="width:100%" placeholder="FIAMBRES / LACTEOS"></div>
     <div class="fg"><label>Costo</label><input type="number" id="pro-costo" value="0" step="0.01" style="width:100%" oninput="recalcPrecioSugerido()"></div>
@@ -3084,7 +3096,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260624-1';
+const APP_VERSION = '20260624-2';
 let _versionTag = null;
 let _versionCheckTimer = null;
 
@@ -5069,6 +5081,7 @@ function renderProductos(){
     <td style="color:var(--txt2);font-size:11px">${p.codigo||''}</td>
     <td style="font-weight:600">${p.nombre}</td>
     <td style="font-size:11px;color:var(--txt2)">${p.proveedor_nom||''}</td>
+    <td style="font-size:12px;color:var(--txt2)">${p.unidad||'—'}</td>
     <td style="font-size:12px">${fmt(costo)}</td>
     <td style="color:var(--P);font-weight:600">${fmt(precio)}</td>
     <td style="font-size:12px;font-weight:600;color:${mReal<0?'var(--D)':mReal<mObj?'var(--W)':'var(--P)'}">${mReal}%</td>
@@ -5076,7 +5089,7 @@ function renderProductos(){
     <td>${badge}</td>
     <td><span class="b ${(p.stock||0)<=0?'bD':(p.stock||0)<=5?'bW':'bP'}">${p.stock||0}</span></td>
     <td><button class="btn sm" onclick="editarProducto(${p.id})">✏️</button></td>
-  </tr>`;}).join(''):'<tr><td colspan="10"><div class="empty">Sin productos</div></td></tr>';
+  </tr>`;}).join(''):'<tr><td colspan="11"><div class="empty">Sin productos</div></td></tr>';
   pag('pro-pg',tot,_proPg,p=>{_proPg=p;renderProductos();});
 }
 function recalcPrecioSugerido(){
