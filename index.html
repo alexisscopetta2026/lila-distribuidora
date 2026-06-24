@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<!-- v20260609111905 --><title>Distribuidora Lila — Sistema de Gestión</title>
+<!-- v20260623181500 --><title>Distribuidora Lila — Sistema de Gestión</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -243,7 +243,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="sidebar-items">
       <button class="sidebar-item" onclick="go('cobranza')" data-p="cobranza">💰 Cobranza</button>
       <button class="sidebar-item" onclick="go('tesoreria')" data-p="tesoreria">🏦 Tesorería</button>
-      <button class="sidebar-item" onclick="contTabDesde('cheques')" data-p="contabilidad">📋 Cheques en cartera</button>
+      <button class="sidebar-item" onclick="go('cheques')" data-p="cheques">📋 Cheques en cartera</button>
     </div>
   </div>
 
@@ -1177,6 +1177,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 </div><!-- fin p-tesoreria -->
 
+<!-- CHEQUES EN CARTERA (panel independiente dentro de Tesorería) -->
+<div class="panel" id="p-cheques">
+  <div class="sech">
+    <h2>📋 Cheques en cartera</h2>
+    <button class="btn P" onclick="abrirCheque()">+ Agregar cheque</button>
+  </div>
+  <div id="chq-lista"></div>
+</div>
+
 <!-- CUENTAS CORRIENTES -->
 <div class="panel" id="p-cuentas">
   <div class="sech"><h2>Cuentas corrientes</h2>
@@ -1482,11 +1491,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
   <!-- SECCIÓN CHEQUES EN CARTERA -->
   <div id="cont-cheques" style="display:none">
-    <div class="sech" style="margin-bottom:10px">
-      <h2>📋 Cheques en cartera</h2>
-      <button class="btn P" onclick="abrirCheque()">+ Agregar cheque</button>
+    <div style="padding:20px;color:var(--txt2);font-size:14px">
+      Los cheques en cartera están en
+      <button class="btn P sm" onclick="go('cheques')" style="margin-left:6px">💰 Tesorería → Cheques</button>
     </div>
-    <div id="chq-lista"></div>
   </div>
 
 </div>
@@ -3064,7 +3072,7 @@ const USUARIOS = [
 ];
 
 // Pantallas por rol
-const MENUS_ADMIN=['dash','pedidos','pedido-movil','carga','remitos','cobranza','tesoreria','cuentas','clientes','maestro-proveedores','productos','remito-rapido','nc','rendicion','stock','informes','comisiones','contrib-zona','gastos-fijos','contabilidad','exportar','importar-historico'];
+const MENUS_ADMIN=['dash','pedidos','pedido-movil','carga','remitos','cobranza','tesoreria','cheques','cuentas','clientes','maestro-proveedores','productos','remito-rapido','nc','rendicion','stock','informes','comisiones','contrib-zona','gastos-fijos','contabilidad','exportar','importar-historico'];
 const MENUS_VENDEDOR=['vendedor-home','pedidos','pedido-movil','cobranza','cuentas'];
 let usuarioActual = null;
 
@@ -3076,7 +3084,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260623-1';
+const APP_VERSION = '20260623-2';
 let _versionTag = null;
 let _versionCheckTimer = null;
 
@@ -8349,6 +8357,7 @@ function go(p){
   if(p==='zonas'){renderZonas();setTimeout(()=>{const q=document.getElementById('zona-q');if(q)q.focus();},100);}
   if(p==='importar-historico')initImportarHistorico();
   if(p==='tesoreria')initTesoreria();
+  if(p==='cheques')renderChequesCartera();
   if(p==='compras'){renderComprobantes();setTimeout(()=>{const q=document.getElementById('comp-q');if(q)q.focus();},100);}
   if(p==='remitos'){const f=document.getElementById('rem-grupo-fecha');if(f&&!f.value)f.value=new Date().toISOString().split('T')[0];}
   // Actualizar sidebar activo
@@ -8358,7 +8367,7 @@ function go(p){
   const grupoMap={
     'clientes':'maestros','cuentas':'maestros','productos':'maestros','stock':'maestros','maestro-proveedores':'maestros',
     'pedidos':'ventas','pedido-movil':'ventas','carga':'ventas','remitos':'ventas','remito-rapido':'ventas','nc':'ventas',
-    'cobranza':'tesoreria','tesoreria':'tesoreria','contabilidad':'tesoreria',
+    'cobranza':'tesoreria','tesoreria':'tesoreria','cheques':'tesoreria','contabilidad':'tesoreria',
     'informes':'informes','rendicion':'informes','comisiones':'informes','contrib-zona':'informes','gastos-fijos':'informes','importar-historico':'informes'
   };
   const g=grupoMap[p];
