@@ -2875,6 +2875,49 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 </div>
 
+<!-- MODAL AJUSTE NC/ND EN COMPROBANTE DE COMPRA -->
+<div class="mbg" id="m-comp-ajuste">
+<div class="mdl" style="width:420px">
+  <div class="mh">
+    <h3 id="m-ca-titulo">Ajuste de comprobante</h3>
+    <button class="btn sm" onclick="cerrar('m-comp-ajuste')">✕</button>
+  </div>
+  <div class="mb">
+    <input type="hidden" id="ca-comp-id">
+    <input type="hidden" id="ca-tipo">
+    <div id="ca-info" style="background:var(--bg2);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--txt2)"></div>
+    <div class="fr">
+      <div class="fg"><label>Motivo</label>
+        <select id="ca-motivo" style="width:100%">
+          <option value="devolucion_mercaderia">Devolución de mercadería</option>
+          <option value="descuento_comercial">Descuento comercial</option>
+          <option value="error_facturacion">Error de facturación</option>
+          <option value="bonificacion">Bonificación</option>
+          <option value="cargo_adicional">Cargo adicional</option>
+          <option value="diferencia_precio">Diferencia de precio</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+    </div>
+    <div class="fr">
+      <div class="fg"><label>Importe del ajuste</label>
+        <input type="number" id="ca-importe" min="0" step="0.01" value="0" style="width:100%;font-size:18px;font-weight:700">
+      </div>
+    </div>
+    <div id="ca-resultado" style="padding:10px 14px;border-radius:8px;font-size:13px;margin-top:6px;display:none"></div>
+    <div class="fr" style="margin-top:10px">
+      <div class="fg"><label>Observaciones</label>
+        <input id="ca-obs" placeholder="Opcional" style="width:100%">
+      </div>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn" onclick="cerrar('m-comp-ajuste')">Cancelar</button>
+      <button id="ca-btn-guardar" class="btn P" onclick="guardarAjusteComp()">Aplicar ajuste</button>
+    </div>
+  </div>
+</div>
+</div>
+
 <!-- MODAL PROVEEDOR -->
 <div class="mbg" id="m-proveedor">
 <div class="mdl" style="width:520px">
@@ -3443,7 +3486,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260625-11';
+const APP_VERSION = '20260625-12';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function _mostrarBannerUpdate(){
@@ -4223,6 +4266,69 @@ function resumenCarga(id){
     ${peds.length?`<div style="margin-top:10px;font-size:11px;color:var(--txt2)">Pedidos: #${peds.map(p=>p.id).join(', #')}</div>`:''}
   `;
   document.getElementById('m-ver').classList.add('on');
+}
+
+// ─── AJUSTE NC/ND EN COMPROBANTE DE COMPRA ──────────────────────────────────
+function abrirAjusteComp(compId, tipo){
+  const comp=_comprobantes.find(c=>c.id===compId);if(!comp)return;
+  document.getElementById('ca-comp-id').value=compId;
+  document.getElementById('ca-tipo').value=tipo;
+  const esNC=tipo==='nc';
+  document.getElementById('m-ca-titulo').textContent=esNC
+    ?'📋 Nota de crédito — Comprobante de compra'
+    :'⚠️ Nota de débito — Comprobante de compra';
+  document.getElementById('ca-info').innerHTML=`
+    <div style="margin-bottom:4px"><strong>${comp.proveedor_nom}</strong> · ${comp.nro_comprobante||'Sin Nro'}</div>
+    <div>Fecha: ${comp.fecha} · Importe actual: <strong style="color:var(--D)">${fmt(comp.importe)}</strong></div>
+    <div style="margin-top:4px;font-size:12px;color:${esNC?'var(--P)':'var(--W)'}">
+      ${esNC?'✅ NC reduce el monto que debés al proveedor':'⚠️ ND incrementa el monto que debés al proveedor'}
+    </div>`;
+  const motivoSel=document.getElementById('ca-motivo');
+  // NC: motivos de crédito; ND: motivos de débito
+  const motivos=esNC
+    ?[['devolucion_mercaderia','Devolución de mercadería'],['descuento_comercial','Descuento comercial'],['error_facturacion','Error de facturación'],['bonificacion','Bonificación'],['otro','Otro']]
+    :[['cargo_adicional','Cargo adicional'],['diferencia_precio','Diferencia de precio'],['error_facturacion','Error de facturación'],['interes_mora','Interés por mora'],['otro','Otro']];
+  motivoSel.innerHTML=motivos.map(([v,l])=>`<option value="${v}">${l}</option>`).join('');
+  document.getElementById('ca-importe').value='';
+  document.getElementById('ca-obs').value='';
+  document.getElementById('ca-resultado').style.display='none';
+  const btn=document.getElementById('ca-btn-guardar');
+  btn.className=esNC?'btn P':'btn';
+  btn.style.background=esNC?'':'var(--W)';
+  btn.style.color=esNC?'':'#fff';
+  document.getElementById('m-comp-ajuste').classList.add('on');
+  setTimeout(()=>document.getElementById('ca-importe')?.focus(),100);
+}
+
+async function guardarAjusteComp(){
+  const compId=parseInt(document.getElementById('ca-comp-id').value);
+  const tipo=document.getElementById('ca-tipo').value;
+  const monto=parseFloat(document.getElementById('ca-importe').value)||0;
+  if(monto<=0){alert('Ingresá un importe mayor a cero');return;}
+  const motivo=document.getElementById('ca-motivo').value;
+  const obs=document.getElementById('ca-obs').value;
+  const comp=_comprobantes.find(c=>c.id===compId);if(!comp)return;
+
+  const nuevoImporte=tipo==='nc'
+    ?Math.max(0, comp.importe-monto)
+    :comp.importe+monto;
+  const observNueva=`[${tipo.toUpperCase()} ${new Date().toLocaleDateString('es-AR')}: ${fmt(tipo==='nc'?-monto:monto)} — ${motivo}${obs?' — '+obs:''}]`;
+  const obsActual=comp.observaciones||'';
+
+  const {error}=await sb.from('comprobantes').update({
+    importe:nuevoImporte,
+    observaciones:(obsActual+' '+observNueva).trim(),
+    estado:nuevoImporte<=0?'pagado':comp.estado
+  }).eq('id',compId);
+  if(error){alert('Error: '+error.message);return;}
+
+  cerrar('m-comp-ajuste');
+  await cargarComprobantes();
+  renderComprobantes();
+  const msg=tipo==='nc'
+    ?`✅ NC aplicada: monto reducido de ${fmt(comp.importe)} a ${fmt(nuevoImporte)}`
+    :`✅ ND aplicada: monto incrementado de ${fmt(comp.importe)} a ${fmt(nuevoImporte)}`;
+  alert(msg);
 }
 
 function toggleNuevoCompVentas(e){
@@ -10342,8 +10448,10 @@ function renderComprobantes(){
       <td style="font-size:12px">${c.condicion_pago?c.condicion_pago+'d':'Contado'}</td>
       <td style="font-weight:600;color:var(--D)">${fmt(c.importe)}</td>
       <td><span class="b ${badgeClass}">${estado}</span></td>
-      <td style="display:flex;gap:3px">
+      <td style="display:flex;gap:3px;flex-wrap:wrap">
         ${estado!=='pagado'?`<button class="btn P sm" onclick="pagarComprobante(${c.id})">✓ Pagar</button>`:''}
+        <button class="btn sm" onclick="abrirAjusteComp(${c.id},'nc')" title="Nota de crédito del proveedor" style="background:#dbeafe;color:#1e40af;border:none">NC</button>
+        <button class="btn sm" onclick="abrirAjusteComp(${c.id},'nd')" title="Nota de débito del proveedor" style="background:#fef3c7;color:#92400e;border:none">ND</button>
         <button class="btn D sm" onclick="eliminarComprobante(${c.id})">🗑</button>
       </td>
     </tr>`;
