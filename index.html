@@ -810,6 +810,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <!-- Comprobante transferencia (solo visible cuando se elige Transferencia) -->
       <div id="cobm-comp-wrap" style="display:none;margin-bottom:14px;background:var(--bg2);border:2px solid var(--A);border-radius:12px;padding:12px">
         <div style="font-size:11px;font-weight:600;color:var(--A);margin-bottom:8px">📎 COMPROBANTE DE TRANSFERENCIA</div>
+        <div style="margin-bottom:10px">
+          <label style="font-size:12px;font-weight:600;color:var(--txt2);display:block;margin-bottom:4px">Nombre del cliente que transfirió <span style="color:var(--D)">*</span></label>
+          <input id="cobm-transf-nombre" type="text" placeholder="Ej: Juan García" autocomplete="off"
+            style="width:100%;padding:10px 12px;border:2px solid var(--A);border-radius:8px;font-size:15px;box-sizing:border-box;font-family:inherit">
+        </div>
         <input type="file" id="cobm-comprobante" accept="image/*" capture="environment" style="display:none" onchange="prevComprobanteMov(this)">
         <div style="display:flex;gap:8px;margin-bottom:8px">
           <button type="button" onclick="document.getElementById('cobm-comprobante').click()"
@@ -1250,6 +1255,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <option value="">Todas las subcategorías</option>
     </select>
     <select id="pro-prov" onchange="renderProductos()"><option value="">Todos los proveedores</option></select>
+    <select id="pro-activo" onchange="renderProductos()" style="min-width:110px">
+      <option value="activos">Solo activos</option>
+      <option value="todos">Todos</option>
+      <option value="inactivos">Solo inactivos</option>
+    </select>
   </div>
   <div class="tbl-wrap"><table class="tbl">
     <thead><tr><th>Código</th><th>Nombre</th><th>Proveedor</th><th>Unidad</th><th>Costo</th><th>Precio vta</th><th>Margen real</th><th>Margen obj</th><th>Estado</th><th>Stock</th><th></th></tr></thead>
@@ -2229,6 +2239,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="fg"><label>Descuento máx %</label><input type="number" id="pro-dto" value="0" step="0.1" style="width:100%"></div>
   </div>
   <input type="hidden" id="pro-edit-id">
+  <div style="display:flex;align-items:center;gap:10px;margin-top:10px;padding:8px 12px;background:var(--bg2);border-radius:8px">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;font-weight:600">
+      <input type="checkbox" id="pro-activo-chk" checked style="width:18px;height:18px;accent-color:var(--P)">
+      Producto activo
+    </label>
+    <span style="font-size:12px;color:var(--txt2)">Los inactivos no aparecen en pedidos ni remitos</span>
+  </div>
   <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
     <button class="btn" onclick="cerrar('m-producto')">Cancelar</button>
     <button class="btn P" onclick="guardarProducto()">✓ Guardar</button>
@@ -3130,7 +3147,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260624-9';
+const APP_VERSION = '20260624-10';
 let _versionTag = null;
 let _versionCheckTimer = null;
 
@@ -5090,12 +5107,15 @@ function renderProductos(){
   const cat=document.getElementById('pro-cat')?.value||'';
   const subcat=document.getElementById('pro-subcat')?.value||'';
   const prov=document.getElementById('pro-prov')?.value||'';
+  const activoFiltro=document.getElementById('pro-activo')?.value||'activos';
   let data=_productos.filter(p=>{
     const okQ=!q||(p.nombre||'').toLowerCase().includes(q)||(p.codigo||'').toString().includes(q)||(p.proveedor_nom||'').toLowerCase().includes(q);
     const okC=!cat||(p.rubro||'')===cat;
     const okSC=!subcat||(p.linea||'')===subcat;
     const okP=!prov||(p.proveedor_nom||'')===prov;
-    return okQ&&okC&&okSC&&okP;
+    const esActivo=p.activo!==false;
+    const okA=activoFiltro==='todos'||(activoFiltro==='activos'&&esActivo)||(activoFiltro==='inactivos'&&!esActivo);
+    return okQ&&okC&&okSC&&okP&&okA;
   });
   const tot=data.length,sl=data.slice((_proPg-1)*PP,_proPg*PP);
   const tbody=document.getElementById('pro-tbody');
@@ -5105,9 +5125,10 @@ function renderProductos(){
     const mObj=p.margen_objetivo||0;
     const dif=Math.round((mReal-mObj)*10)/10;
     const badge=mReal<0?'<span class="b bD">📉 Pérdida</span>':dif>=-5&&dif<0?`<span class="b bW" title="${dif}%">⚠️ -${Math.abs(dif)}%</span>`:dif<-5?`<span class="b bD" title="${dif}%">🔴 -${Math.abs(dif)}%</span>`:'<span class="b bP">✅ OK</span>';
-    return `<tr>
+    const esActivo=p.activo!==false;
+    return `<tr${esActivo?'':' style="opacity:0.55"'}>
     <td style="color:var(--txt2);font-size:11px">${p.codigo||''}</td>
-    <td style="font-weight:600">${p.nombre}</td>
+    <td style="font-weight:600">${p.nombre}${esActivo?'':' <span class="b" style="background:var(--D30);color:var(--D);font-size:10px">INACTIVO</span>'}</td>
     <td style="font-size:11px;color:var(--txt2)">${p.proveedor_nom||''}</td>
     <td style="font-size:12px;color:var(--txt2)">${p.unidad||'—'}</td>
     <td style="font-size:12px">${fmt(costo)}</td>
@@ -5144,6 +5165,7 @@ function abrirProducto(){
   document.getElementById('pro-cat-modal').value='';
   document.getElementById('pro-subcat-modal').innerHTML='<option value="">— Sin subcategoría —</option>';
   document.getElementById('pro-subcat-modal').disabled=true;
+  document.getElementById('pro-activo-chk').checked=true;
   ['pro-costo','pro-precio','pro-stock','pro-dto'].forEach(id=>document.getElementById(id).value='0');
   document.getElementById('pro-iva').value='21';
   document.getElementById('pro-margen').value='30';
@@ -5166,6 +5188,7 @@ function editarProducto(id){
   poblarSubcats('pro-cat-modal','pro-subcat-modal');
   document.getElementById('pro-subcat-modal').value=p.linea||'';
   document.getElementById('pro-margen').value=p.margen_objetivo||30;
+  document.getElementById('pro-activo-chk').checked=p.activo!==false;
   recalcPrecioSugerido();
   document.getElementById('m-producto').classList.add('on');
 }
@@ -5182,7 +5205,8 @@ async function guardarProducto(){
     descuento:parseFloat(document.getElementById('pro-dto').value)||0,
     rubro:document.getElementById('pro-cat-modal').value,
     linea:document.getElementById('pro-subcat-modal').value,
-    margen_objetivo:parseFloat(document.getElementById('pro-margen').value)||0};
+    margen_objetivo:parseFloat(document.getElementById('pro-margen').value)||0,
+    activo:document.getElementById('pro-activo-chk').checked};
   if(editId){await sb.from('productos').update(obj).eq('id',editId);}
   else{await sb.from('productos').insert(obj);}
   cerrar('m-producto');await cargarProductos();renderProductos();
@@ -7176,6 +7200,7 @@ function limpiarCobMovil(){
   const rw=document.getElementById('cobm-resto-wrap');if(rw)rw.style.display='none';
   const cw=document.getElementById('cobm-comp-wrap');if(cw)cw.style.display='none';
   clearComprobanteMov();
+  const tn=document.getElementById('cobm-transf-nombre');if(tn)tn.value='';
   ['cobm-btn-ef','cobm-btn-tr','cobm-btn-ch'].forEach(id=>{const b=document.getElementById(id);if(b){b.style.background='#fff';b.style.borderColor='var(--brd)';b.style.color='';}});
   setTimeout(()=>document.getElementById('cobm-cli-q')?.focus(),100);
 }
@@ -7257,6 +7282,8 @@ async function guardarCobMovil(){
   // Subir comprobante si se adjuntó uno (solo para transferencias)
   let comprobante_url='';
   if(_cobMovilForma==='transferencia'){
+    const nombreTransf=(document.getElementById('cobm-transf-nombre')?.value||'').trim();
+    if(!nombreTransf){alert('Ingresá el nombre del cliente que transfirió');return;}
     const compFile=document.getElementById('cobm-comprobante')?.files?.[0];
     if(compFile){
       const ext=compFile.name.split('.').pop()||'jpg';
@@ -7271,6 +7298,7 @@ async function guardarCobMovil(){
     }
   }
 
+  const nombreTransf=_cobMovilForma==='transferencia'?(document.getElementById('cobm-transf-nombre')?.value||'').trim():'';
   await sb.from('cobros').insert({
     cliente_id:_cobMovilCliId,cliente:c?.nombre||'?',
     fecha:new Date().toISOString().split('T')[0],
@@ -7281,7 +7309,8 @@ async function guardarCobMovil(){
     vendedor:usuarioActual?.nombre||'',
     observaciones:document.getElementById('cobm-obs')?.value||'',
     imputaciones,saldo_favor:resto>0?resto:0,
-    comprobante_url
+    comprobante_url,
+    nombre_transf:nombreTransf||null
   });
   for(const imp of imputaciones){
     const rem=_remitos.find(r=>r.id===imp.remito_id);
@@ -9816,15 +9845,28 @@ async function verVistaCruzada() {
     return;
   }
 
+  // Normalizar nombre para join (puede que códigos difieran entre archivos)
+  const normKey = n => (n||'').trim().toUpperCase().replace(/\s+/g,' ');
+
+  // Agregar por nombre_cliente (más robusto que código que puede diferir)
   const mapV = {}, mapS = {};
-  dataV.forEach(r => mapV[r.codigo_cliente] = r);
-  dataS.forEach(r => mapS[r.codigo_cliente] = r);
+  dataV.forEach(r => {
+    const key = normKey(r.nombre_cliente) || r.codigo_cliente;
+    if (!mapV[key]) mapV[key] = { nombre: r.nombre_cliente||'', cod: r.codigo_cliente||'', vendido: 0 };
+    mapV[key].vendido += (r.monto_vendido || 0);
+  });
+  dataS.forEach(r => {
+    const key = normKey(r.nombre_cliente) || r.codigo_cliente;
+    if (!mapS[key]) mapS[key] = { nombre: r.nombre_cliente||'', cod: r.codigo_cliente||'', saldo: 0 };
+    mapS[key].saldo += (r.saldo || 0);
+  });
 
   const claves = [...new Set([...Object.keys(mapV), ...Object.keys(mapS)])];
-  let filas = claves.map(cod => {
-    const v = mapV[cod], s = mapS[cod];
-    const nombre = (v||s)?.nombre_cliente || '';
-    const vendido = v?.monto_vendido || 0;
+  let filas = claves.map(key => {
+    const v = mapV[key], s = mapS[key];
+    const nombre = (v||s)?.nombre || key;
+    const cod = (v||s)?.cod || '';
+    const vendido = v?.vendido || 0;
     const saldo = s?.saldo || 0;
     const rot = vendido > 0 ? (saldo / vendido * 100) : (saldo > 0 ? 9999 : 0);
     return { cod, nombre, vendido, saldo, rot };
