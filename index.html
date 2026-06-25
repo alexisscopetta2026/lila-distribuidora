@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<!-- v20260624181500 --><title>Distribuidora Lila — Sistema de Gestión</title>
+<!-- v20260624190000 --><title>Distribuidora Lila — Sistema de Gestión</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -3146,7 +3146,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260624-5';
+const APP_VERSION = '20260624-6';
 let _versionTag = null;
 let _versionCheckTimer = null;
 
@@ -7807,6 +7807,7 @@ function editarPedidoMovil(pedId){
   if(drop)drop.style.display='none';
   renderEditPedidoMovil();
   abrirBottomSheetEditar();
+  setTimeout(()=>{const b=document.getElementById('epm-busq');if(b){b.value='';filtrarAgregarMovil();}},350);
 }
 
 function abrirBottomSheetEditar(){
@@ -7835,7 +7836,7 @@ function renderEditPedidoMovil(){
     <div style="display:flex;align-items:center;min-height:56px;padding:8px 0;border-bottom:1px solid var(--brd);gap:10px">
       <div style="flex:1;min-width:0">
         <div style="font-size:16px;font-weight:600;line-height:1.3">${it.nom}</div>
-        <div style="font-size:13px;color:var(--txt2)">${fmt(it.precio)} ${it.un?'/ '+it.un:''}</div>
+        <div style="font-size:13px;color:var(--txt2)">${fmt(it.precio)}</div>
       </div>
       <input type="number" inputmode="decimal" value="${it.cant}" min="0" step="0.5"
         onchange="_editPedMovil.items[${i}].cant=parseFloat(this.value)||0;actualizarTotalEditMovil()"
@@ -7860,18 +7861,25 @@ function actualizarTotalEditMovil(){
 function filtrarAgregarMovil(){
   const q=(document.getElementById('epm-busq')?.value||'').toLowerCase().trim();
   const drop=document.getElementById('epm-drop');if(!drop)return;
-  if(!q){drop.style.display='none';return;}
-  const res=_productos.filter(p=>p.activo!==false&&((p.nombre||'').toLowerCase().includes(q)||(p.codigo||'').toString().includes(q))).slice(0,10);
+  const todos=_productos.filter(p=>p.activo!==false);
+  const res=q
+    ?todos.filter(p=>(p.nombre||'').toLowerCase().includes(q)||(p.codigo||'').toString().includes(q)||(p.linea||'').toLowerCase().includes(q))
+    :todos.slice(0,40);
   if(!res.length){drop.style.display='none';return;}
   drop.innerHTML=res.map(p=>{
     const enEdit=_editPedMovil?.items.find(x=>x.id===p.id);
+    const sub=[p.linea,p.rubro].filter(Boolean).join(' · ');
     return `<div onclick="abrirPopupMovil(${p.id})"
-      style="padding:12px 14px;font-size:16px;border-bottom:1px solid var(--brd);cursor:pointer;min-height:52px;display:flex;align-items:center;gap:10px;background:${enEdit?'var(--PL)':''}">
+      style="padding:12px 14px;border-bottom:1px solid var(--brd);cursor:pointer;min-height:52px;display:flex;align-items:center;gap:10px;background:${enEdit?'var(--PL)':''}">
       <div style="flex:1;min-width:0">
-        <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.nombre}</div>
+        <div style="font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.nombre}</div>
+        ${sub?`<div style="font-size:11px;color:var(--txt2)">${sub}</div>`:''}
         ${enEdit?`<div style="font-size:12px;color:var(--P);font-weight:600">✓ ${enEdit.cant} ${p.unidad||''} en pedido</div>`:''}
       </div>
-      <span style="font-size:14px;font-weight:700;color:var(--PD);flex-shrink:0">${fmt(p.precio)}</span>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:14px;font-weight:700;color:var(--PD)">${fmt(p.precio)}</div>
+        ${p.unidad?`<div style="font-size:11px;color:var(--txt2)">${p.unidad}</div>`:''}
+      </div>
     </div>`;
   }).join('');
   drop.style.display='block';
