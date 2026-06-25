@@ -616,10 +616,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="mb">
     <div class="fr">
       <div class="fg"><label>Fecha</label><input type="date" id="comp-fecha" style="width:100%"></div>
-      <div class="fg"><label>Proveedor</label>
-        <select id="comp-prov-id" style="width:100%" onchange="selProvComp()">
-          <option value="">— Elegir proveedor —</option>
-        </select>
+      <div class="fg"><label>Proveedor &nbsp;<span style="font-size:10px;color:var(--txt2)">[F2]</span></label>
+        <input type="hidden" id="comp-prov-id">
+        <div style="display:flex;gap:4px">
+          <input id="comp-prov-cod" placeholder="Cód." autocomplete="off"
+            style="width:58px;font-size:13px;font-weight:600;text-align:center"
+            onkeydown="if(event.key==='F2'){event.preventDefault();abrirBuscadorProv();}else if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();buscarCodProv();}">
+          <div style="flex:1;position:relative">
+            <input id="comp-prov-q" placeholder="Nombre del proveedor..." autocomplete="off" style="width:100%"
+              oninput="dropProvComp()"
+              onkeydown="if(event.key==='F2'){event.preventDefault();abrirBuscadorProv();}">
+            <div id="comp-prov-drop" class="drop-list" style="display:none;position:absolute;z-index:200;width:100%;background:var(--bg);border:1px solid var(--brd);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);max-height:200px;overflow-y:auto;top:100%;left:0"></div>
+          </div>
+          <button class="btn sm" onclick="abrirBuscadorProv()" title="Buscar proveedor (F2)" style="padding:4px 8px;font-size:13px">🔍</button>
+        </div>
       </div>
     </div>
     <div class="fr">
@@ -3420,7 +3430,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260625-09';
+const APP_VERSION = '20260625-10';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function _mostrarBannerUpdate(){
@@ -9898,6 +9908,68 @@ async function cargarComprobantes(){
   _comprobantes = data || [];
 }
 
+// ─── BUSCADOR DE PROVEEDORES EN COMPROBANTE ──────────────────────────────────
+function dropProvComp(){
+  const q=(document.getElementById('comp-prov-q')?.value||'').toLowerCase();
+  const drop=document.getElementById('comp-prov-drop');if(!drop)return;
+  if(q.length<1){drop.style.display='none';return;}
+  const m=_proveedores.filter(p=>(p.nombre||'').toLowerCase().includes(q)).slice(0,8);
+  drop.innerHTML=m.map(p=>`<div style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--brd);font-size:13px"
+    onmousedown="selProvComp(${p.id})"><strong>${p.nombre}</strong>
+    ${p.cuit?'<span style="font-size:11px;color:var(--txt2);margin-left:6px">CUIT: '+p.cuit+'</span>':''}</div>`).join('');
+  drop.style.display=m.length?'block':'none';
+}
+
+function buscarCodProv(){
+  const cod=(document.getElementById('comp-prov-cod')?.value||'').trim();
+  const el=document.getElementById('comp-prov-cod');
+  if(!cod){if(el)el.style.borderColor='';return;}
+  const p=_proveedores.find(x=>String(x.codigo||x.id).trim()===cod);
+  if(p){
+    selProvComp(p.id);
+    if(el)el.style.borderColor='var(--P)';
+    setTimeout(()=>document.getElementById('comp-nro')?.focus(),50);
+  } else {
+    if(el)el.style.borderColor='var(--D)';
+  }
+}
+
+function abrirBuscadorProv(){
+  const existing=document.getElementById('modal-busq-prov');if(existing)existing.remove();
+  const div=document.createElement('div');
+  div.id='modal-busq-prov';
+  div.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center';
+  div.innerHTML=`
+    <div style="background:var(--bg);border-radius:12px;padding:20px;width:420px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.3)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <span style="font-weight:600;font-size:14px">🔍 Buscar proveedor</span>
+        <button onclick="document.getElementById('modal-busq-prov').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--txt2)">✕</button>
+      </div>
+      <input id="busq-prov-q" placeholder="Nombre, CUIT o código..." autocomplete="off"
+        style="padding:8px 12px;border:1px solid var(--brd);border-radius:8px;font-size:14px;margin-bottom:10px"
+        oninput="filtrarBusqProv()">
+      <div id="busq-prov-list" style="overflow-y:auto;flex:1;max-height:50vh"></div>
+    </div>`;
+  document.body.appendChild(div);
+  div.addEventListener('click',e=>{if(e.target===div)div.remove();});
+  setTimeout(()=>{document.getElementById('busq-prov-q')?.focus();filtrarBusqProv();},50);
+}
+function filtrarBusqProv(){
+  const q=(document.getElementById('busq-prov-q')?.value||'').toLowerCase();
+  const lista=document.getElementById('busq-prov-list');if(!lista)return;
+  const res=_proveedores.filter(p=>
+    !q||(p.nombre||'').toLowerCase().includes(q)||String(p.cuit||'').includes(q)||String(p.codigo||p.id).includes(q)
+  ).slice(0,20);
+  lista.innerHTML=res.length?res.map(p=>`
+    <div style="padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--brd);display:flex;align-items:center;gap:10px"
+      onmousedown="selProvComp(${p.id});document.getElementById('modal-busq-prov').remove()">
+      <div>
+        <div style="font-weight:600;font-size:13px">${p.nombre}</div>
+        ${p.cuit?'<div style="font-size:11px;color:var(--txt2)">CUIT: '+p.cuit+'</div>':''}
+      </div>
+    </div>`).join(''):'<div style="padding:16px;text-align:center;color:var(--txt2);font-size:13px">Sin resultados</div>';
+}
+
 async function abrirComprobante(){
   document.getElementById('comp-edit-id').value = '';
   document.getElementById('m-comp-title').textContent = 'Nuevo comprobante';
@@ -9914,12 +9986,11 @@ async function abrirComprobante(){
   
   // Recargar proveedores por si acaso
   if(!_proveedores.length) await cargarProveedores();
-  
-  // Poblar proveedores
-  const sel = document.getElementById('comp-prov-id');
-  sel.innerHTML = '<option value="">— Elegir proveedor —</option>' +
-    _proveedores.map(p => `<option value="${p.id}">${p.nombre}${p.cuenta_defecto?' — '+p.cuenta_defecto.split('|')[1]:''}</option>`).join('');
-  
+
+  // Resetear campos proveedor
+  ['comp-prov-id','comp-prov-q','comp-prov-cod'].forEach(id=>{const el=document.getElementById(id);if(el){el.value='';if(el.style)el.style.borderColor='';}});
+  document.getElementById('comp-prov-drop').style.display='none';
+
   // Resetear cuenta
   document.getElementById('comp-cuenta').value = '50101|Costo Mercadería Vendida';
   
@@ -9930,7 +10001,7 @@ async function abrirComprobante(){
   if(toggleBtn)toggleBtn.textContent='ocultar ▲';
 
   document.getElementById('m-comprobante').classList.add('on');
-  setTimeout(()=>document.getElementById('comp-prov-id').focus(), 100);
+  setTimeout(()=>document.getElementById('comp-prov-cod').focus(), 100);
 }
 
 function calcCostoReal(costoFacturado, condFiscal, pctFact){
@@ -9943,9 +10014,17 @@ function calcCostoReal(costoFacturado, condFiscal, pctFact){
   return costoFacturado/1.21;
 }
 
-function selProvComp(){
-  const id = document.getElementById('comp-prov-id').value;
-  const prov = _proveedores.find(p => String(p.id) === String(id));
+function selProvComp(id){
+  if(id!=null){
+    document.getElementById('comp-prov-id').value=id;
+    const p=_proveedores.find(x=>x.id===id||String(x.id)===String(id));
+    if(p){
+      const q=document.getElementById('comp-prov-q');if(q)q.value=p.nombre;
+      const cod=document.getElementById('comp-prov-cod');if(cod){cod.value=p.codigo||p.id||'';cod.style.borderColor='var(--P)';}
+      document.getElementById('comp-prov-drop').style.display='none';
+    }
+  }
+  const prov = _proveedores.find(p => String(p.id) === String(document.getElementById('comp-prov-id').value));
   if(!prov) return;
   
   // Auto-completar condición de pago
@@ -11707,7 +11786,7 @@ async function leerFacturaConIA(input){
     if(parsed.proveedor){
       const q=parsed.proveedor.toLowerCase();
       const match=_proveedores.find(p=>(p.nombre||'').toLowerCase().includes(q)||q.includes((p.nombre||'').toLowerCase().substring(0,5)));
-      if(match)document.getElementById('comp-prov-id').value=match.id;
+      if(match)selProvComp(match.id);
     }
     // Productos: agregar a la lista de costos
     if(parsed.productos?.length){
