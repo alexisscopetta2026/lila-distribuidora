@@ -3130,7 +3130,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260624-8';
+const APP_VERSION = '20260624-9';
 let _versionTag = null;
 let _versionCheckTimer = null;
 
@@ -5935,7 +5935,10 @@ function selCliNC(id){
   document.getElementById('nc-cli-q').value=c.nombre;
   document.getElementById('nc-cli-drop').style.display='none';
   const cc=document.getElementById('nc-cli-cod');if(cc){cc.value=c.codigo||c.id||'';cc.style.borderColor='var(--P)';}
-  
+
+  // Si hay un producto ya seleccionado, actualizar historial ahora
+  if(_ncProTemp)_mostrarHistorialNC(_ncProTemp.id,id);
+
   // Mostrar facturas pendientes para imputar
   const remsPend=_remitos.filter(r=>r.cliente_id===id&&!r.cobrado).sort((a,b)=>a.fecha.localeCompare(b.fecha));
   const facturasSection=document.getElementById('nc-facturas-section');
@@ -5976,47 +5979,52 @@ function dropProNC(){
   drop.innerHTML=m.map(p=>`<div onmousedown="selProNC(${p.id})"><strong>${p.nombre}</strong> <span style="color:var(--txt2);font-size:11px">${fmt(p.precio)} · stock:${p.stock||0} ${p.unidad||''}</span></div>`).join('');
   drop.style.display=m.length?'block':'none';
 }
+function _mostrarHistorialNC(prodId, cliId){
+  if(!cliId||!prodId){
+    const secHist=document.getElementById('nc-historial-precio');
+    if(secHist){
+      if(prodId&&!cliId){secHist.style.display='block';secHist.innerHTML='<div style="font-size:12px;color:var(--W);padding:6px">⚠ Seleccioná el cliente para ver el historial de precios</div>';}
+      else secHist.style.display='none';
+    }
+    return;
+  }
+  const prod=_productos.find(x=>x.id===prodId);
+  const remitosCliente=_remitos.filter(r=>r.cliente_id===cliId&&r.items);
+  const historial=[];
+  remitosCliente.forEach(r=>{
+    let items=r.items;
+    if(typeof items==='string'){try{items=JSON.parse(items);}catch(e){return;}}
+    if(!Array.isArray(items))return;
+    const item=items.find(it=>it.id===prodId||it.prod_id===prodId||(it.nom||'').toLowerCase()===(prod?.nombre||'').toLowerCase());
+    if(item)historial.push({fecha:r.fecha,remito_id:r.id,precio:item.precio||item.p||0,cant:item.cant||item.q||1});
+  });
+  const secHist=document.getElementById('nc-historial-precio');
+  if(!secHist)return;
+  if(historial.length){
+    historial.sort((a,b)=>b.fecha.localeCompare(a.fecha));
+    secHist.style.display='block';
+    secHist.innerHTML=`<div style="font-size:11px;font-weight:600;color:var(--txt2);text-transform:uppercase;margin-bottom:6px">Últimos remitos con este producto</div>`+
+      historial.slice(0,5).map(h=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:var(--bg2);border-radius:6px;margin-bottom:4px;cursor:pointer"
+        onclick="document.getElementById('nc-precio').value='${h.precio}';this.closest('#nc-historial-precio').querySelectorAll('div[onclick]').forEach(d=>d.style.background='var(--bg2)');this.style.background='var(--PL)'">
+        <span style="font-size:12px">R-${String(h.remito_id).padStart(4,'0')} · ${h.fecha} · ${fmtN(h.cant,2)} ${prod?.unidad||''}</span>
+        <span style="font-size:13px;font-weight:700;color:var(--PD)">${fmt(h.precio)} <span style="font-size:10px;color:var(--txt2)">👆 usar</span></span>
+      </div>`).join('');
+  } else {
+    secHist.style.display='block';
+    secHist.innerHTML='<div style="font-size:12px;color:var(--txt2);padding:6px">Sin remitos con este producto para el cliente seleccionado</div>';
+  }
+}
 function selProNC(id){
   _ncProTemp=_productos.find(x=>x.id===id);if(!_ncProTemp)return;
   document.getElementById('nc-pro-q').value=_ncProTemp.nombre;
   document.getElementById('nc-pro-drop').style.display='none';
   document.getElementById('nc-precio').value=_ncProTemp.precio||0;
   const cp=document.getElementById('nc-cod');if(cp){cp.value=_ncProTemp.codigo||_ncProTemp.id;cp.style.borderColor='var(--P)';}
-  
+
   // Buscar historial de precios de este producto para el cliente seleccionado
   const cliId=parseInt(document.getElementById('nc-cli-id').value)||0;
-  if(!cliId) return;
-  
-  const remitosCliente=_remitos.filter(r=>r.cliente_id===cliId && r.items);
-  const historial=[];
-  remitosCliente.forEach(r=>{
-    let items=r.items;
-    if(typeof items==='string'){try{items=JSON.parse(items);}catch(e){return;}}
-    if(!Array.isArray(items))return;
-    const item=items.find(it=>it.id===id||it.prod_id===id||(it.nom||'').toLowerCase()===(_ncProTemp.nombre||'').toLowerCase());
-    if(item){
-      historial.push({fecha:r.fecha, remito_id:r.id, precio:item.precio||item.p||0, cant:item.cant||item.q||1});
-    }
-  });
-  
-  // Mostrar historial de precios
-  const secHist=document.getElementById('nc-historial-precio');
-  if(secHist){
-    if(historial.length){
-      historial.sort((a,b)=>b.fecha.localeCompare(a.fecha));
-      secHist.style.display='block';
-      secHist.innerHTML=`<div style="font-size:11px;font-weight:600;color:var(--txt2);text-transform:uppercase;margin-bottom:6px">Historial de precio para este cliente</div>`+
-        historial.slice(0,5).map(h=>`
-        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:var(--bg2);border-radius:6px;margin-bottom:4px;cursor:pointer"
-          onclick="document.getElementById('nc-precio').value='${h.precio}';document.getElementById('nc-historial-precio').querySelectorAll('div[onclick]').forEach(d=>d.style.background='var(--bg2)');this.style.background='var(--PL)'">
-          <span style="font-size:12px">Remito #${h.remito_id} · ${h.fecha}</span>
-          <span style="font-size:13px;font-weight:700;color:var(--PD)">${fmt(h.precio)} <span style="font-size:10px;color:var(--txt2)">👆 usar este</span></span>
-        </div>`).join('');
-    } else {
-      secHist.style.display='block';
-      secHist.innerHTML='<div style="font-size:12px;color:var(--txt2);padding:6px">Sin historial de este producto para el cliente seleccionado</div>';
-    }
-  }
+  _mostrarHistorialNC(id,cliId);
 }
 function agregarItemNC(){
   if(!_ncProTemp){const q=(document.getElementById('nc-pro-q').value||'').toLowerCase();_ncProTemp=_productos.find(p=>(p.nombre||'').toLowerCase().includes(q));}
