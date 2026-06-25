@@ -3500,7 +3500,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260625-14';
+const APP_VERSION = '20260625-15';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function _mostrarBannerUpdate(){
@@ -3744,23 +3744,42 @@ function renderPedidos(){
   let data=_pedidos.filter(p=>(!q||(p.cliente||'').toLowerCase().includes(q)||String(p.id).includes(q)||(p.localidad||'').toLowerCase().includes(q)||(p.vendedor||'').toLowerCase().includes(q))&&(!est||p.estado===est));
   const el=document.getElementById('ped-lista');
   if(!data.length){el.innerHTML='<div class="empty">Sin pedidos</div>';return;}
-  const stBadge=s=>s==='pendiente'?'bW':s==='en_carga'?'bA':s==='remitado'?'bP':'bG';
-  el.innerHTML=data.map(p=>`<div class="ccard">
-    <div class="ccard-h">
-      <div>
-        <div class="ccard-nm">#${p.id} — ${p.cliente}</div>
-        <div class="ccard-sub">${p.localidad||''} · Zona ${p.zona||'-'} · ${p.vendedor||'—'} · ${p.fecha||''}</div>
-        <div style="font-size:11px;color:var(--txt2);margin-top:2px">${(p.items||[]).length} productos${p.visita?` · <span style="color:var(--P);font-weight:500">👁 ${p.visita}</span>`:''}</div>
+  const stBadge=s=>`<span class="b ${s==='pendiente'?'bW':s==='en_carga'?'bA':s==='remitado'?'bP':'bG'}">${s.replace('_',' ')}</span>`;
+  el.innerHTML=data.map(p=>`
+    <div style="background:var(--bg);border:1.5px solid var(--brd);border-radius:12px;margin-bottom:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06)">
+      <div onclick="toggleDetallePed(${p.id})" style="display:flex;justify-content:space-between;align-items:center;padding:14px;cursor:pointer;border-left:4px solid var(--P)">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">#${p.id} — ${p.cliente}</div>
+          <div style="font-size:12px;color:var(--txt2);margin-top:2px">${p.localidad||''} · Z${p.zona||'?'} · ${p.vendedor||'—'} · ${p.fecha||''}</div>
+          <div style="margin-top:4px;display:flex;align-items:center;gap:6px">${stBadge(p.estado)}<span style="font-size:11px;color:var(--txt2)">${(p.items||[]).length} producto${(p.items||[]).length!==1?'s':''}${p.visita?' · '+p.visita:''}</span></div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;margin-left:12px;flex-shrink:0">
+          <div style="font-size:18px;font-weight:700;color:var(--P)">${fmt(p.total)}</div>
+          <span id="ped-chev-${p.id}" style="font-size:16px;color:var(--txt2);transition:transform 0.2s">▼</span>
+        </div>
       </div>
-      <div style="text-align:right"><div class="ccard-tot">${fmt(p.total)}</div><span class="b ${stBadge(p.estado)}">${p.estado.replace('_',' ')}</span></div>
-    </div>
-    <div class="ccard-acts">
-      <button class="btn sm" onclick="verPedido(${p.id})">👁 Ver</button>
-      ${p.estado==='pendiente'?`<button class="btn A sm" onclick="editarPedidoMovil(${p.id})">✏️ Editar</button>`:''}
-      ${p.estado==='pendiente'?`<button class="btn D sm" onclick="elimPedido(${p.id})">🗑</button>`:''}
-      ${p.estado==='remitado'?`<button class="btn sm" onclick="verRemito(${p.remito_id})">📄 Remito</button>`:''}
-    </div>
-  </div>`).join('');
+      <div id="ped-det-${p.id}" style="display:none;border-top:1px solid var(--brd)">
+        <div style="padding:12px 16px;font-size:13px;color:var(--txt2);background:var(--bg2)">
+          ${(p.items||[]).map(it=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:0.5px solid var(--brd)"><span>${it.nom||it.nombre}</span><span style="font-weight:600">${it.cant} ${it.un||'un'} · ${fmt(it.precio*it.cant)}</span></div>`).join('')}
+          ${p.obs?`<div style="margin-top:8px;color:var(--txt2);font-size:12px">Obs: ${p.obs}</div>`:''}
+        </div>
+        <div style="display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--brd)">
+          ${p.estado==='pendiente'?`
+            <button onclick="event.stopPropagation();editarPedidoMovil(${p.id})" style="flex:2;min-height:44px;background:var(--AL);color:var(--A);border:1.5px solid var(--A);border-radius:10px;font-size:15px;font-weight:600;cursor:pointer">✏️ Editar</button>
+            <button onclick="event.stopPropagation();elimPedido(${p.id})" style="flex:1;min-height:44px;background:var(--DL);color:var(--D);border:1.5px solid var(--D);border-radius:10px;font-size:15px;font-weight:600;cursor:pointer">🗑</button>
+          `:''}
+          ${p.estado==='remitado'?`<button onclick="event.stopPropagation();verRemito(${p.remito_id})" style="min-height:44px;padding:0 16px;background:var(--bg2);border:1.5px solid var(--brd);border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">📄 Ver remito</button>`:''}
+        </div>
+      </div>
+    </div>`).join('');
+}
+function toggleDetallePed(id){
+  const det=document.getElementById('ped-det-'+id);
+  const chev=document.getElementById('ped-chev-'+id);
+  if(!det)return;
+  const open=det.style.display==='none';
+  det.style.display=open?'block':'none';
+  if(chev)chev.style.transform=open?'rotate(180deg)':'rotate(0deg)';
 }
 function verPedido(id){
   const p=_pedidos.find(x=>x.id===id);if(!p)return;
