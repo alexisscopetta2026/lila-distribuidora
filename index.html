@@ -272,6 +272,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
   </div>
 
+  <div class="sidebar-group" id="sg-logistica">
+    <button class="sidebar-group-btn" onclick="toggleSidebar('logistica')">🗺 Logística <span id="sc-logistica">▶</span></button>
+    <div class="sidebar-items">
+      <button class="sidebar-item" onclick="go('hoja-ruta')" data-p="hoja-ruta">🗺 Hoja de ruta</button>
+    </div>
+  </div>
+
   <div class="sidebar-group" id="sg-config">
     <button class="sidebar-group-btn" onclick="toggleSidebar('config')">⚙️ Config <span id="sc-config">▶</span></button>
     <div class="sidebar-items">
@@ -2497,8 +2504,61 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </table></div>
 </div>
 
+<!-- HOJA DE RUTA -->
+<div class="panel" id="p-hoja-ruta">
+  <div style="padding:0 0 16px;display:flex;justify-content:space-between;align-items:center">
+    <h2 style="margin-bottom:0">🗺 Hoja de ruta del día</h2>
+  </div>
+
+  <!-- TABS: Admin / Mi ruta (vendedor) -->
+  <div style="display:flex;gap:8px;margin-bottom:16px" id="hr-tabs">
+    <button class="btn P sm" id="hr-tab-admin" onclick="hrTab('admin')">🛠 Armar ruta (Admin)</button>
+    <button class="btn sm" id="hr-tab-mia" onclick="hrTab('mia')">📱 Mi ruta</button>
+  </div>
+
+  <!-- PANEL ADMIN: armar la ruta del día -->
+  <div id="hr-panel-admin">
+    <div class="g2" style="gap:10px;margin-bottom:12px">
+      <div class="fg">
+        <label style="font-size:12px;color:var(--txt2)">Fecha</label>
+        <input type="date" id="hr-fecha" style="width:100%" onchange="hrCargarRuta()">
+      </div>
+      <div class="fg">
+        <label style="font-size:12px;color:var(--txt2)">Vendedor</label>
+        <select id="hr-vendedor" style="width:100%" onchange="hrCargarRuta()">
+          <option value="">— Todos —</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <button class="btn sm" onclick="hrAgregarCliente()">+ Agregar cliente a ruta</button>
+      <button class="btn P sm" onclick="hrGuardarRuta()">💾 Guardar ruta</button>
+    </div>
+    <!-- Buscador para agregar clientes -->
+    <div id="hr-buscador-wrap" style="display:none;margin-bottom:12px;position:relative">
+      <input id="hr-cli-q" type="text" placeholder="Buscar cliente por nombre, zona..." autocomplete="off"
+        style="width:100%;padding:10px 12px;border:2px solid var(--P);border-radius:8px;font-size:14px;box-sizing:border-box;font-family:inherit"
+        oninput="hrFiltrarClientes()">
+      <div id="hr-cli-drop" style="position:absolute;top:100%;left:0;right:0;background:var(--bg);border:1.5px solid var(--P);border-radius:8px;max-height:220px;overflow-y:auto;z-index:50;display:none"></div>
+    </div>
+    <!-- Lista de clientes en la ruta de hoy -->
+    <div id="hr-lista-ruta" style="margin-top:8px"></div>
+  </div>
+
+  <!-- PANEL MI RUTA: vendedor ve su lista del día -->
+  <div id="hr-panel-mia" style="display:none">
+    <div class="g2" style="gap:10px;margin-bottom:12px">
+      <div class="fg">
+        <label style="font-size:12px;color:var(--txt2)">Fecha</label>
+        <input type="date" id="hr-fecha-mia" style="width:100%" onchange="hrVerMiRuta()">
+      </div>
+    </div>
+    <div id="hr-mia-lista" style="margin-top:8px"><div class="empty">Sin clientes asignados para hoy</div></div>
+  </div>
+</div>
+
 <!-- IMPORTAR HISTÓRICO FOXPRO -->
-<div class="panel" id="p-importar-historico">
+<div class="panel" id="p-importar-historico" style="display:flex;flex-direction:column;overflow-y:auto;min-height:0">
   <div style="padding:0 0 16px">
     <h2 style="margin-bottom:4px">📥 Importar histórico FoxPro</h2>
     <p style="color:var(--txt2);font-size:13px">Importá archivos Excel del sistema anterior para análisis comparativo por período</p>
@@ -3147,7 +3207,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260624-10';
+const APP_VERSION = '20260624-11';
 let _versionTag = null;
 let _versionCheckTimer = null;
 
@@ -8392,6 +8452,7 @@ document.addEventListener('click',e=>{
   if(!e.target.closest('#rr-pro-q')&&!e.target.closest('#rr-pro-drop'))hide('rr-pro-drop');
   if(!e.target.closest('#nc-cli-q')&&!e.target.closest('#nc-cli-drop'))hide('nc-cli-drop');
   if(!e.target.closest('#nc-pro-q')&&!e.target.closest('#nc-pro-drop'))hide('nc-pro-drop');
+  if(!e.target.closest('#hr-cli-q')&&!e.target.closest('#hr-cli-drop'))hide('hr-cli-drop');
 });
 
 function go(p){
@@ -8427,6 +8488,7 @@ function go(p){
   }
   if(p==='contabilidad'){contTab(_pendingContTab||'gastos');_pendingContTab=null;}
   if(p==='nc')renderNCs();
+  if(p==='hoja-ruta')hrInit();
   if(p==='cuentas'){setTimeout(()=>{const q=document.getElementById('cc-q');if(q)q.focus();},100);}
   if(p==='clientes'){setTimeout(()=>{const q=document.getElementById('cli-q');if(q)q.focus();},100);}
   if(p==='productos'){setTimeout(()=>{const q=document.getElementById('pro-q');if(q)q.focus();},100);}
@@ -10409,6 +10471,146 @@ function renderImpHistChart(dA, perA, dB, perB) {
       scales: { x: { ticks: { callback: v => '$' + Math.round(v/1000) + 'k' } } }
     }
   });
+}
+
+// ─── HOJA DE RUTA ──────────────────────────────────────────────
+let _hrRuta = []; // array de {cliente_id, nombre, direccion, telefono, zona, orden, visitado}
+
+function hrTab(tab){
+  document.getElementById('hr-panel-admin').style.display=tab==='admin'?'':'none';
+  document.getElementById('hr-panel-mia').style.display=tab==='mia'?'':'none';
+  document.getElementById('hr-tab-admin').className='btn'+(tab==='admin'?' P':'')+' sm';
+  document.getElementById('hr-tab-mia').className='btn'+(tab==='mia'?' P':'')+' sm';
+  if(tab==='mia') hrVerMiRuta();
+}
+
+function hrInit(){
+  const hoy = new Date().toISOString().split('T')[0];
+  document.getElementById('hr-fecha').value = hoy;
+  document.getElementById('hr-fecha-mia').value = hoy;
+  // Poblar vendedores
+  const sel = document.getElementById('hr-vendedor');
+  const vens = [...new Set(_clientes.map(c=>c.vendedor||'').filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">— Todos —</option>' + vens.map(v=>`<option value="${v}">${v}</option>`).join('');
+  // Si soy vendedor, pre-seleccionar mi nombre
+  if(usuarioActual?.rol==='vendedor'){
+    sel.value=usuarioActual.nombre||'';sel.disabled=true;
+    hrTab('mia');
+  } else {
+    hrCargarRuta();
+  }
+}
+
+async function hrCargarRuta(){
+  const fecha = document.getElementById('hr-fecha').value;
+  const vend = document.getElementById('hr-vendedor').value;
+  if(!fecha) return;
+  const q = sb.from('hoja_ruta').select('*').eq('fecha', fecha);
+  if(vend) q.eq('vendedor', vend);
+  const {data} = await q.order('orden');
+  _hrRuta = (data||[]).map(r=>({...r, visitado: r.visitado||false}));
+  hrRenderLista();
+}
+
+function hrRenderLista(){
+  const el = document.getElementById('hr-lista-ruta');
+  if(!_hrRuta.length){
+    el.innerHTML='<div class="empty">Sin clientes en la ruta. Agregá clientes con el botón de arriba.</div>';
+    return;
+  }
+  el.innerHTML = _hrRuta.map((r,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg2);border-radius:10px;margin-bottom:6px;${r.visitado?'opacity:0.5':''}">
+      <span style="font-size:18px;font-weight:700;color:var(--txt2);min-width:24px">${i+1}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:14px">${r.nombre}</div>
+        <div style="font-size:11px;color:var(--txt2)">${r.direccion||''}${r.localidad?' · '+r.localidad:''}${r.zona?' · Z'+r.zona:''}</div>
+        ${r.telefono?`<div style="font-size:11px;color:var(--P)">${r.telefono}</div>`:''}
+      </div>
+      <div style="display:flex;gap:4px;flex-shrink:0">
+        ${i>0?`<button class="btn sm" onclick="hrMover(${i},-1)">↑</button>`:'<span style="width:28px"></span>'}
+        ${i<_hrRuta.length-1?`<button class="btn sm" onclick="hrMover(${i},1)">↓</button>`:'<span style="width:28px"></span>'}
+        <button class="btn D sm" onclick="hrEliminar(${i})">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+function hrAgregarCliente(){
+  const w = document.getElementById('hr-buscador-wrap');
+  w.style.display = w.style.display==='none'?'':'none';
+  if(w.style.display!=='none'){document.getElementById('hr-cli-q').value='';hrFiltrarClientes();setTimeout(()=>document.getElementById('hr-cli-q').focus(),100);}
+}
+
+function hrFiltrarClientes(){
+  const q=(document.getElementById('hr-cli-q').value||'').toLowerCase();
+  const drop = document.getElementById('hr-cli-drop');
+  const idsEnRuta = new Set(_hrRuta.map(r=>r.cliente_id));
+  const res = _clientes.filter(c=>!idsEnRuta.has(c.id)&&(!q||(c.nombre||'').toLowerCase().includes(q)||(c.zona||'').toLowerCase().includes(q)||(c.localidad||'').toLowerCase().includes(q))).slice(0,30);
+  drop.style.display = 'block';
+  drop.innerHTML = res.length ? res.map(c=>`
+    <div style="padding:8px 12px;cursor:pointer;border-bottom:0.5px solid var(--brd)" onmousedown="hrSelCli(${c.id})">
+      <div style="font-weight:600;font-size:13px">${c.nombre}</div>
+      <div style="font-size:11px;color:var(--txt2)">${c.direccion||''}${c.localidad?' · '+c.localidad:''}${c.zona?' · Z'+c.zona:''} ${c.telefono?'· '+c.telefono:''}</div>
+    </div>`).join('') : '<div style="padding:10px;color:var(--txt2);font-size:13px">Sin resultados</div>';
+}
+
+function hrSelCli(id){
+  const c = _clientes.find(x=>x.id===id);if(!c)return;
+  _hrRuta.push({cliente_id:c.id,nombre:c.nombre,direccion:c.direccion||'',localidad:c.localidad||'',zona:c.zona||'',telefono:c.telefono||'',vendedor:document.getElementById('hr-vendedor').value||'',orden:_hrRuta.length+1,visitado:false,fecha:document.getElementById('hr-fecha').value});
+  document.getElementById('hr-cli-drop').style.display='none';
+  document.getElementById('hr-buscador-wrap').style.display='none';
+  hrRenderLista();
+}
+
+function hrMover(i, dir){
+  if(i+dir<0||i+dir>=_hrRuta.length)return;
+  [_hrRuta[i],_hrRuta[i+dir]]=[_hrRuta[i+dir],_hrRuta[i]];
+  hrRenderLista();
+}
+
+function hrEliminar(i){_hrRuta.splice(i,1);hrRenderLista();}
+
+async function hrGuardarRuta(){
+  const fecha = document.getElementById('hr-fecha').value;
+  const vend = document.getElementById('hr-vendedor').value;
+  if(!fecha){alert('Seleccioná una fecha');return;}
+  // Borrar la ruta anterior de ese día y vendedor
+  const dq = sb.from('hoja_ruta').delete().eq('fecha',fecha);
+  if(vend) dq.eq('vendedor',vend);
+  await dq;
+  if(_hrRuta.length){
+    const rows = _hrRuta.map((r,i)=>({...r,orden:i+1,fecha,vendedor:vend||r.vendedor}));
+    const {error} = await sb.from('hoja_ruta').insert(rows);
+    if(error){alert('Error al guardar: '+error.message);return;}
+  }
+  alert('Ruta guardada ✓');
+}
+
+async function hrVerMiRuta(){
+  const fecha = document.getElementById('hr-fecha-mia').value;
+  const vend = usuarioActual?.nombre||'';
+  if(!fecha) return;
+  const q = sb.from('hoja_ruta').select('*').eq('fecha',fecha);
+  if(vend) q.eq('vendedor',vend);
+  const {data} = await q.order('orden');
+  const ruta = data||[];
+  const el = document.getElementById('hr-mia-lista');
+  if(!ruta.length){el.innerHTML='<div class="empty">Sin clientes asignados para hoy</div>';return;}
+  el.innerHTML = ruta.map(r=>`
+    <div id="hr-mia-${r.id}" style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:${r.visitado?'var(--PL)':'var(--bg2)'};border-radius:12px;margin-bottom:8px;border:2px solid ${r.visitado?'var(--P)':'var(--brd)'}">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:15px;${r.visitado?'text-decoration:line-through;color:var(--txt2)':''}">${r.nombre}</div>
+        ${r.direccion||r.localidad?`<div style="font-size:12px;color:var(--txt2)">${r.direccion}${r.localidad?' · '+r.localidad:''}</div>`:''}
+        ${r.telefono?`<a href="tel:${r.telefono}" style="font-size:13px;color:var(--P);font-weight:600">📞 ${r.telefono}</a>`:''}
+      </div>
+      <button class="btn ${r.visitado?'':'P'} sm" onclick="hrMarcarVisitado(${r.id},${!r.visitado})" style="min-width:80px">
+        ${r.visitado?'✓ Visitado':'Marcar visitado'}
+      </button>
+    </div>`).join('');
+}
+
+async function hrMarcarVisitado(id, visitado){
+  await sb.from('hoja_ruta').update({visitado}).eq('id',id);
+  hrVerMiRuta();
 }
 
 // ─── DASHBOARD EVOLUCIÓN HISTÓRICA ───────────────────────────
