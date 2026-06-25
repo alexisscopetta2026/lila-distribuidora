@@ -236,7 +236,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="sidebar-group" id="sg-compras">
     <button class="sidebar-group-btn" onclick="toggleSidebar('compras')">🛍 Compras <span id="sc-compras">▶</span></button>
     <div class="sidebar-items">
-      <button class="sidebar-item" onclick="contTabDesde('gastos')" data-p="contabilidad">📝 Gastos</button>
       <button class="sidebar-item" onclick="go('compras')" data-p="compras">🧾 Comprobantes</button>
     </div>
   </div>
@@ -253,6 +252,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="sidebar-group" id="sg-contabilidad">
     <button class="sidebar-group-btn" onclick="toggleSidebar('contabilidad')">📒 Contabilidad <span id="sc-contabilidad">▶</span></button>
     <div class="sidebar-items">
+      <button class="sidebar-item" onclick="contTabDesde('gastos')" data-p="contabilidad">📝 Gastos</button>
       <button class="sidebar-item" onclick="contTabDesde('mayor')" data-p="contabilidad">📊 Mayor</button>
       <button class="sidebar-item" onclick="contTabDesde('resultado')" data-p="contabilidad">💹 Resultado</button>
       <button class="sidebar-item" onclick="contTabDesde('asientos')" data-p="contabilidad">📖 Asientos</button>
@@ -3130,7 +3130,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260624-7';
+const APP_VERSION = '20260624-8';
 let _versionTag = null;
 let _versionCheckTimer = null;
 
