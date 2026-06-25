@@ -637,9 +637,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="fg"><label>Tipo</label>
         <select id="comp-tipo" style="width:100%">
           <option value="factura">Factura</option>
+          <option value="nota_credito">Nota de crédito (NC)</option>
+          <option value="nota_debito">Nota de débito (ND)</option>
           <option value="recibo">Recibo de sueldo</option>
           <option value="remito">Remito de compra</option>
-          <option value="ticket">Ticket</option>
+          <option value="ticket">Ticket / Comprobante informal</option>
           <option value="otro">Otro</option>
         </select>
       </div>
@@ -810,7 +812,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <!-- REMITOS -->
 <div class="panel" id="p-remitos">
-  <div class="sech"><h2>Remitos emitidos</h2></div>
+  <div class="sech">
+    <h2>Remitos emitidos</h2>
+    <div style="position:relative">
+      <button class="btn P" onclick="toggleNuevoCompVentas(event)">+ Nuevo comprobante ▾</button>
+      <div id="nuevo-comp-ventas-menu" style="display:none;position:absolute;right:0;top:110%;background:var(--bg);border:1px solid var(--brd);border-radius:10px;box-shadow:0 4px 18px rgba(0,0,0,.14);z-index:500;min-width:210px;padding:6px 0">
+        <div onclick="cerrarMenuNuevoComp();go('remito-rapido')" style="padding:10px 16px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px"><span>🧾</span> Factura / Remito</div>
+        <div onclick="cerrarMenuNuevoComp();abrirNC()" style="padding:10px 16px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px"><span style="color:var(--P)">📋</span> Nota de Crédito</div>
+        <div onclick="cerrarMenuNuevoComp();abrirND()" style="padding:10px 16px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px"><span style="color:var(--W)">⚠️</span> Nota de Débito</div>
+        <div onclick="cerrarMenuNuevoComp()" style="padding:10px 16px;cursor:pointer;font-size:13px;color:var(--txt2);display:flex;align-items:center;gap:8px"><span>🗂</span> Otros (próximamente)</div>
+      </div>
+    </div>
+  </div>
   <div class="tb">
     <input id="rem-q" placeholder="Buscar cliente..." oninput="renderRemitos();resetNav('rem-tbody')" onkeydown="navRemitos(event)" title="↑↓ navegar · Enter abrir · Esc volver">
     <select id="rem-est" onchange="renderRemitos()">
@@ -3430,7 +3443,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260625-10';
+const APP_VERSION = '20260625-11';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function _mostrarBannerUpdate(){
@@ -4210,6 +4223,21 @@ function resumenCarga(id){
     ${peds.length?`<div style="margin-top:10px;font-size:11px;color:var(--txt2)">Pedidos: #${peds.map(p=>p.id).join(', #')}</div>`:''}
   `;
   document.getElementById('m-ver').classList.add('on');
+}
+
+function toggleNuevoCompVentas(e){
+  e.stopPropagation();
+  const m=document.getElementById('nuevo-comp-ventas-menu');
+  if(!m)return;
+  const showing=m.style.display!=='none';
+  m.style.display=showing?'none':'block';
+  if(!showing){
+    const close=()=>{m.style.display='none';document.removeEventListener('click',close);};
+    setTimeout(()=>document.addEventListener('click',close),10);
+  }
+}
+function cerrarMenuNuevoComp(){
+  const m=document.getElementById('nuevo-comp-ventas-menu');if(m)m.style.display='none';
 }
 
 // ─── REMITOS ───
