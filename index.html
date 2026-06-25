@@ -608,7 +608,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="mh"><h3 id="m-comp-title">Nuevo comprobante</h3>
     <div style="display:flex;gap:6px;align-items:center">
       <button class="btn sm A" onclick="cargarFacturaIA()" title="Sacar foto de la factura y que la IA extraiga los datos automáticamente">📷 Leer con IA</button>
-      <input type="file" id="comp-ia-file" accept="image/*" capture="environment" style="display:none" onchange="leerFacturaConIA(this)">
+      <input type="file" id="comp-ia-file" accept="image/*" style="display:none" onchange="leerFacturaConIA(this)">
       <button class="btn sm" onclick="cerrar('m-comprobante')">✕</button>
     </div>
   </div>
@@ -974,7 +974,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <input id="cobm-transf-nombre" type="text" placeholder="Ej: Juan García" autocomplete="off"
             style="width:100%;padding:10px 12px;border:2px solid var(--A);border-radius:8px;font-size:15px;box-sizing:border-box;font-family:inherit">
         </div>
-        <input type="file" id="cobm-comprobante" accept="image/*" capture="environment" style="display:none" onchange="prevComprobanteMov(this)">
+        <input type="file" id="cobm-comprobante" accept="image/*" style="display:none" onchange="prevComprobanteMov(this)">
         <div style="display:flex;gap:8px;margin-bottom:8px">
           <button type="button" onclick="document.getElementById('cobm-comprobante').click()"
             style="flex:1;padding:12px;background:var(--A);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer">
@@ -1112,7 +1112,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
             <!-- Comprobante de transferencia -->
             <div style="margin-top:8px;background:var(--bg);border:1px solid var(--brd);border-radius:8px;padding:8px">
               <div style="font-size:10px;font-weight:600;color:var(--txt2);margin-bottom:6px">📎 COMPROBANTE DE TRANSFERENCIA (opcional)</div>
-              <input type="file" id="cob-comprobante" accept="image/*" capture="environment" style="display:none" onchange="prevComprobante(this)">
+              <input type="file" id="cob-comprobante" accept="image/*" style="display:none" onchange="prevComprobante(this)">
               <div style="display:flex;gap:6px;align-items:center">
                 <button type="button" class="btn sm A" onclick="document.getElementById('cob-comprobante').click()" style="font-size:12px;padding:7px 12px;font-weight:600">📷 Sacar foto</button>
                 <button type="button" class="btn sm" onclick="document.getElementById('cob-comprobante').removeAttribute('capture');document.getElementById('cob-comprobante').click();document.getElementById('cob-comprobante').setAttribute('capture','environment')" style="font-size:12px;padding:7px 10px">🖼 Galería</button>
@@ -3420,7 +3420,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260625-08';
+const APP_VERSION = '20260625-09';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function _mostrarBannerUpdate(){
