@@ -103,7 +103,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .nav-dropdown button:hover{background:rgba(255,255,255,.15);color:#fff}
 .nav-dropdown button.on{background:rgba(255,255,255,.2);color:#fff;font-weight:600}
 .body{flex:1;padding:14px;overflow-y:auto;min-width:0;scroll-behavior:smooth}
-.panel{display:none!important;width:100%;box-sizing:border-box}.panel.on{display:block!important;width:100%}#p-informes.on,#p-cuentas.on{display:flex!important;flex-direction:column;height:100%;overflow:hidden}
+.panel{display:none!important;width:100%;box-sizing:border-box}.panel.on{display:block!important;width:100%}#p-informes.on,#p-cuentas.on,#p-remitos.on{display:flex!important;flex-direction:column;height:100%;overflow:hidden}
 
 /* Cards */
 .card{background:var(--bg);border:1px solid var(--brd);border-radius:10px;padding:14px;margin-bottom:12px}
@@ -815,11 +815,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <input id="rem-grupo-ven" placeholder="Vendedor (vacío=todos)" style="padding:5px 9px;border:1px solid var(--brd);border-radius:6px;font-size:13px;font-family:inherit;width:180px">
     <button class="btn A" onclick="imprimirHojaRutaGrupal()">🗺️ Imprimir hoja de ruta</button>
   </div>
-  <div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>Nro</th><th>Fecha</th><th>Cliente</th><th>Localidad</th><th>Items</th><th>Total</th><th>Cobro</th><th>ARCA</th><th></th></tr></thead>
-    <tbody id="rem-tbody"></tbody>
-  </table></div>
-  <div class="pg" id="rem-pg"></div>
+  <div style="flex:1;overflow-y:auto;min-height:0">
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Nro</th><th>Fecha</th><th>Cliente</th><th>Localidad</th><th>Items</th><th>Total</th><th>Cobro</th><th>ARCA</th><th></th></tr></thead>
+      <tbody id="rem-tbody"></tbody>
+    </table></div>
+    <div class="pg" id="rem-pg"></div>
+  </div>
 </div>
 
 <!-- COBRANZA -->
@@ -3318,7 +3320,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260625-03';
+const APP_VERSION = '20260625-04';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function _mostrarBannerUpdate(){
