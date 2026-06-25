@@ -2519,13 +2519,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <!-- HOJA DE RUTA -->
 <div class="panel" id="p-hoja-ruta">
-  <div style="padding:0 0 16px;display:flex;justify-content:space-between;align-items:center">
-    <h2 style="margin-bottom:0">🗺 Hoja de ruta del día</h2>
+  <div style="padding:0 0 16px;display:flex;align-items:center;gap:8px">
     <button onclick="go('vendedor-home')" id="hr-btn-volver"
-      style="display:none;min-width:48px;min-height:48px;padding:0 14px;background:none;border:none;font-size:22px;cursor:pointer;color:var(--PD);display:flex;align-items:center;gap:6px;border-radius:10px;-webkit-tap-highlight-color:transparent"
+      style="display:none;min-width:48px;min-height:48px;padding:0 10px 0 4px;background:none;border:none;cursor:pointer;color:var(--PD);flex-shrink:0;align-items:center;gap:4px;border-radius:10px;-webkit-tap-highlight-color:transparent"
       aria-label="Volver al inicio">
-      <span style="font-size:22px">←</span><span style="font-size:14px;font-weight:600">Volver</span>
+      <span style="font-size:26px;line-height:1">←</span><span style="font-size:14px;font-weight:600">Volver</span>
     </button>
+    <h2 style="margin:0;flex:1">🗺 Hoja de ruta del día</h2>
   </div>
 
   <!-- TABS: Admin / Mi ruta (vendedor) -->
@@ -3225,7 +3225,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260624-14';
+const APP_VERSION = '20260624-15';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function _mostrarBannerUpdate(){
@@ -3556,7 +3556,7 @@ function dropPro(){
   const q=(document.getElementById('np-pro-q').value||'').toLowerCase();
   const drop=document.getElementById('np-pro-drop');
   if(q.length<1){drop.style.display='none';_proTemp=null;return;}
-  const m=_productos.filter(p=>(p.nombre||'').toLowerCase().includes(q)||(p.codigo||'').toString().includes(q)).slice(0,8);
+  const m=_productos.filter(p=>p.activo!==false&&((p.nombre||'').toLowerCase().includes(q)||(p.codigo||'').toString().includes(q))).slice(0,8);
   drop.innerHTML=m.map(p=>{
     const stock=p.stock||0;
     const stockColor=stock<=0?'color:#C00000;font-weight:600':stock<=5?'color:#C55A11;font-weight:600':'color:var(--txt2)';
@@ -5703,7 +5703,7 @@ function dropProRR(){
   const q=(document.getElementById('rr-pro-q').value||'').toLowerCase();
   const drop=document.getElementById('rr-pro-drop');
   if(q.length<1){drop.style.display='none';_rrProTemp=null;return;}
-  const m=_productos.filter(p=>(p.nombre||'').toLowerCase().includes(q)||(p.codigo||'').toString().includes(q)).slice(0,8);
+  const m=_productos.filter(p=>p.activo!==false&&((p.nombre||'').toLowerCase().includes(q)||(p.codigo||'').toString().includes(q))).slice(0,8);
   drop.innerHTML=m.map(p=>{
     const stock=p.stock||0;
     const stockColor=stock<=0?'color:#C00000;font-weight:600':stock<=5?'color:#C55A11;font-weight:600':'color:var(--txt2)';
@@ -10649,7 +10649,7 @@ function hrInit(){
   const btnVolver = document.getElementById('hr-btn-volver');
   if(usuarioActual?.rol==='vendedor'){
     sel.value=usuarioActual.nombre||'';sel.disabled=true;
-    if(btnVolver) btnVolver.style.display='flex';
+    if(btnVolver){btnVolver.style.display='flex';btnVolver.style.alignItems='center';}
     hrTab('mia');
   } else {
     if(btnVolver) btnVolver.style.display='none';
