@@ -395,6 +395,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div id="vh-fecha" style="font-size:13px;color:var(--txt2);margin-top:4px;text-transform:capitalize"></div>
     </div>
 
+    <!-- Bloques de acción (reemplazados por renderVendedorHome() para repartidores) -->
+    <div id="vh-bloques" style="display:flex;flex-direction:column;gap:20px">
+
     <!-- Bloque Pedidos -->
     <div style="background:#fff;border-radius:20px;padding:16px;box-shadow:0 2px 16px rgba(0,0,0,.07)">
       <div style="font-size:10px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;padding-left:2px">
@@ -432,6 +435,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         </button>
       </div>
     </div>
+
+    </div><!-- /vh-bloques -->
 
   </div>
 </div>
@@ -3374,10 +3379,12 @@ const sb = supabase.createClient(SB_URL, SB_KEY);
 
 // ─── USUARIOS (locales, simples) ───
 const USUARIOS = [
-  {user:'mauricio', pass:'lila2024', nombre:'Mauricio', rol:'vendedor', rol_original:'admin'},
-  {user:'alexis',   pass:'lila2024', nombre:'Alexis',   rol:'vendedor', esAdmin:true},
-  {user:'franco',   pass:'franco2024', nombre:'Franco', rol:'vendedor', vendedor:'Franco'},
-  {user:'david',    pass:'david2024',  nombre:'David',  rol:'vendedor', vendedor:'David'},
+  {user:'mauricio',  pass:'lila2024',     nombre:'Mauricio',  rol:'vendedor',    rol_original:'admin'},
+  {user:'alexis',    pass:'lila2024',     nombre:'Alexis',    rol:'vendedor',    esAdmin:true},
+  {user:'franco',    pass:'franco2024',   nombre:'Franco',    rol:'vendedor',    vendedor:'Franco'},
+  {user:'david',     pass:'david2024',    nombre:'David',     rol:'vendedor',    vendedor:'David'},
+  {user:'emiliano',  pass:'emiliano2024', nombre:'Emiliano',  rol:'repartidor',  vendedor:'Emiliano'},
+  {user:'gaston',    pass:'gaston2024',   nombre:'Gastón',    rol:'repartidor',  vendedor:'Gastón'},
 ];
 
 // ─── CATEGORÍAS DE PRODUCTOS ───
@@ -3402,6 +3409,7 @@ function poblarSubcats(catSelId,subcatSelId){
 // Pantallas por rol
 const MENUS_ADMIN=['dash','pedidos','pedido-movil','carga','remitos','cobranza','tesoreria','cheques','cuentas','clientes','maestro-proveedores','productos','remito-rapido','nc','rendicion','stock','informes','comisiones','contrib-zona','gastos-fijos','contabilidad','exportar','importar-historico'];
 const MENUS_VENDEDOR=['vendedor-home','pedidos','pedido-movil','cobranza','cuentas'];
+const MENUS_REPARTIDOR=['vendedor-home','cobranza','hoja-ruta','nc'];
 let usuarioActual = null;
 
 // ─── ESTADO LOCAL ───
@@ -3412,7 +3420,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260625-07';
+const APP_VERSION = '20260625-08';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function _mostrarBannerUpdate(){
@@ -3483,7 +3491,7 @@ async function initVersionCheck(){
   const params = new URLSearchParams(window.location.search);
   // Limpiar param _v (cache-bust post-actualización) sin afectar el historial
   if(params.get('_v')) history.replaceState(null,'',location.pathname);
-  const v = params.get('v');
+  const v = params.get('v') || params.get('user');
   if(v){
     const found = USUARIOS.find(x => x.user === v.toLowerCase() || (x.vendedor||'').toLowerCase() === v.toLowerCase());
     if(found){
@@ -3511,7 +3519,8 @@ function doLogin(){
   
   // Aplicar permisos de navegación
   const sidebar=document.getElementById('sidebar');
-  if(found.rol==='vendedor'){
+  const esMovil=found.rol==='vendedor'||found.rol==='repartidor';
+  if(esMovil){
     if(sidebar)sidebar.style.display='none';
     document.querySelector('[data-p="vendedor-home"]').style.display='flex';
     // Si es admin en modo vendedor, mostrar botón para volver al admin
@@ -3522,9 +3531,9 @@ function doLogin(){
   } else {
     if(sidebar)sidebar.style.display='';
   }
-  
-  // Si es vendedor, ir directo a pedidos
-  if(found.rol==='vendedor'){
+
+  // Si es móvil (vendedor o repartidor), ir directo a home
+  if(esMovil){
     cargarTodo().then(()=>{initVersionCheck();go('vendedor-home');});
   } else {
     cargarTodo().then(()=>{
@@ -8048,6 +8057,36 @@ async function guardarCobMovil(){
 // ─── PEDIDO MÓVIL (estilo Moviler) ───
 let _pmCliId=null, _pmCarrito=[], _pmMarcaActual=null, _pmProdActual=null;
 
+function renderVendedorHome(){
+  const bloques=document.getElementById('vh-bloques');
+  if(!bloques)return;
+  const esRep=usuarioActual?.rol==='repartidor';
+  if(esRep){
+    bloques.innerHTML=`
+      <div style="background:#fff;border-radius:20px;padding:16px;box-shadow:0 2px 16px rgba(0,0,0,.07)">
+        <div style="font-size:10px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;padding-left:2px">💰 Cobro</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button onclick="go('cobranza')"
+            style="display:flex;align-items:center;gap:16px;width:100%;padding:20px 22px;background:#1a6fa8;color:#fff;border:none;border-radius:14px;font-size:19px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;box-shadow:0 3px 10px rgba(26,111,168,.25)">
+            <span style="font-size:28px;line-height:1">💰</span><span>Cobrar</span>
+          </button>
+          <button onclick="go('hoja-ruta')"
+            style="display:flex;align-items:center;gap:16px;width:100%;padding:16px 22px;background:#ede9fe;color:#5b21b6;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent">
+            <span style="font-size:22px;line-height:1">🗺</span><span>Hoja de ruta</span>
+          </button>
+        </div>
+      </div>
+      <div style="background:#fff;border-radius:20px;padding:16px;box-shadow:0 2px 16px rgba(0,0,0,.07)">
+        <div style="font-size:10px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;padding-left:2px">📦 Devoluciones</div>
+        <button onclick="go('nc')"
+          style="display:flex;align-items:center;gap:16px;width:100%;padding:20px 22px;background:var(--W);color:#fff;border:none;border-radius:14px;font-size:19px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;box-shadow:0 3px 10px rgba(234,88,12,.25)">
+          <span style="font-size:28px;line-height:1">📋</span><span>Registrar devolución</span>
+        </button>
+      </div>`;
+  }
+  // Para vendedores el HTML ya está en el DOM, no se modifica
+}
+
 function abrirPedidoMovil(){
   // Si el panel fue reemplazado con innerHTML, restaurarlo primero
   const panel=document.getElementById('p-pedido-movil');
@@ -9149,6 +9188,7 @@ function go(p){
     const f=document.getElementById('vh-fecha');
     if(s&&usuarioActual)s.textContent='Hola, '+usuarioActual.nombre+'!';
     if(f)f.textContent=new Date().toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'});
+    renderVendedorHome();
   }
   if(p==='contabilidad'){contTab(_pendingContTab||'gastos');_pendingContTab=null;}
   if(p==='nc')renderNCs();
