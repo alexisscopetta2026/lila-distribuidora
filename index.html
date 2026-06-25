@@ -1425,8 +1425,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <!-- NOTAS DE CREDITO -->
 <div class="panel" id="p-nc">
   <div class="sech">
-    <h2>📋 Notas de crédito / Devoluciones</h2>
-    <button class="btn P" onclick="abrirNC()">+ Nueva nota de crédito</button>
+    <h2>📋 NC / ND — Notas de crédito y débito</h2>
+    <div style="display:flex;gap:6px">
+      <button class="btn P" onclick="abrirNC()">+ Nota de crédito</button>
+      <button class="btn A" onclick="abrirND()">+ Nota de débito</button>
+    </div>
   </div>
   <div class="tbl-wrap"><table class="tbl">
     <thead><tr><th>Nro</th><th>Fecha</th><th>Cliente</th><th>Motivo</th><th>Importe</th><th>Vendedor</th></tr></thead>
@@ -2536,8 +2539,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="fg drop-wrap" style="margin-bottom:10px">
     <label>Cliente &nbsp;<span style="font-size:10px;color:var(--txt2)">[código o nombre]</span></label>
     <div style="display:flex;gap:4px">
-      <input id="nc-cli-cod" placeholder="Cód." style="width:70px;font-size:15px;font-weight:600" 
-        onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();buscarCliPorCodigo('nc');}" autocomplete="off">
+      <input id="nc-cli-cod" placeholder="Cód." style="width:70px;font-size:15px;font-weight:600"
+        onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();buscarCodCli('nc');}" autocomplete="off">
       <input id="nc-cli-q" placeholder="Buscar cliente por nombre..." oninput="dropCliNC()" autocomplete="off" style="flex:1">
     </div>
     <input type="hidden" id="nc-cli-id">
@@ -2594,9 +2597,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
   <!-- Imputar contra factura (modo producto) -->
   <div id="nc-imputacion-wrap" style="margin-top:10px;display:none">
-    <div style="font-size:12px;font-weight:600;color:var(--txt2);text-transform:uppercase;margin-bottom:4px">Imputar contra (opcional)</div>
-    <div id="nc-facturas-section" style="display:none">
-      <div id="nc-facturas-lista"></div>
+    <div style="font-size:12px;font-weight:600;color:var(--txt2);text-transform:uppercase;margin-bottom:4px">Imputar contra factura (opcional)</div>
+    <div id="nc-imputacion-section" style="display:none">
+      <div id="nc-imputacion-lista"></div>
     </div>
   </div>
 
@@ -2614,6 +2617,56 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
     <button class="btn" onclick="cerrar('m-nc')">Cancelar</button>
     <button class="btn P" onclick="guardarNC()">✓ Emitir nota de crédito</button>
+  </div>
+</div>
+</div>
+
+<!-- MODAL NOTA DE DÉBITO -->
+<div class="mbg" id="m-nd">
+<div class="mdl" style="width:520px">
+  <div class="mh">
+    <h3>⚠️ Nueva nota de débito</h3>
+    <button class="btn sm" onclick="cerrar('m-nd')">✕</button>
+  </div>
+  <div class="fr x2">
+    <div class="fg"><label>Fecha</label><input type="date" id="nd-fecha" style="width:100%"></div>
+    <div class="fg"><label>Motivo</label>
+      <select id="nd-motivo" style="width:100%">
+        <option value="interes">Interés por mora</option>
+        <option value="diferencia_precio">Diferencia de precio</option>
+        <option value="cargo_adicional">Cargo adicional</option>
+        <option value="otro">Otro</option>
+      </select>
+    </div>
+  </div>
+  <div class="fg drop-wrap" style="margin-bottom:10px">
+    <label>Cliente &nbsp;<span style="font-size:10px;color:var(--txt2)">[código o nombre]</span></label>
+    <div style="display:flex;gap:4px">
+      <input id="nd-cli-cod" placeholder="Cód." style="width:70px;font-size:15px;font-weight:600"
+        onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();buscarCodCli('nd');}" autocomplete="off">
+      <input id="nd-cli-q" placeholder="Buscar cliente por nombre..." oninput="dropCliND()" autocomplete="off" style="flex:1">
+    </div>
+    <input type="hidden" id="nd-cli-id">
+    <div class="drop" id="nd-cli-drop"></div>
+  </div>
+  <div class="fr x2">
+    <div class="fg">
+      <label>Importe</label>
+      <input type="number" id="nd-importe" value="0" min="0.01" step="0.01"
+        style="width:100%;font-size:22px;font-weight:700">
+    </div>
+    <div class="fg">
+      <label>Saldo actual del cliente</label>
+      <div id="nd-cli-saldo" style="font-size:16px;font-weight:600;color:var(--D);padding-top:6px">—</div>
+    </div>
+  </div>
+  <div class="fg" style="margin-top:8px">
+    <label>Observaciones</label>
+    <input id="nd-obs" placeholder="Opcional" style="width:100%">
+  </div>
+  <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+    <button class="btn" onclick="cerrar('m-nd')">Cancelar</button>
+    <button class="btn A" onclick="guardarND()">⚠️ Emitir nota de débito</button>
   </div>
 </div>
 </div>
@@ -3359,7 +3412,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260625-06';
+const APP_VERSION = '20260625-07';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function _mostrarBannerUpdate(){
@@ -5633,6 +5686,7 @@ const _modalMap = {
   'nc':  {selCli: selCliNC,  selPro: selProNC,  qCli:'nc-cli-q',  idCli:'nc-cli-id',  codCli:'nc-cli-cod',  qPro:'nc-pro-q',  codPro:'nc-cod',  focoCliTras:'nc-cod',  focoProTras:'nc-cant'},
   'cob': {selCli: selCliCob, selPro: null,       qCli:'cob-cli-q', idCli:'cob-cli-id', codCli:'cob-cli-cod', qPro:null,        codPro:null,      focoCliTras:'cob-ven-nom', focoProTras:null},
   'rr':  {selCli: selCliRR,  selPro: selProRR,  qCli:'rr-cli-q',  idCli:'rr-cli-id',  codCli:'rr-cli-cod',  qPro:'rr-pro-q',  codPro:'rr-cod',  focoCliTras:'rr-cod',  focoProTras:'rr-cant'},
+  'nd':  {selCli: selCliND,  selPro: null,       qCli:'nd-cli-q',  idCli:'nd-cli-id',  codCli:'nd-cli-cod',  qPro:null,        codPro:null,      focoCliTras:'nd-importe', focoProTras:null},
 };
 function buscarCodCli(pfx){
   const m=_modalMap[pfx];if(!m)return;
@@ -6172,6 +6226,25 @@ function toggleNCItems(){
   document.getElementById('nc-importe-section').style.display=esDevolucion?'none':'block';
   document.getElementById('nc-totbar').style.display=esDevolucion&&_ncItems.length?'flex':'none';
 }
+function ncSetModo(modo){
+  const isF=modo==='factura';
+  const secF=document.getElementById('nc-sec-factura');
+  const secP=document.getElementById('nc-sec-producto');
+  const btnF=document.getElementById('nc-modo-fac');
+  const btnP=document.getElementById('nc-modo-prod');
+  if(secF)secF.style.display=isF?'block':'none';
+  if(secP)secP.style.display=isF?'none':'block';
+  if(btnF){btnF.className=isF?'btn P sm':'btn sm';}
+  if(btnP){btnP.className=isF?'btn sm':'btn P sm';}
+  // Reset imputacion sections
+  const fs=document.getElementById('nc-facturas-section');if(fs)fs.style.display='none';
+  const is=document.getElementById('nc-imputacion-section');if(is)is.style.display='none';
+  const iw=document.getElementById('nc-imputacion-wrap');if(iw)iw.style.display='none';
+  _ncItems=[];
+  const li=document.getElementById('nc-items-lista');if(li)li.innerHTML='';
+  const tb=document.getElementById('nc-totbar');if(tb)tb.style.display='none';
+}
+
 function abrirNC(){
   _ncItems=[];_ncProTemp=null;
   ['nc-cli-q','nc-pro-q','nc-obs-m'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
@@ -6181,10 +6254,7 @@ function abrirNC(){
   const motivo=document.getElementById('nc-motivo');if(motivo)motivo.value='devolucion';
   const imp=document.getElementById('nc-importe');if(imp)imp.value='0';
   const fecha=document.getElementById('nc-fecha-m');if(fecha)fecha.value=new Date().toISOString().split('T')[0];
-  const lista=document.getElementById('nc-items-lista');if(lista)lista.innerHTML='';
-  const totbar=document.getElementById('nc-totbar');if(totbar)totbar.style.display='none';
   const hist=document.getElementById('nc-historial-precio');if(hist)hist.style.display='none';
-  const facSec=document.getElementById('nc-facturas-section');if(facSec)facSec.style.display='none';
   ncSetModo('producto');
   document.getElementById('m-nc').classList.add('on');
 }
@@ -6206,14 +6276,11 @@ function selCliNC(id){
   // Si hay un producto ya seleccionado, actualizar historial ahora
   if(_ncProTemp)_mostrarHistorialNC(_ncProTemp.id,id);
 
-  // Mostrar facturas pendientes para imputar
+  // Mostrar facturas pendientes
   const remsPend=_remitos.filter(r=>r.cliente_id===id&&!r.cobrado).sort((a,b)=>a.fecha.localeCompare(b.fecha));
-  const facturasSection=document.getElementById('nc-facturas-section');
-  const facturasList=document.getElementById('nc-facturas-lista');
-  
-  if(remsPend.length){
-    facturasSection.style.display='block';
-    facturasList.innerHTML=`<div style="font-size:12px;color:var(--txt2);margin-bottom:6px">Seleccioná la factura contra la que querés imputar la NC:</div>`+
+  const renderFacturasHTML=(label)=>{
+    if(!remsPend.length) return '';
+    return `<div style="font-size:12px;color:var(--txt2);margin-bottom:6px">${label}</div>`+
     remsPend.map(r=>`<div style="display:flex;align-items:center;gap:8px;padding:6px;border-bottom:0.5px solid var(--brd);font-size:13px">
       <input type="radio" name="nc-factura" id="nc-fac-${r.id}" value="${r.id}" style="width:16px;height:16px">
       <label for="nc-fac-${r.id}" style="flex:1;cursor:pointer">
@@ -6222,8 +6289,34 @@ function selCliNC(id){
         <span style="color:var(--D);font-weight:600;margin-left:8px">${fmt(r.saldo_pendiente||r.total)}</span>
       </label>
     </div>`).join('');
-  } else {
-    facturasSection.style.display='none';
+  };
+  // Modo factura: mostrar en nc-sec-factura
+  const facSec=document.getElementById('nc-facturas-section');
+  const facList=document.getElementById('nc-facturas-lista');
+  const facEmpty=document.getElementById('nc-facturas-empty');
+  if(facSec&&facList){
+    if(remsPend.length){
+      facSec.style.display='block';
+      facList.innerHTML=renderFacturasHTML('Seleccioná la factura a anular:');
+      if(facEmpty)facEmpty.style.display='none';
+    } else {
+      facSec.style.display='none';
+      if(facEmpty)facEmpty.style.display='block';
+    }
+  }
+  // Modo producto: mostrar en nc-imputacion-wrap
+  const impWrap=document.getElementById('nc-imputacion-wrap');
+  const impSec=document.getElementById('nc-imputacion-section');
+  const impList=document.getElementById('nc-imputacion-lista');
+  if(impWrap&&impSec&&impList){
+    if(remsPend.length){
+      impWrap.style.display='block';
+      impSec.style.display='block';
+      impList.innerHTML=renderFacturasHTML('Imputar contra (opcional):');
+    } else {
+      impWrap.style.display='none';
+      impSec.style.display='none';
+    }
   }
 }
 function buscarPorCodigoNC(){
@@ -6395,6 +6488,64 @@ function renderNCs(){
     <td style="font-weight:600;color:var(--D)">${fmt(n.importe)}</td>
     <td>${n.observaciones||'—'}</td>
   </tr>`).join('');
+}
+
+// ─── NOTA DE DÉBITO ─────────────────────────────────────────────────────
+function abrirND(){
+  ['nd-cli-q','nd-obs'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['nd-cli-id','nd-cli-cod'].forEach(id=>{const el=document.getElementById(id);if(el){el.value='';el.style.borderColor='';}});
+  const imp=document.getElementById('nd-importe');if(imp)imp.value='';
+  const fecha=document.getElementById('nd-fecha');if(fecha)fecha.value=new Date().toISOString().split('T')[0];
+  const motivo=document.getElementById('nd-motivo');if(motivo)motivo.value='interes';
+  const saldo=document.getElementById('nd-cli-saldo');if(saldo)saldo.textContent='—';
+  document.getElementById('m-nd').classList.add('on');
+  setTimeout(()=>document.getElementById('nd-cli-cod')?.focus(),100);
+}
+
+function dropCliND(){
+  const q=(document.getElementById('nd-cli-q')?.value||'').toLowerCase();
+  const drop=document.getElementById('nd-cli-drop');if(!drop)return;
+  if(q.length<1){drop.style.display='none';return;}
+  const m=_clientes.filter(c=>(c.nombre||'').toLowerCase().includes(q)).slice(0,8);
+  drop.innerHTML=m.map(c=>`<div onmousedown="selCliND(${c.id})"><strong>${c.nombre}</strong> <span style="color:var(--txt2);font-size:11px">Saldo: ${fmt(c.saldo)}</span></div>`).join('');
+  drop.style.display=m.length?'block':'none';
+}
+
+function selCliND(id){
+  const c=_clientes.find(x=>x.id===id);if(!c)return;
+  document.getElementById('nd-cli-id').value=id;
+  document.getElementById('nd-cli-q').value=c.nombre;
+  document.getElementById('nd-cli-drop').style.display='none';
+  const cod=document.getElementById('nd-cli-cod');if(cod){cod.value=c.codigo||c.id||'';cod.style.borderColor='var(--P)';}
+  const saldo=document.getElementById('nd-cli-saldo');
+  if(saldo)saldo.textContent=fmt(c.saldo||0);
+  setTimeout(()=>document.getElementById('nd-importe')?.focus(),50);
+}
+
+async function guardarND(){
+  const cid=document.getElementById('nd-cli-id').value;
+  if(!cid){alert('Seleccioná un cliente');return;}
+  const imp=parseFloat(document.getElementById('nd-importe')?.value)||0;
+  if(imp<=0){alert('Ingresá un importe mayor a cero');return;}
+  const c=_clientes.find(x=>x.id==cid);
+  const motivo=document.getElementById('nd-motivo').value;
+
+  const {error}=await sb.from('notas_credito').insert({
+    cliente_id:parseInt(cid),cliente:c?.nombre||'?',
+    fecha:document.getElementById('nd-fecha').value,
+    motivo:'ND:'+motivo,importe:-imp, // importe negativo = ND
+    observaciones:document.getElementById('nd-obs').value,
+    remito_id:null
+  });
+  if(error){alert('Error: '+error.message);return;}
+
+  // Incrementar saldo del cliente
+  if(c){await sb.from('clientes').update({saldo:(c.saldo||0)+imp}).eq('id',c.id);}
+
+  cerrar('m-nd');
+  await Promise.all([cargarClientes(),cargarNCs()]);
+  renderCC();renderDash();actualizarDeuda();renderNCs();
+  alert(`✅ Nota de débito emitida por ${fmt(imp)}.\nSaldo de ${c?.nombre} aumentado en ${fmt(imp)}.`);
 }
 
 // ─── EXPORTAR TODO ───
