@@ -376,40 +376,63 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <!-- PEDIDOS -->
 <!-- VENDEDOR HOME -->
-<div class="panel" id="p-vendedor-home">
-  <!-- Botón admin solo para Mauricio -->
-  <div id="btn-volver-admin" style="display:none;justify-content:flex-end;padding:8px 12px">
+<div class="panel" id="p-vendedor-home" style="min-height:100dvh;display:flex;flex-direction:column;padding:0">
+
+  <!-- Botón admin (solo Mauricio) -->
+  <div id="btn-volver-admin" style="display:none;justify-content:flex-end;padding:10px 14px 0">
     <button onclick="volverAdmin()" style="font-size:12px;padding:6px 12px;background:var(--PD);color:#fff;border:none;border-radius:6px;cursor:pointer">
-      🔧 Ir al menú completo
+      🔧 Menú completo
     </button>
   </div>
-  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;gap:16px;padding:20px">
-    <div style="text-align:center;margin-bottom:10px">
-      <div style="font-size:32px">🌸</div>
-      <div style="font-size:20px;font-weight:700;color:var(--PD)" id="vh-saludo">Hola</div>
-      <div style="font-size:13px;color:var(--txt2)" id="vh-fecha"></div>
+
+  <!-- Cuerpo centrado verticalmente -->
+  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:24px 20px;gap:20px;max-width:460px;width:100%;margin:0 auto">
+
+    <!-- Saludo -->
+    <div style="text-align:center;padding-bottom:4px">
+      <div style="font-size:30px;line-height:1;margin-bottom:10px">🌸</div>
+      <div id="vh-saludo" style="font-size:24px;font-weight:700;color:var(--PD);letter-spacing:-.3px">Hola</div>
+      <div id="vh-fecha" style="font-size:13px;color:var(--txt2);margin-top:4px;text-transform:capitalize"></div>
     </div>
-    <button onclick="abrirPedidoMovil()" style="width:100%;max-width:320px;padding:22px;background:var(--P);color:#fff;border:none;border-radius:14px;font-size:20px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:12px;box-shadow:0 4px 12px rgba(26,122,82,0.3)">
-      📋 Nuevo Pedido
-    </button>
-    <button onclick="go('cobranza')" style="width:100%;max-width:320px;padding:22px;background:#1a6fa8;color:#fff;border:none;border-radius:14px;font-size:20px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:12px">
-      💰 Cobrar
-    </button>
-    <button onclick="go('cuentas')" style="width:100%;max-width:320px;padding:22px;background:var(--bg2);color:var(--PD);border:2px solid var(--P);border-radius:14px;font-size:20px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:12px">
-      ⚖️ Cuenta Corriente
-    </button>
-    <button onclick="verMisPedidosHoy()" style="width:100%;max-width:320px;padding:14px;background:transparent;color:var(--txt2);border:1px solid var(--brd);border-radius:10px;font-size:14px;cursor:pointer">
-      📋 Mis pedidos de hoy
-    </button>
-    <button onclick="go('pedidos')" style="width:100%;max-width:320px;padding:14px;background:transparent;color:var(--txt2);border:1px solid var(--brd);border-radius:10px;font-size:14px;cursor:pointer">
-      📄 Ver historial de pedidos
-    </button>
-    <button onclick="go('hoja-ruta')" style="width:100%;max-width:320px;padding:22px;background:#7c3aed;color:#fff;border:none;border-radius:14px;font-size:20px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:12px;box-shadow:0 4px 12px rgba(124,58,237,0.3)">
-      🗺 Hoja de ruta del día
-    </button>
-    <button onclick="verCobranzaHoy()" style="width:100%;max-width:320px;padding:14px;background:transparent;color:var(--txt2);border:1px solid var(--brd);border-radius:10px;font-size:14px;cursor:pointer">
-      📊 Mi cobranza de hoy
-    </button>
+
+    <!-- Bloque Pedidos -->
+    <div style="background:#fff;border-radius:20px;padding:16px;box-shadow:0 2px 16px rgba(0,0,0,.07)">
+      <div style="font-size:10px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;padding-left:2px">
+        📋 Pedidos
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button onclick="abrirPedidoMovil()"
+          style="display:flex;align-items:center;gap:16px;width:100%;padding:20px 22px;background:var(--P);color:#fff;border:none;border-radius:14px;font-size:19px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;box-shadow:0 3px 10px rgba(26,122,82,.25)">
+          <span style="font-size:28px;line-height:1">📋</span>
+          <span>Nuevo pedido</span>
+        </button>
+        <button onclick="go('pedidos')"
+          style="display:flex;align-items:center;gap:16px;width:100%;padding:16px 22px;background:var(--PL);color:var(--PD);border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent">
+          <span style="font-size:22px;line-height:1">📄</span>
+          <span>Mis pedidos</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Bloque Cobro -->
+    <div style="background:#fff;border-radius:20px;padding:16px;box-shadow:0 2px 16px rgba(0,0,0,.07)">
+      <div style="font-size:10px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;padding-left:2px">
+        💰 Cobro
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button onclick="go('cobranza')"
+          style="display:flex;align-items:center;gap:16px;width:100%;padding:20px 22px;background:#1a6fa8;color:#fff;border:none;border-radius:14px;font-size:19px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;box-shadow:0 3px 10px rgba(26,111,168,.25)">
+          <span style="font-size:28px;line-height:1">💰</span>
+          <span>Cobrar</span>
+        </button>
+        <button onclick="go('hoja-ruta')"
+          style="display:flex;align-items:center;gap:16px;width:100%;padding:16px 22px;background:#ede9fe;color:#5b21b6;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent">
+          <span style="font-size:22px;line-height:1">🗺</span>
+          <span>Hoja de ruta</span>
+        </button>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -3265,7 +3288,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260624-16';
+const APP_VERSION = '20260624-17';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function _mostrarBannerUpdate(){
