@@ -890,18 +890,32 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
     <!-- Sub-panel: Mis cobranzas -->
     <div id="cobm-panel-miscobranzas" style="display:none;margin-bottom:14px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <!-- Header row -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
         <button onclick="cobmVolverAcciones()"
           style="padding:6px 12px;background:var(--bg2);border:1.5px solid var(--brd);border-radius:8px;font-size:13px;cursor:pointer;font-weight:600;-webkit-tap-highlight-color:transparent">
           ← Volver
         </button>
         <div style="font-size:13px;font-weight:700;color:var(--txt)">Mis cobranzas</div>
-        <div style="display:flex;gap:6px;margin-left:auto">
-          <button id="cobmc-tab-sem" onclick="cobmRenderMisCobranzas('semana')"
-            style="padding:5px 12px;border-radius:20px;border:1.5px solid var(--brd);background:var(--bg);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">Esta semana</button>
-          <button id="cobmc-tab-mes" onclick="cobmRenderMisCobranzas('mes')"
-            style="padding:5px 12px;border-radius:20px;border:1.5px solid var(--PD);background:var(--PD);color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">Este mes</button>
+      </div>
+      <!-- Filtros: período + zona + fecha puntual -->
+      <div style="background:var(--bg2);border-radius:12px;padding:10px 12px;margin-bottom:12px">
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <button id="cobmc-tab-sem" onclick="cobmSetPeriodo('semana')"
+            style="flex:1;padding:7px;border-radius:8px;border:1.5px solid var(--brd);background:var(--bg);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">Esta semana</button>
+          <button id="cobmc-tab-mes" onclick="cobmSetPeriodo('mes')"
+            style="flex:1;padding:7px;border-radius:8px;border:1.5px solid var(--PD);background:var(--PD);color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">Este mes</button>
+          <button id="cobmc-tab-dia" onclick="cobmSetPeriodo('dia')"
+            style="flex:1;padding:7px;border-radius:8px;border:1.5px solid var(--brd);background:var(--bg);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">Por fecha</button>
         </div>
+        <!-- Fecha puntual (solo visible en modo "dia") -->
+        <div id="cobmc-fecha-wrap" style="display:none;margin-bottom:8px">
+          <input type="date" id="cobmc-fecha-input"
+            oninput="cobmRenderMisCobranzas()"
+            style="width:100%;padding:8px 10px;border:1.5px solid var(--brd);border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box">
+        </div>
+        <!-- Chips de zona (se generan dinámicamente) -->
+        <div id="cobmc-zona-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
       </div>
       <div id="cobm-mc-resumen" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap"></div>
       <div id="cobm-mc-lista"></div>
@@ -3345,7 +3359,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260625-05';
+const APP_VERSION = '20260625-06';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function _mostrarBannerUpdate(){
@@ -7568,47 +7582,102 @@ function cobmIrCC(clienteId){
 
 // ── Mis cobranzas ────────────────────────────────────────────────────────
 let _cobmcPeriodo='mes';
+let _cobmcZona='';
 
 function cobmAbrirMisCobranzas(){
   document.getElementById('cobm-acciones').style.display='none';
   document.getElementById('cobm-panel-zona').style.display='none';
   document.getElementById('cobm-panel-cc').style.display='none';
   document.getElementById('cobm-panel-miscobranzas').style.display='block';
-  cobmRenderMisCobranzas('mes');
+  _cobmcZona='';
+  cobmSetPeriodo('mes');
 }
 
-function cobmRenderMisCobranzas(periodo){
+function cobmSetPeriodo(periodo){
   _cobmcPeriodo=periodo;
+  // Mostrar/ocultar picker de fecha
+  const fw=document.getElementById('cobmc-fecha-wrap');
+  if(fw) fw.style.display=periodo==='dia'?'block':'none';
+  if(periodo==='dia'){
+    const fi=document.getElementById('cobmc-fecha-input');
+    if(fi&&!fi.value) fi.value=new Date().toISOString().split('T')[0];
+  }
+  cobmRenderMisCobranzas();
+}
+
+function cobmSetZonaMC(zona){
+  _cobmcZona=zona;
+  cobmRenderMisCobranzas();
+}
+
+function cobmRenderMisCobranzas(){
   // Actualizar tabs
-  const tabSem=document.getElementById('cobmc-tab-sem');
-  const tabMes=document.getElementById('cobmc-tab-mes');
-  const esActivo='padding:5px 12px;border-radius:20px;border:1.5px solid var(--PD);background:var(--PD);color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit';
-  const esInactivo='padding:5px 12px;border-radius:20px;border:1.5px solid var(--brd);background:var(--bg);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit';
-  if(tabSem)tabSem.style.cssText=periodo==='semana'?esActivo:esInactivo;
-  if(tabMes)tabMes.style.cssText=periodo==='mes'?esActivo:esInactivo;
+  const tabs={sem:'semana',mes:'mes',dia:'dia'};
+  const esActivo='flex:1;padding:7px;border-radius:8px;border:1.5px solid var(--PD);background:var(--PD);color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit';
+  const esInactivo='flex:1;padding:7px;border-radius:8px;border:1.5px solid var(--brd);background:var(--bg);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit';
+  ['sem','mes','dia'].forEach(k=>{
+    const t=document.getElementById('cobmc-tab-'+k);
+    if(t) t.style.cssText=_cobmcPeriodo===tabs[k]?esActivo:esInactivo;
+  });
 
   const ven=(usuarioActual?.nombre||'').toLowerCase();
   const hoy=new Date().toISOString().split('T')[0];
-  let desde;
-  if(periodo==='semana'){
-    const d=new Date();
-    d.setDate(d.getDate()-((d.getDay()+6)%7)); // lunes de esta semana
+  let desde,hasta=hoy;
+  if(_cobmcPeriodo==='semana'){
+    const d=new Date(); d.setDate(d.getDate()-((d.getDay()+6)%7));
     desde=d.toISOString().split('T')[0];
+  } else if(_cobmcPeriodo==='dia'){
+    const fi=document.getElementById('cobmc-fecha-input');
+    desde=fi?.value||hoy; hasta=desde;
   } else {
     desde=hoy.substring(0,7)+'-01';
   }
 
-  // Cobros propios
-  const misCobros=(_cobros||[]).filter(c=>{
+  // Cobros propios en período
+  let misCobros=(_cobros||[]).filter(c=>{
     const cv=(c.vendedor||'').toLowerCase();
-    return cv===ven&&c.fecha>=desde&&c.fecha<=hoy;
+    return cv===ven&&c.fecha>=desde&&c.fecha<=hasta;
   });
 
-  // Remitos propios (para total vendido)
-  const misRemitos=(_remitos||[]).filter(r=>{
+  // Remitos propios en período (para total vendido)
+  let misRemitos=(_remitos||[]).filter(r=>{
     const rv=(r.vendedor||'').toLowerCase();
-    return rv===ven&&r.fecha>=desde&&r.fecha<=hoy;
+    return rv===ven&&r.fecha>=desde&&r.fecha<=hasta;
   });
+
+  // Chips de zona a partir de los cobros del período
+  const chips=document.getElementById('cobmc-zona-chips');
+  if(chips){
+    const zonasEnCobros=[...new Set(misCobros.map(c=>{
+      const cli=_clientes.find(x=>x.id===c.cliente_id);
+      return cli?.localidad||'';
+    }).filter(Boolean))].sort();
+    if(zonasEnCobros.length>1){
+      const mkChip=(label,val)=>{
+        const activo=_cobmcZona===val;
+        return `<button onclick="cobmSetZonaMC('${val}')"
+          style="padding:5px 12px;border-radius:20px;border:1.5px solid ${activo?'var(--PD)':'var(--brd)'};background:${activo?'var(--PD)':'var(--bg)'};color:${activo?'#fff':''};font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;-webkit-tap-highlight-color:transparent">
+          ${label}
+        </button>`;
+      };
+      chips.innerHTML=mkChip('Todas','')+zonasEnCobros.map(z=>mkChip(z,z)).join('');
+    } else {
+      chips.innerHTML='';
+      if(_cobmcZona) _cobmcZona='';
+    }
+  }
+
+  // Filtrar por zona si hay una seleccionada
+  if(_cobmcZona){
+    misCobros=misCobros.filter(c=>{
+      const cli=_clientes.find(x=>x.id===c.cliente_id);
+      return (cli?.localidad||'')===_cobmcZona;
+    });
+    misRemitos=misRemitos.filter(r=>{
+      const cli=_clientes.find(x=>x.id===r.cliente_id);
+      return (cli?.localidad||'')===_cobmcZona;
+    });
+  }
 
   const totalVendido=misRemitos.reduce((s,r)=>s+(r.total||0),0);
   const totalCobrado=misCobros.reduce((s,c)=>s+(c.importe||0),0);
@@ -7623,18 +7692,18 @@ function cobmRenderMisCobranzas(periodo){
   // Resumen cards
   const res=document.getElementById('cobm-mc-resumen');
   if(res) res.innerHTML=`
-    <div style="flex:1;min-width:120px;background:#fff;border-radius:12px;padding:12px;box-shadow:0 2px 8px rgba(0,0,0,.06);text-align:center">
+    <div style="flex:1;min-width:110px;background:#fff;border-radius:12px;padding:12px;box-shadow:0 2px 8px rgba(0,0,0,.06);text-align:center">
       <div style="font-size:10px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px">Vendido</div>
-      <div style="font-size:20px;font-weight:700;color:var(--PD);margin-top:4px">${fmt(totalVendido)}</div>
+      <div style="font-size:18px;font-weight:700;color:var(--PD);margin-top:4px">${fmt(totalVendido)}</div>
     </div>
-    <div style="flex:1;min-width:120px;background:#fff;border-radius:12px;padding:12px;box-shadow:0 2px 8px rgba(0,0,0,.06);text-align:center">
+    <div style="flex:1;min-width:110px;background:#fff;border-radius:12px;padding:12px;box-shadow:0 2px 8px rgba(0,0,0,.06);text-align:center">
       <div style="font-size:10px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px">Cobrado</div>
-      <div style="font-size:20px;font-weight:700;color:var(--P);margin-top:4px">${fmt(totalCobrado)}</div>
+      <div style="font-size:18px;font-weight:700;color:var(--P);margin-top:4px">${fmt(totalCobrado)}</div>
     </div>
-    <div style="flex:1;min-width:120px;background:#7c3aed;border-radius:12px;padding:12px;box-shadow:0 2px 8px rgba(124,58,237,.2);text-align:center">
+    <div style="flex:1;min-width:110px;background:#7c3aed;border-radius:12px;padding:12px;box-shadow:0 2px 8px rgba(124,58,237,.2);text-align:center">
       <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.75);text-transform:uppercase;letter-spacing:.5px">Comisión</div>
-      <div style="font-size:20px;font-weight:700;color:#fff;margin-top:4px">${fmt(comision)}</div>
-      <div style="font-size:10px;color:rgba(255,255,255,.7);margin-top:2px">${pctV}% vtas + ${pctC}% cob</div>
+      <div style="font-size:18px;font-weight:700;color:#fff;margin-top:4px">${fmt(comision)}</div>
+      <div style="font-size:10px;color:rgba(255,255,255,.7);margin-top:2px">${pctV}%v+${pctC}%c</div>
     </div>`;
 
   // Lista agrupada por día
@@ -7652,7 +7721,7 @@ function cobmRenderMisCobranzas(periodo){
   }
   const diaLabel=f=>{
     const d=new Date(f+'T12:00:00');
-    return d.toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'}).replace('.','.').toUpperCase();
+    return d.toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'}).toUpperCase();
   };
   const formaIcon=f=>({efectivo:'💵',transferencia:'🏦',transf:'🏦',cheque:'📋'}[f]||'💰');
   lista.innerHTML=fechas.map(f=>{
@@ -7663,13 +7732,17 @@ function cobmRenderMisCobranzas(periodo){
         <div style="font-size:12px;font-weight:700;color:var(--txt2)">${diaLabel(f)}</div>
         <div style="font-size:14px;font-weight:700;color:var(--P)">${fmt(subtotal)}</div>
       </div>
-      ${cobsDia.map(c=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#fff;border-radius:10px;margin-bottom:5px;border:1px solid var(--brd)">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.cliente||'?'}</div>
-          <div style="font-size:11px;color:var(--txt2)">${formaIcon(c.forma)} ${c.forma||''}</div>
-        </div>
-        <div style="font-size:15px;font-weight:700;color:var(--PD);flex-shrink:0;margin-left:10px">${fmt(c.importe)}</div>
-      </div>`).join('')}
+      ${cobsDia.map(c=>{
+        const cli=_clientes.find(x=>x.id===c.cliente_id);
+        const zona=cli?.localidad?`<span style="font-size:10px;background:var(--bg2);border-radius:4px;padding:1px 5px;margin-left:4px">${cli.localidad}</span>`:'';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#fff;border-radius:10px;margin-bottom:5px;border:1px solid var(--brd)">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.cliente||'?'}${zona}</div>
+            <div style="font-size:11px;color:var(--txt2)">${formaIcon(c.forma)} ${c.forma||''}</div>
+          </div>
+          <div style="font-size:15px;font-weight:700;color:var(--PD);flex-shrink:0;margin-left:10px">${fmt(c.importe)}</div>
+        </div>`;
+      }).join('')}
     </div>`;
   }).join('');
 }
