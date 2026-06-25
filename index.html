@@ -2517,6 +2517,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="panel" id="p-hoja-ruta">
   <div style="padding:0 0 16px;display:flex;justify-content:space-between;align-items:center">
     <h2 style="margin-bottom:0">🗺 Hoja de ruta del día</h2>
+    <button onclick="go('vendedor-home')" id="hr-btn-volver"
+      style="display:none;min-width:48px;min-height:48px;padding:0 14px;background:none;border:none;font-size:22px;cursor:pointer;color:var(--PD);display:flex;align-items:center;gap:6px;border-radius:10px;-webkit-tap-highlight-color:transparent"
+      aria-label="Volver al inicio">
+      <span style="font-size:22px">←</span><span style="font-size:14px;font-weight:600">Volver</span>
+    </button>
   </div>
 
   <!-- TABS: Admin / Mi ruta (vendedor) -->
@@ -3216,38 +3221,79 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260624-12';
-let _versionTag = null;
-let _versionCheckTimer = null;
-
-async function _fetchVersionTag(){
-  try {
-    const r = await fetch(location.pathname + '?_vc=' + Date.now(), {method:'HEAD', cache:'no-store'});
-    return r.headers.get('etag') || r.headers.get('last-modified') || null;
-  } catch(e){ return null; }
-}
-
-async function initVersionCheck(){
-  _versionTag = await _fetchVersionTag();
-  if(_versionCheckTimer) clearInterval(_versionCheckTimer);
-  _versionCheckTimer = setInterval(async ()=>{
-    if(document.getElementById('update-banner')) return;
-    const tag = await _fetchVersionTag();
-    if(tag && _versionTag && tag !== _versionTag) _mostrarBannerUpdate();
-  }, 5 * 60 * 1000);
-}
+const APP_VERSION = '20260624-13';
+// IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function _mostrarBannerUpdate(){
   if(document.getElementById('update-banner')) return;
   const d = document.createElement('div');
   d.id = 'update-banner';
-  d.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9990;background:#1a3c5e;color:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 -3px 20px rgba(0,0,0,0.32);font-family:inherit;animation:slideUpBanner .35s ease';
-  d.innerHTML = `<div style="font-size:15px;font-weight:600;line-height:1.3">🔄 Hay una versión nueva disponible</div><button onclick="actualizarApp()" style="background:#fff;color:#1a3c5e;border:none;border-radius:8px;padding:10px 20px;font-size:15px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap">Actualizar</button>`;
+  d.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9990;background:#1a3c5e;color:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 -3px 20px rgba(0,0,0,0.32);font-family:inherit';
+  d.innerHTML = `<div><div style="font-size:15px;font-weight:600">🔄 Nueva versión disponible</div><div style="font-size:11px;opacity:.75;margin-top:2px">Toca Actualizar para cargar los últimos cambios</div></div><button onclick="actualizarApp()" style="background:#fff;color:#1a3c5e;border:none;border-radius:8px;padding:11px 22px;font-size:15px;font-weight:700;cursor:pointer;flex-shrink:0">Actualizar</button>`;
   document.body.appendChild(d);
 }
 
 function actualizarApp(){
-  location.href = location.pathname + '?_v=' + Date.now();
+  const b = document.getElementById('update-banner');
+  if(b) b.innerHTML = '<div style="font-size:14px;opacity:.85">⏳ Actualizando...</div>';
+  // Si hay SW esperando, decirle que active ya
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.getRegistration().then(reg=>{
+      if(reg?.waiting) reg.waiting.postMessage({type:'SW_SKIP_WAITING'});
+    });
+  }
+  setTimeout(()=>location.reload(), 300);
+}
+
+async function initVersionCheck(){
+  // ── Service Worker (método principal) ─────────────────────────────────
+  if('serviceWorker' in navigator){
+    try{
+      const reg = await navigator.serviceWorker.register(
+        '/lila-distribuidora/sw.js',
+        { updateViaCache: 'none', scope: '/lila-distribuidora/' }
+      );
+
+      // Mensaje del SW: nueva versión ya activada
+      navigator.serviceWorker.addEventListener('message', e=>{
+        if(e.data?.type === 'SW_ACTUALIZADO') _mostrarBannerUpdate();
+      });
+
+      // Hay un SW esperando al cargar la página (deploy entre sesiones)
+      if(reg.waiting) _mostrarBannerUpdate();
+
+      // Un nuevo SW empieza a instalarse durante la sesión
+      reg.addEventListener('updatefound', ()=>{
+        const sw = reg.installing;
+        if(!sw) return;
+        sw.addEventListener('statechange', ()=>{
+          // Instalado + hay un SW activo = actualización lista
+          if(sw.state === 'installed' && navigator.serviceWorker.controller)
+            _mostrarBannerUpdate();
+        });
+      });
+
+      // Forzar chequeo inmediato de updates (ignora caché HTTP del CDN)
+      reg.update().catch(()=>{});
+      return; // SW registrado → no necesitamos el fallback de polling
+    }catch(err){
+      console.warn('[SW] No se pudo registrar:', err);
+    }
+  }
+
+  // ── Fallback HTTP polling (navegadores sin SW — muy raro en 2024) ─────
+  let _tag = null;
+  const getTag = async()=>{
+    try{
+      const r = await fetch(location.pathname+'?_vc='+Date.now(), {method:'HEAD',cache:'no-store'});
+      return r.headers.get('etag')||r.headers.get('last-modified');
+    }catch{ return null; }
+  };
+  _tag = await getTag();
+  setInterval(async()=>{
+    const t = await getTag();
+    if(t && _tag && t !== _tag) _mostrarBannerUpdate();
+  }, 5*60*1000);
 }
 
 // ─── LOGIN ───
@@ -10538,11 +10584,14 @@ function hrInit(){
   const sel = document.getElementById('hr-vendedor');
   const vens = [...new Set(_clientes.map(c=>c.vendedor||'').filter(Boolean))].sort();
   sel.innerHTML = '<option value="">— Todos —</option>' + vens.map(v=>`<option value="${v}">${v}</option>`).join('');
-  // Si soy vendedor, pre-seleccionar mi nombre
+  // Si soy vendedor, pre-seleccionar mi nombre y mostrar botón volver
+  const btnVolver = document.getElementById('hr-btn-volver');
   if(usuarioActual?.rol==='vendedor'){
     sel.value=usuarioActual.nombre||'';sel.disabled=true;
+    if(btnVolver) btnVolver.style.display='flex';
     hrTab('mia');
   } else {
+    if(btnVolver) btnVolver.style.display='none';
     hrCargarRuta();
   }
 }
