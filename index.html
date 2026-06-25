@@ -2519,36 +2519,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <!-- Vista previa del último import -->
   <div id="imp-preview" style="margin-bottom:16px"></div>
 
-  <!-- Comparación entre períodos -->
+  <!-- Dashboard de evolución -->
   <div class="card">
-    <div class="sech"><h3>Comparar períodos</h3></div>
-    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;align-items:flex-end">
-      <div class="fg" style="min-width:140px">
-        <label>Tipo de datos</label>
-        <select id="imp-comp-tipo" style="width:100%" onchange="renderSelectoresPeriodo()">
-          <option value="ventas">Ventas</option>
-          <option value="saldos">Saldos</option>
-          <option value="resultado">Resultado</option>
-        </select>
-      </div>
-      <div class="fg" style="min-width:150px">
-        <label>Período A (base)</label>
-        <select id="imp-per-a" style="width:100%"><option value="">— Seleccionar —</option></select>
-      </div>
-      <div class="fg" style="min-width:150px">
-        <label>Período B (comparar)</label>
-        <select id="imp-per-b" style="width:100%"><option value="">— Seleccionar —</option></select>
-      </div>
-      <div style="align-self:flex-end">
-        <button class="btn P" onclick="compararPeriodos()" style="padding:12px 28px;font-size:15px;font-weight:700">📊 Comparar períodos</button>
-      </div>
+    <div class="sech"><h3>📈 Evolución histórica</h3></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0" id="dash-evol-btns">
+      <button class="btn sm" onclick="renderDashboardEvolucion('2025')" id="dashbtn-2025">2025</button>
+      <button class="btn sm" onclick="renderDashboardEvolucion('2026')" id="dashbtn-2026">2026</button>
+      <button class="btn sm" onclick="renderDashboardEvolucion('6m')" id="dashbtn-6m">Últimos 6 meses</button>
+      <button class="btn P sm" onclick="renderDashboardEvolucion('todo')" id="dashbtn-todo">Todo</button>
     </div>
-    <div id="imp-comp-result" style="margin-top:14px">
-      <div class="empty">Seleccioná tipo y dos períodos para comparar</div>
+    <div id="dash-evol-chart-wrap" style="position:relative;height:280px;display:none">
+      <canvas id="dash-evol-chart"></canvas>
     </div>
-    <div id="imp-chart-wrap" style="display:none;margin-top:14px">
-      <div style="font-size:12px;font-weight:700;color:var(--PD);margin-bottom:6px">Comparación visual — top 10 clientes</div>
-      <div style="position:relative;height:300px"><canvas id="imp-chart-comparacion"></canvas></div>
+    <div id="dash-evol-tabla" style="margin-top:12px">
+      <div class="empty">Importá períodos para ver la evolución</div>
     </div>
   </div>
 
@@ -3146,7 +3130,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260624-6';
+const APP_VERSION = '20260624-7';
 let _versionTag = null;
 let _versionCheckTimer = null;
 
@@ -9465,6 +9449,7 @@ async function initImportarHistorico() {
   await cargarPeriodosImport();
   renderSelectoresPeriodo();
   renderSelectorCruzado();
+  renderDashboardEvolucion('todo');
 }
 
 async function cargarPeriodosImport() {
@@ -9566,6 +9551,7 @@ async function importarHistorico() {
       await cargarPeriodosImport();
       renderSelectoresPeriodo();
       renderSelectorCruzado();
+      renderDashboardEvolucion('todo');
       renderImpPreview(tipo, registros.slice(0, 5));
 
     } catch(err) {
@@ -10373,6 +10359,103 @@ function renderImpHistChart(dA, perA, dB, perB) {
       scales: { x: { ticks: { callback: v => '$' + Math.round(v/1000) + 'k' } } }
     }
   });
+}
+
+// ─── DASHBOARD EVOLUCIÓN HISTÓRICA ───────────────────────────
+let _dashEvolChart = null;
+async function renderDashboardEvolucion(filtro){
+  filtro = filtro || 'todo';
+  // Highlight active button
+  ['2025','2026','6m','todo'].forEach(k=>{
+    const b=document.getElementById('dashbtn-'+k);
+    if(b){b.style.background=k===filtro?'var(--P)':'';b.style.color=k===filtro?'#fff':'';}
+  });
+  const tabla=document.getElementById('dash-evol-tabla');
+  const wrap=document.getElementById('dash-evol-chart-wrap');
+  if(tabla)tabla.innerHTML='<div class="loading">Cargando...</div>';
+
+  // Fetch all periods data
+  const [resV,resS,resR]=await Promise.all([
+    sb.from('importaciones_ventas').select('periodo,monto_vendido'),
+    sb.from('importaciones_saldos').select('periodo,saldo'),
+    sb.from('importaciones_resultado').select('periodo,venta_neta,diferencia'),
+  ]);
+
+  // Aggregate by period
+  const agg={};
+  const ensure=p=>{if(!agg[p])agg[p]={periodo:p,ventas:0,saldos:0,cmg:0,venta_neta:0};};
+  (resV.data||[]).forEach(r=>{ensure(r.periodo);agg[r.periodo].ventas+=(r.monto_vendido||0);});
+  (resS.data||[]).forEach(r=>{ensure(r.periodo);agg[r.periodo].saldos+=(r.saldo||0);});
+  (resR.data||[]).forEach(r=>{ensure(r.periodo);agg[r.periodo].venta_neta+=(r.venta_neta||0);agg[r.periodo].cmg+=(r.diferencia||0);});
+
+  // Sort periods (they're strings like "Mayo 2025")
+  const ordenMes={'enero':1,'febrero':2,'marzo':3,'abril':4,'mayo':5,'junio':6,'julio':7,'agosto':8,'septiembre':9,'octubre':10,'noviembre':11,'diciembre':12};
+  let periodos=Object.values(agg).sort((a,b)=>{
+    const pa=a.periodo.toLowerCase().split(' '),pb=b.periodo.toLowerCase().split(' ');
+    const ya=parseInt(pa[1])||0,yb=parseInt(pb[1])||0;
+    if(ya!==yb)return ya-yb;
+    return (ordenMes[pa[0]]||0)-(ordenMes[pb[0]]||0);
+  });
+
+  // Apply filter
+  if(filtro==='2025')periodos=periodos.filter(p=>p.periodo.includes('2025'));
+  else if(filtro==='2026')periodos=periodos.filter(p=>p.periodo.includes('2026'));
+  else if(filtro==='6m')periodos=periodos.slice(-6);
+
+  if(!periodos.length){
+    if(tabla)tabla.innerHTML='<div class="empty">Sin datos para el filtro seleccionado. Importá períodos primero.</div>';
+    if(wrap)wrap.style.display='none';
+    return;
+  }
+
+  // Chart
+  if(wrap)wrap.style.display='block';
+  if(typeof Chart!=='undefined'){
+    if(_dashEvolChart){_dashEvolChart.destroy();_dashEvolChart=null;}
+    const ctx=document.getElementById('dash-evol-chart')?.getContext('2d');
+    if(ctx){
+      const sets=[];
+      const hasVentas=periodos.some(p=>p.ventas>0);
+      const hasSaldos=periodos.some(p=>p.saldos>0);
+      const hasCMG=periodos.some(p=>p.cmg>0);
+      if(hasVentas)sets.push({label:'Ventas',data:periodos.map(p=>Math.round(p.ventas)),borderColor:'#1a7a52',backgroundColor:'rgba(26,122,82,0.1)',tension:0.3,fill:false,pointRadius:4});
+      if(hasSaldos)sets.push({label:'Saldos adeudados',data:periodos.map(p=>Math.round(p.saldos)),borderColor:'#c0392b',backgroundColor:'rgba(192,57,43,0.08)',tension:0.3,fill:false,pointRadius:4});
+      if(hasCMG)sets.push({label:'CMG (resultado)',data:periodos.map(p=>Math.round(p.cmg)),borderColor:'#1a5fa8',backgroundColor:'rgba(26,95,168,0.08)',tension:0.3,fill:false,pointRadius:4});
+      _dashEvolChart=new Chart(ctx,{type:'line',data:{labels:periodos.map(p=>p.periodo),datasets:sets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{y:{ticks:{callback:v=>v>=1e6?'$'+(v/1e6).toFixed(1)+'M':v>=1000?'$'+(v/1000).toFixed(0)+'k':'$'+v}}}}});
+    }
+  }
+
+  // Tabla resumen
+  const totalV=periodos.reduce((a,p)=>a+p.ventas,0);
+  const totalS=periodos.reduce((a,p)=>a+p.saldos,0);
+  const totalC=periodos.reduce((a,p)=>a+p.cmg,0);
+  if(tabla){
+    tabla.innerHTML=`
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Período</th><th style="text-align:right">Ventas</th><th style="text-align:right">Saldos</th><th style="text-align:right">CMG</th><th style="text-align:right">% CMG</th></tr></thead>
+      <tbody>
+      ${periodos.map((p,i)=>{
+        const pctCmg=p.ventas>0?(p.cmg/p.ventas*100):0;
+        const prev=periodos[i-1];
+        const delta=prev&&prev.ventas>0?Math.round((p.ventas-prev.ventas)/prev.ventas*100):null;
+        return `<tr>
+          <td style="font-weight:600">${p.periodo}</td>
+          <td style="text-align:right">${p.ventas?fmt(p.ventas):'—'} ${delta!==null?`<span style="font-size:10px;color:${delta>=0?'var(--P)':'var(--D)'}">${delta>0?'+':''}${delta}%</span>`:''}</td>
+          <td style="text-align:right;color:${p.saldos>0?'var(--D)':'var(--txt2)'}">${p.saldos?fmt(p.saldos):'—'}</td>
+          <td style="text-align:right;color:var(--P)">${p.cmg?fmt(p.cmg):'—'}</td>
+          <td style="text-align:right;font-weight:600;color:${pctCmg>=20?'var(--P)':pctCmg>0?'var(--W)':'var(--txt2)'}">${pctCmg>0?pctCmg.toFixed(1)+'%':'—'}</td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+      <tfoot><tr style="background:var(--PL);font-weight:700">
+        <td>TOTAL</td>
+        <td style="text-align:right">${fmt(totalV)}</td>
+        <td style="text-align:right;color:var(--D)">${fmt(totalS)}</td>
+        <td style="text-align:right;color:var(--P)">${fmt(totalC)}</td>
+        <td style="text-align:right;color:var(--P)">${totalV>0?(totalC/totalV*100).toFixed(1)+'%':'—'}</td>
+      </tr></tfoot>
+    </table></div>`;
+  }
 }
 
 // ─── GRÁFICO HISTÓRICO FOXPRO ────────────────────────────────
