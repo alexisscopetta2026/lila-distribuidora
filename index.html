@@ -951,13 +951,24 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
     <!-- Paso 1: Cliente -->
     <div id="cobm-paso-cliente">
-      <div class="fg drop-wrap">
-        <label style="font-size:10px">O BUSCÁ UN CLIENTE</label>
-        <input id="cobm-cli-q" placeholder="🔍 Buscar por nombre o código..." autocomplete="off"
-          style="width:100%;padding:12px;border:2px solid var(--brd);border-radius:8px;font-size:16px;box-sizing:border-box"
-          oninput="buscarClienteCobMovil()">
-        <div id="cobm-cli-lista" style="margin-top:6px"></div>
+      <div id="cobm-ruta-badge" style="display:none;font-size:12px;font-weight:600;color:var(--P);background:var(--PL);border-radius:8px;padding:6px 10px;margin-bottom:10px"></div>
+      <!-- Búsqueda por código (teclado numérico) -->
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <label style="font-size:10px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px">Cód.</label>
+          <input id="cobm-cli-cod" inputmode="numeric" pattern="[0-9]*" placeholder="00" autocomplete="off"
+            style="width:72px;height:46px;font-size:20px;font-weight:700;text-align:center;border:2px solid var(--brd);border-radius:8px;padding:0 6px"
+            oninput="cobmBuscarPorCod()"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();cobmConfirmarCod();}">
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:3px">
+          <label style="font-size:10px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px">Nombre</label>
+          <input id="cobm-cli-q" placeholder="🔍 Buscar cliente..." autocomplete="off"
+            style="width:100%;height:46px;font-size:16px;border:2px solid var(--brd);border-radius:8px;padding:0 12px;box-sizing:border-box"
+            oninput="buscarClienteCobMovil()">
+        </div>
       </div>
+      <div id="cobm-cli-lista" style="max-height:420px;overflow-y:auto;border-radius:10px;border:1.5px solid var(--brd);background:#fff;display:none"></div>
     </div>
 
     <!-- Paso 2: Forma + Importe -->
@@ -3486,7 +3497,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260625-12';
+const APP_VERSION = '20260625-13';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function _mostrarBannerUpdate(){
@@ -7763,7 +7774,8 @@ function cobmVolverAcciones(){
 
 // ── Selector de zona (step 1) ────────────────────────────────────────────
 function renderZonasMovil(){
-  const conSaldo = _clientes.filter(c=>(c.saldo||0)>0).sort((a,b)=>(b.saldo||0)-(a.saldo||0));
+  const pool=_cobmCliPool();
+  const conSaldo = pool.filter(c=>(c.saldo||0)>0).sort((a,b)=>(b.saldo||0)-(a.saldo||0));
   const zonas = [...new Set(conSaldo.map(c=>c.localidad||'').filter(Boolean))].sort();
   const zl = document.getElementById('cobm-zonas-lista');
   const ml = document.getElementById('cobm-morosos-lista');
@@ -7803,7 +7815,8 @@ function renderMorososMovil(){
   const el = document.getElementById('cobm-morosos-lista');
   if(!el) return;
 
-  const conSaldo = _clientes.filter(c=>(c.saldo||0)>0).sort((a,b)=>(b.saldo||0)-(a.saldo||0));
+  const pool=_cobmCliPool();
+  const conSaldo = pool.filter(c=>(c.saldo||0)>0).sort((a,b)=>(b.saldo||0)-(a.saldo||0));
   const morosos = _cobmZona ? conSaldo.filter(c=>(c.localidad||'')===_cobmZona) : conSaldo;
 
   // Ocultar zona-picker, mostrar lista
@@ -8054,7 +8067,8 @@ function cobmRenderMisCobranzas(){
 function limpiarCobMovil(){
   _cobMovilCliId=null;_cobMovilForma=null;
   const qEl=document.getElementById('cobm-cli-q');if(qEl)qEl.value='';
-  const lEl=document.getElementById('cobm-cli-lista');if(lEl)lEl.innerHTML='';
+  const codEl=document.getElementById('cobm-cli-cod');if(codEl){codEl.value='';codEl.style.borderColor='';}
+  const lEl=document.getElementById('cobm-cli-lista');if(lEl){lEl.innerHTML='';lEl.style.display='none';}
   const nEl=document.getElementById('cobm-cli-nombre');if(nEl)nEl.textContent='Seleccioná un cliente';
   const sEl=document.getElementById('cobm-cli-saldo');if(sEl)sEl.textContent='';
   const pc=document.getElementById('cobm-paso-cliente');if(pc)pc.style.display='block';
@@ -8079,16 +8093,93 @@ function limpiarCobMovil(){
   setTimeout(()=>document.getElementById('cobm-cli-q')?.focus(),100);
 }
 
+// ─── Pool de clientes para el repartidor ─────────────────────────────────────
+let _hrClientesHoy = null; // null = no cargado, [] = cargado sin ruta, [ids] = ruta del día
+
+async function cargarHojaRutaRepartidor(){
+  if(usuarioActual?.rol!=='repartidor'){_hrClientesHoy=null;return;}
+  const hoy=new Date().toISOString().split('T')[0];
+  const nombre=usuarioActual.nombre||'';
+  const {data}=await sb.from('hoja_ruta').select('cliente_id').eq('fecha',hoy).ilike('vendedor',nombre);
+  const ids=(data||[]).map(r=>r.cliente_id).filter(Boolean);
+  _hrClientesHoy=ids.length?ids:[];
+  // Mostrar badge indicador
+  const badge=document.getElementById('cobm-ruta-badge');
+  if(badge){
+    if(ids.length){
+      badge.textContent=`📍 Ruta del día: ${ids.length} cliente${ids.length>1?'s':''}`;
+      badge.style.display='block';
+    } else {
+      badge.textContent='⚠️ Sin hoja de ruta hoy — mostrando todos tus clientes';
+      badge.style.display='block';
+    }
+  }
+}
+
+function _cobmCliPool(){
+  if(!_hrClientesHoy||!_hrClientesHoy.length){
+    // Sin ruta: usar todos los clientes (vendedores) o todos (repartidores sin ruta)
+    if(usuarioActual?.rol==='repartidor'&&usuarioActual?.vendedor){
+      const v=(usuarioActual.vendedor||'').toLowerCase();
+      const porVendedor=_clientes.filter(c=>(c.vendedor||'').toLowerCase()===v);
+      return porVendedor.length?porVendedor:_clientes;
+    }
+    const v=usuarioActual?.vendedor||usuarioActual?.nombre||'';
+    if(!v)return _clientes;
+    const filtrado=_clientes.filter(c=>(c.vendedor||'').toLowerCase()===v.toLowerCase());
+    return filtrado.length?filtrado:_clientes;
+  }
+  // Con ruta: solo los clientes de la hoja del día
+  const rutaSet=new Set(_hrClientesHoy);
+  return _clientes.filter(c=>rutaSet.has(c.id));
+}
+
 function buscarClienteCobMovil(){
   const q=(document.getElementById('cobm-cli-q').value||'').toLowerCase();
   const lista=document.getElementById('cobm-cli-lista');
-  if(q.length<1){lista.innerHTML='';return;}
-  const m=_clientes.filter(c=>(c.nombre||'').toLowerCase().includes(q)||String(c.codigo||c.id).includes(q)).slice(0,10);
-  lista.innerHTML=m.map(c=>`<div onclick="selClienteCobMovil(${c.id})" style="display:flex;justify-content:space-between;align-items:center;padding:14px;border-bottom:1px solid var(--brd);cursor:pointer;background:#fff">
-    <div><div style="font-size:15px;font-weight:600">[${c.codigo||c.id}] ${c.nombre.toUpperCase()}</div>
-    <div style="font-size:12px;color:var(--txt2)">${c.localidad||''} · ${c.telefono||'—'}</div></div>
-    <div style="text-align:right"><div style="font-size:16px;font-weight:700;color:${(c.saldo||0)>0?'var(--D)':'var(--P)'}">${fmt(c.saldo||0)}</div>
-    <div style="font-size:10px;color:var(--txt2)">saldo</div></div></div>`).join('');
+  if(q.length<1){lista.style.display='none';lista.innerHTML='';return;}
+  const pool=_cobmCliPool();
+  const m=pool.filter(c=>(c.nombre||'').toLowerCase().includes(q)||String(c.codigo||c.id).includes(q)).slice(0,10);
+  lista.style.display=m.length?'block':'none';
+  if(!m.length){lista.innerHTML='<div style="padding:14px;font-size:14px;color:var(--txt2)">Sin resultados</div>';return;}
+  lista.innerHTML=m.map(c=>`<div onclick="selClienteCobMovil(${c.id})"
+    style="display:flex;justify-content:space-between;align-items:center;min-height:56px;padding:10px 14px;border-bottom:1px solid var(--brd);cursor:pointer;-webkit-tap-highlight-color:transparent">
+    <div style="flex:1;min-width:0">
+      <div style="font-size:16px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nombre}</div>
+      <div style="font-size:12px;color:var(--txt2);margin-top:2px">${c.localidad||''}${c.codigo?' · #'+c.codigo:''}</div>
+    </div>
+    <div style="text-align:right;flex-shrink:0;margin-left:10px">
+      <div style="font-size:17px;font-weight:700;color:${(c.saldo||0)>0?'var(--D)':'var(--P)'}">${fmt(c.saldo||0)}</div>
+    </div>
+  </div>`).join('');
+}
+
+function cobmBuscarPorCod(){
+  const cod=(document.getElementById('cobm-cli-cod')?.value||'').trim();
+  if(!cod){document.getElementById('cobm-cli-lista').style.display='none';return;}
+  const pool=_cobmCliPool();
+  const m=pool.filter(c=>String(c.codigo||c.id)===cod).slice(0,10);
+  const lista=document.getElementById('cobm-cli-lista');
+  lista.style.display=m.length?'block':'none';
+  lista.innerHTML=m.map(c=>`<div onclick="selClienteCobMovil(${c.id})"
+    style="display:flex;justify-content:space-between;align-items:center;min-height:56px;padding:10px 14px;border-bottom:1px solid var(--brd);cursor:pointer;-webkit-tap-highlight-color:transparent">
+    <div style="flex:1;min-width:0">
+      <div style="font-size:16px;font-weight:700">${c.nombre}</div>
+      <div style="font-size:12px;color:var(--txt2);margin-top:2px">${c.localidad||''}${c.codigo?' · #'+c.codigo:''}</div>
+    </div>
+    <div style="text-align:right;flex-shrink:0;margin-left:10px">
+      <div style="font-size:17px;font-weight:700;color:${(c.saldo||0)>0?'var(--D)':'var(--P)'}">${fmt(c.saldo||0)}</div>
+    </div>
+  </div>`).join('');
+}
+
+function cobmConfirmarCod(){
+  const cod=(document.getElementById('cobm-cli-cod')?.value||'').trim();
+  if(!cod)return;
+  const pool=_cobmCliPool();
+  const c=pool.find(x=>String(x.codigo||x.id)===cod);
+  if(c){selClienteCobMovil(c.id);}
+  else{const el=document.getElementById('cobm-cli-cod');if(el)el.style.borderColor='var(--D)';}
 }
 
 function selClienteCobMovil(id){
@@ -9316,10 +9407,11 @@ function go(p){
   if(p==='informes')initInformes();
   if(p==='rendicion')initRendicion();
   if(p==='cobranza'){
-    if(usuarioActual?.rol==='vendedor'){
+    if(usuarioActual?.rol==='vendedor'||usuarioActual?.rol==='repartidor'){
       document.getElementById('cob-movil').style.display='block';
       document.getElementById('cob-form-inline').style.display='none';
       limpiarCobMovil();
+      cargarHojaRutaRepartidor();
     } else {
       document.getElementById('cob-movil').style.display='none';
       document.getElementById('cob-form-inline').style.display='block';
