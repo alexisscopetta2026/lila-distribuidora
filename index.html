@@ -7,6 +7,46 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <!-- v20260624190000 --><title>Distribuidora Lila — Sistema de Gestión</title>
+
+<!-- ── SERVICE WORKER: registrar ANTES del login para interceptar desde la primera carga ── -->
+<script>
+(function(){
+  if(!('serviceWorker' in navigator)) return;
+
+  // Registrar con updateViaCache:'none' → browser siempre busca sw.js sin caché HTTP
+  navigator.serviceWorker.register('/lila-distribuidora/sw.js',{
+    updateViaCache:'none', scope:'/lila-distribuidora/'
+  }).then(function(r){
+    r.update(); // forzar chequeo ahora mismo
+  }).catch(function(){});
+
+  // controllerchange = nuevo SW tomó el control de la página
+  //   · Antes del login (usuarioActual no existe): recarga silenciosa → SW sirve HTML fresco
+  //   · Mid-sesión (usuarioActual existe): mostrar banner para que el usuario decida
+  navigator.serviceWorker.addEventListener('controllerchange', function(){
+    if(!window.usuarioActual){
+      location.reload();
+    } else if(window._mostrarBannerUpdate){
+      window._mostrarBannerUpdate();
+    } else {
+      window._pendingSwUpdate = true; // la función aún no existe, la usará cuando cargue
+    }
+  });
+
+  // Mensaje explícito del SW (backup para el caso de iOS Safari y timing edge cases)
+  navigator.serviceWorker.addEventListener('message', function(e){
+    if(!e.data || e.data.type !== 'SW_ACTUALIZADO') return;
+    if(!window.usuarioActual){
+      location.reload();
+    } else if(window._mostrarBannerUpdate){
+      window._mostrarBannerUpdate();
+    } else {
+      window._pendingSwUpdate = true;
+    }
+  });
+})();
+</script>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -3225,7 +3265,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260624-15';
+const APP_VERSION = '20260624-16';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function _mostrarBannerUpdate(){
@@ -3250,54 +3290,44 @@ function actualizarApp(){
 }
 
 async function initVersionCheck(){
-  // ── Service Worker (método principal) ─────────────────────────────────
-  if('serviceWorker' in navigator){
-    try{
-      const reg = await navigator.serviceWorker.register(
-        '/lila-distribuidora/sw.js',
-        { updateViaCache: 'none', scope: '/lila-distribuidora/' }
-      );
+  // Mostrar banner si quedó pendiente de antes de que esta función existiera
+  if(window._pendingSwUpdate){ _mostrarBannerUpdate(); window._pendingSwUpdate=false; }
 
-      // Mensaje del SW: nueva versión ya activada
-      navigator.serviceWorker.addEventListener('message', e=>{
-        if(e.data?.type === 'SW_ACTUALIZADO') _mostrarBannerUpdate();
+  if(!('serviceWorker' in navigator)) return;
+
+  try{
+    // SW ya fue registrado en <head> — solo obtener el registro existente
+    const reg = await navigator.serviceWorker.getRegistration('/lila-distribuidora/');
+    if(!reg) return;
+
+    // SW esperando (descargado pero no activado — puede pasar si varias pestañas abiertas)
+    if(reg.waiting) _mostrarBannerUpdate();
+
+    // Nuevo SW encontrado durante esta sesión → banner cuando termine de instalarse
+    reg.addEventListener('updatefound', ()=>{
+      const sw = reg.installing; if(!sw) return;
+      sw.addEventListener('statechange', ()=>{
+        if(sw.state==='installed' && navigator.serviceWorker.controller)
+          _mostrarBannerUpdate();
       });
+    });
 
-      // Hay un SW esperando al cargar la página (deploy entre sesiones)
-      if(reg.waiting) _mostrarBannerUpdate();
+    // Cuando el usuario vuelve al celular después de tenerlo en segundo plano:
+    // forzar chequeo de sw.js para detectar deploys que ocurrieron mientras tanto
+    document.addEventListener('visibilitychange', ()=>{
+      if(document.visibilityState==='visible') reg.update().catch(()=>{});
+    });
 
-      // Un nuevo SW empieza a instalarse durante la sesión
-      reg.addEventListener('updatefound', ()=>{
-        const sw = reg.installing;
-        if(!sw) return;
-        sw.addEventListener('statechange', ()=>{
-          // Instalado + hay un SW activo = actualización lista
-          if(sw.state === 'installed' && navigator.serviceWorker.controller)
-            _mostrarBannerUpdate();
-        });
-      });
+    // Forzar chequeo ahora (por si hubo deploy entre que el script de head registró y acá)
+    reg.update().catch(()=>{});
 
-      // Forzar chequeo inmediato de updates (ignora caché HTTP del CDN)
-      reg.update().catch(()=>{});
-      return; // SW registrado → no necesitamos el fallback de polling
-    }catch(err){
-      console.warn('[SW] No se pudo registrar:', err);
-    }
+  }catch(e){
+    // Fallback: polling HTTP cada 5 min (para browsers muy viejos o error de SW)
+    let _tag=null;
+    const getTag=async()=>{try{const r=await fetch(location.pathname+'?_vc='+Date.now(),{method:'HEAD',cache:'no-store'});return r.headers.get('etag')||r.headers.get('last-modified');}catch{return null;}};
+    _tag=await getTag();
+    setInterval(async()=>{const t=await getTag();if(t&&_tag&&t!==_tag)_mostrarBannerUpdate();},5*60*1000);
   }
-
-  // ── Fallback HTTP polling (navegadores sin SW — muy raro en 2024) ─────
-  let _tag = null;
-  const getTag = async()=>{
-    try{
-      const r = await fetch(location.pathname+'?_vc='+Date.now(), {method:'HEAD',cache:'no-store'});
-      return r.headers.get('etag')||r.headers.get('last-modified');
-    }catch{ return null; }
-  };
-  _tag = await getTag();
-  setInterval(async()=>{
-    const t = await getTag();
-    if(t && _tag && t !== _tag) _mostrarBannerUpdate();
-  }, 5*60*1000);
 }
 
 // ─── LOGIN ───
