@@ -621,11 +621,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <div style="display:flex;gap:4px">
           <input id="comp-prov-cod" placeholder="Cód." autocomplete="off"
             style="width:58px;font-size:13px;font-weight:600;text-align:center"
-            onkeydown="if(event.key==='F2'){event.preventDefault();abrirBuscadorProv();}else if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();buscarCodProv();}">
+            onkeydown="if(event.key==='F2'){event.preventDefault();abrirBuscadorProv();}else if(event.key==='Enter'){event.preventDefault();buscarCodProv();}else if(event.key==='Tab'){event.preventDefault();if(this.value.trim())buscarCodProv();else document.getElementById('comp-prov-q').focus();}">
           <div style="flex:1;position:relative">
             <input id="comp-prov-q" placeholder="Nombre del proveedor..." autocomplete="off" style="width:100%"
               oninput="dropProvComp()"
-              onkeydown="if(event.key==='F2'){event.preventDefault();abrirBuscadorProv();}">
+              onkeydown="if(event.key==='F2'){event.preventDefault();abrirBuscadorProv();}else if(event.key==='Tab'){event.preventDefault();document.getElementById('comp-prov-drop').style.display='none';document.getElementById('comp-nro').focus();}else if(event.key==='Escape'){document.getElementById('comp-prov-drop').style.display='none';}">
             <div id="comp-prov-drop" class="drop-list" style="display:none;position:absolute;z-index:200;width:100%;background:var(--bg);border:1px solid var(--brd);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);max-height:200px;overflow-y:auto;top:100%;left:0"></div>
           </div>
           <button class="btn sm" onclick="abrirBuscadorProv()" title="Buscar proveedor (F2)" style="padding:4px 8px;font-size:13px">🔍</button>
@@ -633,7 +633,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </div>
     </div>
     <div class="fr">
-      <div class="fg"><label>Nro. Comprobante</label><input id="comp-nro" style="width:100%" placeholder="Ej: 0001-00012345"></div>
+      <div class="fg"><label>Nro. Comprobante</label><input id="comp-nro" style="width:100%" placeholder="Ej: 0001-00012345"
+        onkeydown="if(event.key==='Tab'){event.preventDefault();document.getElementById('comp-tipo').focus();}"></div>
       <div class="fg"><label>Tipo</label>
         <select id="comp-tipo" style="width:100%">
           <option value="factura">Factura</option>
@@ -647,10 +648,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </div>
     </div>
     <div class="fr">
-      <div class="fg" style="grid-column:1/-1"><label>Descripción</label><input id="comp-desc" style="width:100%" placeholder="Ej: Compra mercadería enero"></div>
+      <div class="fg" style="grid-column:1/-1"><label>Descripción</label><input id="comp-desc" style="width:100%" placeholder="Ej: Compra mercadería enero"
+        onkeydown="if(event.key==='Tab'){event.preventDefault();document.getElementById('comp-importe').focus();}"></div>
     </div>
     <div class="fr">
-      <div class="fg"><label>Importe</label><input type="number" id="comp-importe" value="0" min="0" step="0.01" style="width:100%;font-size:16px;font-weight:600"></div>
+      <div class="fg"><label>Importe</label><input type="number" id="comp-importe" value="0" min="0" step="0.01" style="width:100%;font-size:16px;font-weight:600"
+        onkeydown="if(event.key==='Tab'){event.preventDefault();document.getElementById('comp-condpago').focus();}"></div>
       <div class="fg"><label>Condición de pago</label>
         <select id="comp-condpago" style="width:100%" onchange="calcVencimiento()">
           <option value="0">Contado</option>
@@ -3497,7 +3500,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260625-13';
+const APP_VERSION = '20260625-14';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function _mostrarBannerUpdate(){
@@ -10154,6 +10157,7 @@ function buscarCodProv(){
   if(p){
     selProvComp(p.id);
     if(el)el.style.borderColor='var(--P)';
+    document.getElementById('comp-prov-q').value=p.nombre;
     setTimeout(()=>document.getElementById('comp-nro')?.focus(),50);
   } else {
     if(el)el.style.borderColor='var(--D)';
@@ -10173,14 +10177,17 @@ function abrirBuscadorProv(){
       </div>
       <input id="busq-prov-q" placeholder="Nombre, CUIT o código..." autocomplete="off"
         style="padding:8px 12px;border:1px solid var(--brd);border-radius:8px;font-size:14px;margin-bottom:10px"
-        oninput="filtrarBusqProv()">
+        oninput="filtrarBusqProv()"
+        onkeydown="navBusqProv(event)">
       <div id="busq-prov-list" style="overflow-y:auto;flex:1;max-height:50vh"></div>
     </div>`;
   document.body.appendChild(div);
   div.addEventListener('click',e=>{if(e.target===div)div.remove();});
   setTimeout(()=>{document.getElementById('busq-prov-q')?.focus();filtrarBusqProv();},50);
 }
+let _busqProvIdx=-1;
 function filtrarBusqProv(){
+  _busqProvIdx=-1;
   const q=(document.getElementById('busq-prov-q')?.value||'').toLowerCase();
   const lista=document.getElementById('busq-prov-list');if(!lista)return;
   const res=_proveedores.filter(p=>
@@ -10188,12 +10195,21 @@ function filtrarBusqProv(){
   ).slice(0,20);
   lista.innerHTML=res.length?res.map(p=>`
     <div style="padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--brd);display:flex;align-items:center;gap:10px"
-      onmousedown="selProvComp(${p.id});document.getElementById('modal-busq-prov').remove()">
+      onmousedown="selProvComp(${p.id});document.getElementById('modal-busq-prov').remove();setTimeout(()=>document.getElementById('comp-nro')?.focus(),50)">
       <div>
         <div style="font-weight:600;font-size:13px">${p.nombre}</div>
         ${p.cuit?'<div style="font-size:11px;color:var(--txt2)">CUIT: '+p.cuit+'</div>':''}
       </div>
     </div>`).join(''):'<div style="padding:16px;text-align:center;color:var(--txt2);font-size:13px">Sin resultados</div>';
+}
+function navBusqProv(e){
+  const lista=document.getElementById('busq-prov-list');if(!lista)return;
+  const items=lista.querySelectorAll('div[onmousedown]');
+  if(!items.length)return;
+  if(e.key==='ArrowDown'){e.preventDefault();_busqProvIdx=Math.min(_busqProvIdx+1,items.length-1);items.forEach((el,i)=>el.style.background=i===_busqProvIdx?'var(--PL)':'');items[_busqProvIdx]?.scrollIntoView({block:'nearest'});}
+  else if(e.key==='ArrowUp'){e.preventDefault();_busqProvIdx=Math.max(_busqProvIdx-1,0);items.forEach((el,i)=>el.style.background=i===_busqProvIdx?'var(--PL)':'');items[_busqProvIdx]?.scrollIntoView({block:'nearest'});}
+  else if(e.key==='Enter'){e.preventDefault();const target=_busqProvIdx>=0?items[_busqProvIdx]:items.length===1?items[0]:null;if(target){const attr=target.getAttribute('onmousedown');if(attr)eval(attr);}_busqProvIdx=-1;}
+  else if(e.key==='Escape'){document.getElementById('modal-busq-prov')?.remove();}
 }
 
 async function abrirComprobante(){
