@@ -364,6 +364,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button onclick="go('pedidos')" style="width:100%;max-width:320px;padding:14px;background:transparent;color:var(--txt2);border:1px solid var(--brd);border-radius:10px;font-size:14px;cursor:pointer">
       📄 Ver historial de pedidos
     </button>
+    <button onclick="go('hoja-ruta')" style="width:100%;max-width:320px;padding:22px;background:#7c3aed;color:#fff;border:none;border-radius:14px;font-size:20px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:12px;box-shadow:0 4px 12px rgba(124,58,237,0.3)">
+      🗺 Hoja de ruta del día
+    </button>
     <button onclick="verCobranzaHoy()" style="width:100%;max-width:320px;padding:14px;background:transparent;color:var(--txt2);border:1px solid var(--brd);border-radius:10px;font-size:14px;cursor:pointer">
       📊 Mi cobranza de hoy
     </button>
@@ -774,11 +777,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </div>
     </div>
 
+    <!-- Morosos -->
+    <div id="cobm-morosos-section" style="margin-bottom:14px">
+      <div style="font-size:10px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Clientes con saldo pendiente</div>
+      <div id="cobm-morosos-lista" style="max-height:320px;overflow-y:auto"></div>
+    </div>
+
     <!-- Paso 1: Cliente -->
     <div id="cobm-paso-cliente">
       <div class="fg drop-wrap">
-        <label style="font-size:10px">CÓDIGO O NOMBRE</label>
-        <input id="cobm-cli-q" placeholder="🔍 Buscar cliente..." autocomplete="off"
+        <label style="font-size:10px">O BUSCÁ UN CLIENTE</label>
+        <input id="cobm-cli-q" placeholder="🔍 Buscar por nombre o código..." autocomplete="off"
           style="width:100%;padding:12px;border:2px solid var(--brd);border-radius:8px;font-size:16px;box-sizing:border-box"
           oninput="buscarClienteCobMovil()">
         <div id="cobm-cli-lista" style="margin-top:6px"></div>
@@ -3207,7 +3216,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260624-11';
+const APP_VERSION = '20260624-12';
 let _versionTag = null;
 let _versionCheckTimer = null;
 
@@ -7246,6 +7255,42 @@ function clearComprobanteMov(){
   document.getElementById('cobm-comp-preview').style.display='none';
   const img=document.getElementById('cobm-comp-img');if(img)img.src='';
 }
+function renderMorososMovil(){
+  const el=document.getElementById('cobm-morosos-lista');
+  if(!el)return;
+  const morosos=_clientes.filter(c=>(c.saldo||0)>0).sort((a,b)=>(b.saldo||0)-(a.saldo||0));
+  if(!morosos.length){
+    el.innerHTML='<div style="font-size:12px;color:var(--txt2);padding:6px 0">Sin clientes con saldo pendiente ✓</div>';
+    return;
+  }
+  // Construir mapa de último cobro por cliente
+  const ultimoCobro={};
+  (_cobros||[]).forEach(c=>{
+    const id=c.cliente_id;
+    if(!ultimoCobro[id]||c.fecha>ultimoCobro[id])ultimoCobro[id]=c.fecha;
+  });
+  el.innerHTML=morosos.map(c=>{
+    const dias=ultimoCobro[c.id]?diasDesde(ultimoCobro[c.id]):null;
+    const diasTxt=dias===null?'Sin cobros':dias===0?'Cobró hoy':dias===1?'Ayer':dias+'d sin cobrar';
+    const diasColor=dias===null||dias>30?'var(--D)':dias>7?'var(--W)':'var(--txt2)';
+    const telHref=c.telefono?(c.telefono.replace(/\D/g,'')):'';
+    return `<div onclick="selClienteCobMovil(${c.id})"
+      style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--bg2);border-radius:12px;margin-bottom:6px;cursor:pointer;border:1.5px solid var(--brd);active:background:var(--PL)">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nombre}</div>
+        <div style="font-size:11px;color:var(--txt2);margin-top:2px">${c.localidad||''}${c.zona?' · Z'+c.zona:''}</div>
+        <div style="font-size:11px;color:${diasColor};font-weight:600;margin-top:2px">${diasTxt}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:17px;font-weight:700;color:var(--D)">${fmt(c.saldo)}</div>
+        ${telHref?`<a href="tel:${telHref}" onclick="event.stopPropagation()"
+          style="display:inline-flex;align-items:center;gap:3px;font-size:12px;color:var(--P);font-weight:600;text-decoration:none;margin-top:4px;padding:3px 8px;background:var(--PL);border-radius:6px">
+          📞 Llamar</a>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function limpiarCobMovil(){
   _cobMovilCliId=null;_cobMovilForma=null;
   const qEl=document.getElementById('cobm-cli-q');if(qEl)qEl.value='';
@@ -7262,6 +7307,7 @@ function limpiarCobMovil(){
   clearComprobanteMov();
   const tn=document.getElementById('cobm-transf-nombre');if(tn)tn.value='';
   ['cobm-btn-ef','cobm-btn-tr','cobm-btn-ch'].forEach(id=>{const b=document.getElementById(id);if(b){b.style.background='#fff';b.style.borderColor='var(--brd)';b.style.color='';}});
+  renderMorososMovil();
   setTimeout(()=>document.getElementById('cobm-cli-q')?.focus(),100);
 }
 
@@ -10595,16 +10641,22 @@ async function hrVerMiRuta(){
   const ruta = data||[];
   const el = document.getElementById('hr-mia-lista');
   if(!ruta.length){el.innerHTML='<div class="empty">Sin clientes asignados para hoy</div>';return;}
-  el.innerHTML = ruta.map(r=>`
-    <div id="hr-mia-${r.id}" style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:${r.visitado?'var(--PL)':'var(--bg2)'};border-radius:12px;margin-bottom:8px;border:2px solid ${r.visitado?'var(--P)':'var(--brd)'}">
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:700;font-size:15px;${r.visitado?'text-decoration:line-through;color:var(--txt2)':''}">${r.nombre}</div>
-        ${r.direccion||r.localidad?`<div style="font-size:12px;color:var(--txt2)">${r.direccion}${r.localidad?' · '+r.localidad:''}</div>`:''}
-        ${r.telefono?`<a href="tel:${r.telefono}" style="font-size:13px;color:var(--P);font-weight:600">📞 ${r.telefono}</a>`:''}
+  el.innerHTML = ruta.map((r,i)=>`
+    <div onclick="hrMarcarVisitado(${r.id},${!r.visitado})"
+      style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:${r.visitado?'var(--PL)':'var(--bg)'};border-radius:14px;margin-bottom:8px;border:2px solid ${r.visitado?'var(--P)':'var(--brd)'};cursor:pointer;transition:background .15s">
+      <div style="font-size:26px;font-weight:700;min-width:32px;text-align:center;color:${r.visitado?'var(--P)':'var(--txt2)'}">
+        ${r.visitado?'✓':i+1}
       </div>
-      <button class="btn ${r.visitado?'':'P'} sm" onclick="hrMarcarVisitado(${r.id},${!r.visitado})" style="min-width:80px">
-        ${r.visitado?'✓ Visitado':'Marcar visitado'}
-      </button>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:16px;${r.visitado?'text-decoration:line-through;color:var(--txt2)':''}">${r.nombre}</div>
+        ${r.direccion||r.localidad?`<div style="font-size:12px;color:var(--txt2);margin-top:2px">${[r.direccion,r.localidad].filter(Boolean).join(' · ')}</div>`:''}
+        ${r.telefono?`<a href="tel:${r.telefono.replace(/\D/g,'')}" onclick="event.stopPropagation()"
+          style="display:inline-flex;align-items:center;gap:4px;margin-top:5px;font-size:13px;color:var(--P);font-weight:600;text-decoration:none;padding:4px 10px;background:var(--PL);border-radius:8px">
+          📞 ${r.telefono}</a>`:''}
+      </div>
+      <div style="font-size:11px;color:${r.visitado?'var(--P)':'var(--txt2)'};text-align:right;flex-shrink:0;font-weight:600">
+        ${r.visitado?'Visitado':'Tocar para<br>marcar'}
+      </div>
     </div>`).join('');
 }
 
