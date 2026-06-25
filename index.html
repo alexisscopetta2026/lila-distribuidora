@@ -3318,7 +3318,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260625-02';
+const APP_VERSION = '20260625-03';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function _mostrarBannerUpdate(){
@@ -7558,7 +7558,7 @@ function limpiarCobMovil(){
   _cobmZona='';
   const acc=document.getElementById('cobm-acciones');if(acc)acc.style.display='flex';
   const pz=document.getElementById('cobm-panel-zona');if(pz)pz.style.display='none';
-  const pc=document.getElementById('cobm-panel-cc');if(pc)pc.style.display='none';
+  const pcc=document.getElementById('cobm-panel-cc');if(pcc)pcc.style.display='none';
   const zl=document.getElementById('cobm-zonas-lista');if(zl)zl.innerHTML='';
   const ml=document.getElementById('cobm-morosos-lista');if(ml)ml.innerHTML='';
   const tot=document.getElementById('cobm-morosos-total');if(tot)tot.textContent='';
