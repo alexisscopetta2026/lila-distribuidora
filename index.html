@@ -254,6 +254,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="sidebar-items">
       <button class="sidebar-item" onclick="go('clientes');renderClientes()" data-p="clientes">👥 Clientes</button>
       <button class="sidebar-item" onclick="go('maestro-proveedores')" data-p="maestro-proveedores">🏭 Proveedores</button>
+      <button class="sidebar-item" onclick="go('listas-precios')" data-p="listas-precios">💲 Listas de precios</button>
       <button class="sidebar-item" onclick="go('zonas')" data-p="zonas">🗺 Zonas</button>
       <button class="sidebar-item" onclick="go('productos');renderProductos()" data-p="productos">📦 Productos</button>
       <button class="sidebar-item" onclick="go('stock')" data-p="stock">📊 Stock</button>
@@ -2034,6 +2035,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <div class="fg" style="justify-content:flex-end"><label>&nbsp;</label>
           <button class="btn P" onclick="informeCMGClientes()" style="width:100%">Calcular</button>
         </div>
+        <div class="fg">
+          <label>Simular con lista</label>
+          <select id="cmgc-lista-sim" style="width:100%">
+            <option value="">Sin simulación</option>
+          </select>
+        </div>
       </div>
       <div id="cmgc-res" style="margin-top:12px"></div>
     </div>
@@ -2718,6 +2725,110 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 
 <!-- MAESTRO PROVEEDORES -->
+<div class="panel" id="p-listas-precios">
+  <div style="max-width:900px;margin:0 auto;padding:20px 12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="margin:0;font-size:20px">💲 Listas de precios</h2>
+      <button class="btn P" onclick="nuevaListaPrecio()" id="lp-btn-nueva" style="display:none">+ Nueva lista</button>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">
+      <button id="lp-tab-listas" class="btn P sm" onclick="lpTab('listas')">Listas</button>
+      <button id="lp-tab-precios" class="btn sm" onclick="lpTab('precios')">Precios por lista</button>
+      <button id="lp-tab-clientes" class="btn sm" onclick="lpTab('clientes')">Clientes</button>
+      <button id="lp-tab-sim" class="btn sm" onclick="lpTab('sim')">Simulador</button>
+    </div>
+    <!-- Listas -->
+    <div id="lp-sec-listas">
+      <div id="lp-listas-res"></div>
+    </div>
+    <!-- Precios por lista -->
+    <div id="lp-sec-precios" style="display:none">
+      <div class="card" style="margin-bottom:12px">
+        <div class="fr" style="flex-wrap:wrap;gap:8px">
+          <div class="fg" style="flex:0 0 220px">
+            <label>Lista</label>
+            <select id="lp-sel-lista" style="width:100%" onchange="lpCargarPrecios()">
+              <option value="">Seleccioná una lista...</option>
+            </select>
+          </div>
+          <div class="fg" style="flex:1;min-width:160px">
+            <label>Buscar producto</label>
+            <input id="lp-pro-q" placeholder="Nombre..." oninput="lpFiltrarPrecios()">
+          </div>
+        </div>
+      </div>
+      <div id="lp-precios-res"></div>
+    </div>
+    <!-- Clientes -->
+    <div id="lp-sec-clientes" style="display:none">
+      <div class="card" style="margin-bottom:12px">
+        <div class="fr" style="flex-wrap:wrap;gap:8px">
+          <div class="fg" style="flex:1;min-width:160px">
+            <label>Buscar cliente</label>
+            <input id="lp-cli-q" placeholder="Nombre..." oninput="lpRenderClientes()">
+          </div>
+          <div class="fg" style="flex:0 0 220px">
+            <label>Filtrar por lista</label>
+            <select id="lp-cli-lista-fil" style="width:100%" onchange="lpRenderClientes()">
+              <option value="">Todas</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div id="lp-cli-res"></div>
+    </div>
+    <!-- Simulador -->
+    <div id="lp-sec-sim" style="display:none">
+      <div class="card">
+        <div style="font-weight:700;font-size:15px;margin-bottom:14px">🧮 Simulador de precios</div>
+        <div class="fr" style="flex-wrap:wrap;gap:8px;margin-bottom:12px">
+          <div class="fg" style="flex:1;min-width:160px;position:relative">
+            <label>Cliente (opcional)</label>
+            <input id="lp-sim-cli-q" placeholder="Buscar cliente..." oninput="lpSimDropCli()" autocomplete="off">
+            <input type="hidden" id="lp-sim-cli-id">
+            <div id="lp-sim-cli-drop" class="drop-list" style="display:none;max-height:220px;overflow-y:auto;position:absolute;top:100%;left:0;right:0;z-index:200;background:#fff;border:1px solid var(--brd);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.1)"></div>
+          </div>
+          <div class="fg" style="flex:0 0 220px">
+            <label>Lista a aplicar</label>
+            <select id="lp-sim-lista" style="width:100%">
+              <option value="">— Sin lista —</option>
+            </select>
+          </div>
+        </div>
+        <div class="fr" style="flex-wrap:wrap;gap:8px;margin-bottom:10px;align-items:flex-end">
+          <div class="fg" style="flex:1;min-width:160px;position:relative">
+            <label>Producto</label>
+            <input id="lp-sim-pro-q" placeholder="Buscar producto..." oninput="lpSimDropPro()" autocomplete="off">
+            <div id="lp-sim-pro-drop" class="drop-list" style="display:none;max-height:220px;overflow-y:auto;position:absolute;top:100%;left:0;right:0;z-index:200;background:#fff;border:1px solid var(--brd);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.1)"></div>
+          </div>
+          <div class="fg" style="flex:0 0 90px"><label>Cant.</label><input id="lp-sim-cant" type="number" value="1" min="0.01" step="any" inputmode="decimal"></div>
+          <div style="padding-bottom:0px"><button class="btn P" onclick="lpSimAgregar()" style="height:38px;padding:0 18px">Agregar</button></div>
+        </div>
+        <div id="lp-sim-items"></div>
+        <div id="lp-sim-totales" style="display:none;margin-top:12px;background:var(--PL);border-radius:10px;padding:14px 16px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-size:11px;color:var(--txt2)">Total con lista</div>
+              <div id="lp-sim-tot-val" style="font-size:22px;font-weight:700;color:var(--PD)">$0</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:11px;color:var(--txt2)">vs precio base</div>
+              <div id="lp-sim-tot-base" style="font-size:15px;font-weight:600;color:var(--txt2)">$0</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:11px;color:var(--txt2)">Diferencia</div>
+              <div id="lp-sim-tot-diff" style="font-size:15px;font-weight:700">$0</div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:10px;text-align:right">
+          <button class="btn sm" onclick="_lpSimItems=[];lpSimRender()" style="color:var(--D)">Limpiar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="panel" id="p-maestro-proveedores">
   <div class="sech">
     <h2>🏭 Proveedores</h2>
@@ -3491,7 +3602,7 @@ function poblarSubcats(catSelId,subcatSelId){
 }
 
 // Pantallas por rol
-const MENUS_ADMIN=['dash','pedidos','pedido-movil','carga','remitos','cobranza','tesoreria','cheques','cuentas','clientes','maestro-proveedores','productos','remito-rapido','nc','rendicion','stock','informes','comisiones','contrib-zona','gastos-fijos','contabilidad','exportar','importar-historico'];
+const MENUS_ADMIN=['dash','pedidos','pedido-movil','carga','remitos','cobranza','tesoreria','cheques','cuentas','clientes','maestro-proveedores','listas-precios','productos','remito-rapido','nc','rendicion','stock','informes','comisiones','contrib-zona','gastos-fijos','contabilidad','exportar','importar-historico'];
 const MENUS_VENDEDOR=['vendedor-home','pedidos','pedido-movil','cobranza','cuentas'];
 const MENUS_REPARTIDOR=['vendedor-home','cobranza','hoja-ruta','nc'];
 let usuarioActual = null;
@@ -3504,7 +3615,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260626-01';
+const APP_VERSION = '20260626-02';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function _mostrarBannerUpdate(){
@@ -3672,7 +3783,7 @@ async function cargarTodo(){
   // Guardar HTML original del panel pedido-movil
   const pmPanel = document.getElementById('p-pedido-movil');
   if(pmPanel && !window._pmPanelOriginal) window._pmPanelOriginal = pmPanel.innerHTML;
-  await Promise.all([cargarClientes(),cargarProductos(),cargarPedidos(),cargarRemitos(),cargarCobros(),cargarCargas(),cargarGastos(),cargarProveedores(),cargarZonas(),cargarComprobantes()]);
+  await Promise.all([cargarClientes(),cargarProductos(),cargarPedidos(),cargarRemitos(),cargarCobros(),cargarCargas(),cargarGastos(),cargarProveedores(),cargarZonas(),cargarComprobantes(),cargarListasPrecios()]);
   renderDash();renderPedidos();renderClientes();renderProductos();renderProveedores();renderRemitos();renderCobros();renderCC();renderCargas();renderGastos();
   poblarZonas();
   // Asegurar que el panel activo sea el correcto
@@ -3683,6 +3794,18 @@ async function cargarClientes(){
   const {data}=await sb.from('clientes').select('*').order('nombre').limit(2000);
   // Vendedor ve sus clientes + los que no tienen vendedor asignado (para no perder ninguno)
   _clientes=usuarioActual.vendedor?(data||[]).filter(c=>{const v=c.vendedor||'';return v===''||v.toLowerCase().includes(usuarioActual.vendedor.toLowerCase());}):data||[];
+}
+async function cargarListasPrecios(){
+  try{
+    const {data:listas}=await sb.from('listas_precios').select('*').eq('activa',true).order('nombre');
+    _listasPrecios=listas||[];
+    if(_listasPrecios.length){
+      const ids=_listasPrecios.map(l=>l.id);
+      const {data:items}=await sb.from('lista_precios_items').select('*').in('lista_id',ids);
+      _listaPreciosItems=items||[];
+    }
+  }catch(e){_listasPrecios=[];_listaPreciosItems=[];}
+  try{_clienteListaMap=JSON.parse(localStorage.getItem('lila_cliente_lista')||'{}');}catch{_clienteListaMap={};}
 }
 async function cargarProductos(){const {data}=await sb.from('productos').select('*').order('nombre');_productos=data||[];}
 async function cargarPedidos(){
@@ -5014,6 +5137,28 @@ function limpiarModalCobro(){
   clearComprobante();
   setTimeout(()=>{const f=document.getElementById('cob-cli-cod');if(f)f.focus();},100);
 }
+// Sube un comprobante de transferencia al bucket "comprobantes" de Supabase Storage.
+// Retorna la URL pública o '' si falla. Muestra toast con mensaje claro si el bucket no existe.
+async function _subirComprobante(file, suffix){
+  if(!file) return '';
+  const ext=(file.name.split('.').pop()||'jpg').toLowerCase();
+  const path=`cobros/${Date.now()}_${suffix}.${ext}`;
+  const {error:upErr}=await sb.storage.from('comprobantes').upload(path, file, {upsert:true});
+  if(upErr){
+    const esBucketFaltante=(upErr.message||'').toLowerCase().includes('bucket')||
+                            (upErr.message||'').toLowerCase().includes('not found')||
+                            upErr.statusCode==='404'||upErr.error==='not_found';
+    if(esBucketFaltante){
+      toast('Bucket "comprobantes" no configurado. Crealo en Supabase Storage → New bucket → nombre: comprobantes → Public','warn',8000);
+    } else {
+      toast('No se pudo subir el comprobante: '+(upErr.message||upErr),'err',5000);
+    }
+    return '';
+  }
+  const {data:urlData}=sb.storage.from('comprobantes').getPublicUrl(path);
+  return urlData?.publicUrl||'';
+}
+
 function prevComprobante(input){
   const file=input.files[0];if(!file)return;
   document.getElementById('cob-comp-nombre').textContent=file.name;
@@ -5226,17 +5371,7 @@ async function guardarCobro(){
   let comprobante_url='';
   if(tr>0){
     const compFile=document.getElementById('cob-comprobante')?.files?.[0];
-    if(compFile){
-      const ext=compFile.name.split('.').pop()||'jpg';
-      const path=`cobros/${Date.now()}_${cid}.${ext}`;
-      const {error:upErr}=await sb.storage.from('comprobantes').upload(path,compFile,{upsert:true});
-      if(!upErr){
-        const {data:urlData}=sb.storage.from('comprobantes').getPublicUrl(path);
-        comprobante_url=urlData?.publicUrl||'';
-      }else{
-        toast('No se pudo subir el comprobante: '+upErr.message,'err',5000);
-      }
-    }
+    if(compFile) comprobante_url=await _subirComprobante(compFile, cid);
   }
 
   // Guardar cobro
@@ -6417,8 +6552,34 @@ async function informeComisiones(){
     }).join('')}
   `;
 }
+let _listasPrecios=[], _listaPreciosItems=[], _clienteListaMap={};
+let _lpItemsCache=[];
+let _lpSimItems=[];
+let _lpSimProActual=null;
 let _ncs=[], _ncItems=[], _ncProTemp=null;
 async function cargarNCs(){const {data}=await sb.from('notas_credito').select('*').order('created_at',{ascending:false});_ncs=data||[];}
+function getPrecioLista(productoId, listaId){
+  if(!listaId) return null;
+  const lista=_listasPrecios.find(l=>l.id==listaId);
+  if(!lista) return null;
+  const item=_listaPreciosItems.find(i=>i.lista_id==listaId&&i.producto_id==productoId);
+  if(item&&item.precio_override!=null) return +item.precio_override;
+  const prod=_productos.find(p=>p.id===productoId);
+  if(!prod) return null;
+  const costo=prod.costo||0;
+  if(!costo) return null;
+  return costo*(1+(lista.margen_pct||0)/100);
+}
+function getListaCliente(clienteId){
+  return _clienteListaMap[clienteId]||null;
+}
+function getPrecioParaCliente(productoId, clienteId){
+  const listaId=getListaCliente(clienteId);
+  return getPrecioLista(productoId, listaId);
+}
+function guardarClienteListaMap(){
+  localStorage.setItem('lila_cliente_lista',JSON.stringify(_clienteListaMap));
+}
 function toggleNCItems(){
   const motivo=document.getElementById('nc-motivo').value;
   const esDevolucion=motivo==='devolucion';
@@ -7243,7 +7404,7 @@ function actualizarNavActivo(p){
   // Resaltar grupo padre
   const grupos={
     'pedidos':'ventas','pedido-movil':'ventas','carga':'ventas','remitos':'ventas','remito-rapido':'ventas','nc':'ventas',
-    'clientes':'maestros','cuentas':'maestros','productos':'maestros','stock':'maestros','maestro-proveedores':'maestros',
+    'clientes':'maestros','cuentas':'maestros','productos':'maestros','stock':'maestros','maestro-proveedores':'maestros','listas-precios':'maestros',
     'cobranza':'tesoreria','tesoreria':'tesoreria',
     'contabilidad':'contabilidad',
     'informes':'informes','rendicion':'informes','comisiones':'informes','contrib-zona':'informes','gastos-fijos':'informes'
@@ -8296,17 +8457,7 @@ async function guardarCobMovil(){
     const nombreTransf=(document.getElementById('cobm-transf-nombre')?.value||'').trim();
     if(!nombreTransf){alert('Ingresá el nombre del cliente que transfirió');return;}
     const compFile=document.getElementById('cobm-comprobante')?.files?.[0];
-    if(compFile){
-      const ext=compFile.name.split('.').pop()||'jpg';
-      const path=`cobros/${Date.now()}_${_cobMovilCliId}.${ext}`;
-      const {error:upErr}=await sb.storage.from('comprobantes').upload(path,compFile,{upsert:true});
-      if(!upErr){
-        const {data:urlData}=sb.storage.from('comprobantes').getPublicUrl(path);
-        comprobante_url=urlData?.publicUrl||'';
-      }else{
-        toast('No se pudo subir el comprobante: '+upErr.message,'err',5000);
-      }
-    }
+    if(compFile) comprobante_url=await _subirComprobante(compFile, _cobMovilCliId);
   }
 
   const nombreTransf=_cobMovilForma==='transferencia'?(document.getElementById('cobm-transf-nombre')?.value||'').trim():'';
@@ -8573,7 +8724,11 @@ function abrirPopupMovil(prodId){
     ? _editPedMovil.items.find(x=>x.id===prodId)
     : _pmCarrito.find(x=>x.id===prodId);
   document.getElementById('pm-popup-nombre').textContent=p.nombre;
-  document.getElementById('pm-popup-precio').textContent=fmt(p.precio||0)+' '+(p.unidad||'');
+  const _lpPrecioLista=_pmCliId?getPrecioParaCliente(p.id,_pmCliId):null;
+  const _lpPrecioBase=p.precio||0;
+  const _lpPrecioMostrar=_lpPrecioLista!=null?_lpPrecioLista:_lpPrecioBase;
+  const _lpListaNom=_pmCliId&&getListaCliente(_pmCliId)?(_listasPrecios.find(l=>l.id==getListaCliente(_pmCliId))?.nombre||''):'';
+  document.getElementById('pm-popup-precio').innerHTML=fmt(_lpPrecioMostrar)+' <span style="color:var(--txt2)">'+(p.unidad||'')+'</span>'+(_lpListaNom?` <span style="font-size:11px;background:var(--PL);color:var(--PD);border-radius:4px;padding:1px 5px">${_lpListaNom}</span>`:'');
   document.getElementById('pm-cant').value=existente?existente.cant:1;
   document.getElementById('pm-dto').value=existente?existente.dto:(p.descuento||0);
   // En modo edición ocultar el backdrop del sheet para evitar doble oscurecimiento
@@ -8605,7 +8760,8 @@ function agregarAlCarrito(){
   if(!_pmProdActual)return;
   const cant=parseFloat(document.getElementById('pm-cant').value)||0;
   const dto=parseFloat(document.getElementById('pm-dto').value)||0;
-  const precio=_pmProdActual.precio||0;
+  const _ppLista=_pmCliId?getPrecioParaCliente(_pmProdActual?.id,_pmCliId):null;
+  const precio=_ppLista!=null?_ppLista:(_pmProdActual?.precio||0);
 
   if(_editPedMovil){
     // Modo edición: guardar referencia antes de cerrar el popup (que nula _pmProdActual)
@@ -8615,7 +8771,8 @@ function agregarAlCarrito(){
     if(cant<=0){
       if(idx>=0) _editPedMovil.items.splice(idx,1);
     } else {
-      const item={id:prod.id,nom:prod.nombre,un:prod.unidad||'un',cant,precio:prod.precio||0,dto,iva:prod.iva||21};
+      const _precioLP=_pmCliId?getPrecioParaCliente(prod.id,_pmCliId):null;
+      const item={id:prod.id,nom:prod.nombre,un:prod.unidad||'un',cant,precio:_precioLP!=null?_precioLP:(prod.precio||0),dto,iva:prod.iva||21};
       if(idx>=0) _editPedMovil.items[idx]=item; else _editPedMovil.items.push(item);
     }
     const busq=document.getElementById('epm-busq');
@@ -9313,6 +9470,287 @@ function agregarPersonaCom(){
   setTimeout(()=>{const rows=document.querySelectorAll('#com-personas-tbody tr');if(rows.length){const inp=rows[rows.length-1].querySelector('input');if(inp)inp.focus();}},50);
 }
 
+// ═══════════════════════════════════════════════════════════════
+// LISTAS DE PRECIOS
+// ═══════════════════════════════════════════════════════════════
+async function initListasPrecios(){
+  await cargarListasPrecios();
+  lpTab('listas');
+  _lpPoblarSelects();
+}
+function _lpPoblarSelects(){
+  const opts=_listasPrecios.map(l=>`<option value="${l.id}">${l.nombre}</option>`).join('');
+  ['lp-sel-lista','lp-cli-lista-fil','lp-sim-lista','cmgc-lista-sim'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el)return;
+    const base=id==='lp-cli-lista-fil'?'<option value="">Todas</option>':
+                id==='lp-sim-lista'?'<option value="">— Sin lista —</option>':
+                id==='cmgc-lista-sim'?'<option value="">Sin simulación</option>':
+                '<option value="">Seleccioná una lista...</option>';
+    el.innerHTML=base+opts;
+  });
+  const btn=document.getElementById('lp-btn-nueva');
+  if(btn)btn.style.display=(usuarioActual?.esAdmin||usuarioActual?.rol==='admin')?'inline-flex':'none';
+}
+function lpTab(tab){
+  ['listas','precios','clientes','sim'].forEach(t=>{
+    const sec=document.getElementById('lp-sec-'+t);
+    const btn=document.getElementById('lp-tab-'+t);
+    if(sec)sec.style.display=t===tab?'block':'none';
+    if(btn)btn.className=t===tab?'btn P sm':'btn sm';
+  });
+  if(tab==='listas')lpRenderListas();
+  if(tab==='clientes')lpRenderClientes();
+  if(tab==='sim')_lpPoblarSelects();
+}
+function lpRenderListas(){
+  const el=document.getElementById('lp-listas-res');
+  if(!el)return;
+  if(!_listasPrecios.length){
+    el.innerHTML='<div class="empty">No hay listas de precios. Creá la primera con "+ Nueva lista".</div>';
+    return;
+  }
+  el.innerHTML=_listasPrecios.map(l=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:var(--bg2);border:1px solid var(--brd);border-radius:10px;margin-bottom:8px">
+      <div>
+        <div style="font-weight:700;font-size:15px">${l.nombre}</div>
+        <div style="font-size:12px;color:var(--txt2);margin-top:2px">Margen base: <strong>${l.margen_pct||0}%</strong> · ${Object.values(_clienteListaMap).filter(v=>v==l.id).length} cliente(s)</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn sm" onclick="lpEditarLista(${l.id})" style="color:var(--P);background:var(--PL)">Editar</button>
+        <button class="btn D sm" onclick="lpEliminarLista(${l.id})">Eliminar</button>
+      </div>
+    </div>`).join('');
+}
+async function nuevaListaPrecio(){
+  const nombre=prompt('Nombre de la lista de precios:');
+  if(!nombre)return;
+  const margen=parseFloat(prompt('Margen base sobre costo (%) — ej: 20 para 20%:','20')||'20');
+  const {data,error}=await sb.from('listas_precios').insert({nombre:nombre.trim(),margen_pct:margen,activa:true}).select().single();
+  if(error){alert('Error: '+error.message);return;}
+  await cargarListasPrecios();
+  _lpPoblarSelects();
+  lpRenderListas();
+}
+async function lpEditarLista(id){
+  const l=_listasPrecios.find(x=>x.id===id);if(!l)return;
+  const nombre=prompt('Nombre:',l.nombre);if(nombre===null)return;
+  const margen=parseFloat(prompt('Margen base %:',l.margen_pct)||String(l.margen_pct));
+  await sb.from('listas_precios').update({nombre:nombre.trim(),margen_pct:margen}).eq('id',id);
+  await cargarListasPrecios();_lpPoblarSelects();lpRenderListas();
+}
+async function lpEliminarLista(id){
+  if(!confirm('¿Eliminar esta lista? Se perderán todos los precios asociados.'))return;
+  await sb.from('lista_precios_items').delete().eq('lista_id',id);
+  await sb.from('listas_precios').delete().eq('id',id);
+  Object.keys(_clienteListaMap).forEach(cid=>{if(_clienteListaMap[cid]==id)delete _clienteListaMap[cid];});
+  guardarClienteListaMap();
+  await cargarListasPrecios();_lpPoblarSelects();lpRenderListas();
+}
+async function lpCargarPrecios(){
+  const listaId=document.getElementById('lp-sel-lista').value;
+  if(!listaId){document.getElementById('lp-precios-res').innerHTML='';return;}
+  const {data}=await sb.from('lista_precios_items').select('*').eq('lista_id',listaId);
+  _listaPreciosItems=_listaPreciosItems.filter(i=>i.lista_id!=listaId);
+  _listaPreciosItems.push(...(data||[]));
+  _lpItemsCache=data||[];
+  lpFiltrarPrecios();
+}
+function lpFiltrarPrecios(){
+  const listaId=document.getElementById('lp-sel-lista').value;
+  const q=(document.getElementById('lp-pro-q')?.value||'').toLowerCase();
+  const lista=_listasPrecios.find(l=>l.id==listaId);
+  const el=document.getElementById('lp-precios-res');
+  if(!listaId||!lista){if(el)el.innerHTML='';return;}
+  let prods=_productos.filter(p=>!q||(p.nombre||'').toLowerCase().includes(q));
+  if(!prods.length){el.innerHTML='<div class="empty">Sin resultados</div>';return;}
+  el.innerHTML=`<div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr style="background:var(--bg2)">
+      <th style="padding:8px 10px;text-align:left">Producto</th>
+      <th style="padding:8px 10px;text-align:right">Costo</th>
+      <th style="padding:8px 10px;text-align:right">Precio base</th>
+      <th style="padding:8px 10px;text-align:right">Precio lista (${lista.margen_pct}%)</th>
+      <th style="padding:8px 10px;text-align:right">Override</th>
+      <th style="padding:8px 10px;text-align:right">Precio final</th>
+    </tr></thead>
+    <tbody>${prods.map(p=>{
+      const item=_lpItemsCache.find(i=>i.producto_id===p.id);
+      const precioBase=p.precio||0;
+      const costo=p.costo||0;
+      const precioLista=costo?(costo*(1+(lista.margen_pct||0)/100)):precioBase;
+      const override=item?.precio_override;
+      const final=override!=null?override:precioLista;
+      return `<tr style="border-bottom:0.5px solid var(--brd)">
+        <td style="padding:7px 10px;font-weight:500">${p.nombre}</td>
+        <td style="padding:7px 10px;text-align:right;color:var(--txt2)">${fmt(costo)}</td>
+        <td style="padding:7px 10px;text-align:right;color:var(--txt2)">${fmt(precioBase)}</td>
+        <td style="padding:7px 10px;text-align:right">${fmt(precioLista)}</td>
+        <td style="padding:7px 10px;text-align:right">
+          <input type="number" value="${override!=null?override:''}" placeholder="Auto"
+            style="width:90px;padding:4px 6px;border:1px solid var(--brd);border-radius:6px;font-size:12px;text-align:right"
+            onchange="lpGuardarOverride(${listaId},${p.id},this.value)">
+        </td>
+        <td style="padding:7px 10px;text-align:right;font-weight:700;color:var(--PD)">${fmt(final)}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
+}
+async function lpGuardarOverride(listaId,productoId,val){
+  const precio=val===''?null:parseFloat(val);
+  const existing=_lpItemsCache.find(i=>i.producto_id===productoId);
+  if(existing){
+    if(precio===null){
+      await sb.from('lista_precios_items').delete().eq('id',existing.id);
+      _lpItemsCache=_lpItemsCache.filter(i=>i.id!==existing.id);
+    } else {
+      await sb.from('lista_precios_items').update({precio_override:precio}).eq('id',existing.id);
+      existing.precio_override=precio;
+    }
+  } else if(precio!==null){
+    const {data}=await sb.from('lista_precios_items').insert({lista_id:listaId,producto_id:productoId,precio_override:precio}).select().single();
+    if(data)_lpItemsCache.push(data);
+  }
+  _listaPreciosItems=_listaPreciosItems.filter(i=>!(i.lista_id==listaId&&i.producto_id===productoId));
+  if(precio!==null){
+    const item=_lpItemsCache.find(i=>i.producto_id===productoId);
+    if(item)_listaPreciosItems.push(item);
+  }
+}
+function lpRenderClientes(){
+  const q=(document.getElementById('lp-cli-q')?.value||'').toLowerCase();
+  const listaFil=document.getElementById('lp-cli-lista-fil')?.value||'';
+  const el=document.getElementById('lp-cli-res');if(!el)return;
+  let clis=_clientes.filter(c=>!q||(c.nombre||'').toLowerCase().includes(q));
+  if(listaFil)clis=clis.filter(c=>String(_clienteListaMap[c.id]||'')==listaFil);
+  if(!clis.length){el.innerHTML='<div class="empty">Sin resultados</div>';return;}
+  el.innerHTML=`<div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr style="background:var(--bg2)">
+      <th style="padding:8px 10px;text-align:left">Cliente</th>
+      <th style="padding:8px 10px;text-align:left">Lista asignada</th>
+    </tr></thead>
+    <tbody>${clis.slice(0,100).map(c=>{
+      const listaId=_clienteListaMap[c.id]||'';
+      return `<tr style="border-bottom:0.5px solid var(--brd)">
+        <td style="padding:7px 10px;font-weight:500">${c.nombre}</td>
+        <td style="padding:7px 10px">
+          <select style="width:100%;padding:4px 6px;border:1px solid var(--brd);border-radius:6px;font-size:12px"
+            onchange="lpAsignarClienteLista(${c.id},this.value)">
+            <option value="">— Sin lista —</option>
+            ${_listasPrecios.map(l=>`<option value="${l.id}"${l.id==listaId?' selected':''}>${l.nombre}</option>`).join('')}
+          </select>
+        </td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div>${clis.length>100?`<div style="font-size:12px;color:var(--txt2);padding:8px 0">Mostrando 100 de ${clis.length} — filtrá para ver más</div>`:''}`;
+}
+function lpAsignarClienteLista(clienteId, listaId){
+  if(listaId) _clienteListaMap[clienteId]=parseInt(listaId);
+  else delete _clienteListaMap[clienteId];
+  guardarClienteListaMap();
+}
+function lpSimDropCli(){
+  const q=(document.getElementById('lp-sim-cli-q').value||'').toLowerCase();
+  const drop=document.getElementById('lp-sim-cli-drop');
+  if(q.length<1){drop.style.display='none';return;}
+  const m=_clientes.filter(c=>(c.nombre||'').toLowerCase().includes(q)).slice(0,8);
+  drop.innerHTML=m.map(c=>`<div onmousedown="lpSimSelCli(${c.id})"
+    style="padding:10px 12px;cursor:pointer;border-bottom:0.5px solid var(--brd)"
+    onmouseover="this.style.background='var(--PL)'" onmouseout="this.style.background=''">
+    <div style="font-weight:600">${c.nombre}</div>
+    ${_clienteListaMap[c.id]?`<div style="font-size:11px;color:var(--PD)">${_listasPrecios.find(l=>l.id==_clienteListaMap[c.id])?.nombre||''}</div>`:''}
+  </div>`).join('');
+  drop.style.display=m.length?'block':'none';
+}
+function lpSimSelCli(id){
+  const c=_clientes.find(x=>x.id===id);if(!c)return;
+  document.getElementById('lp-sim-cli-id').value=id;
+  document.getElementById('lp-sim-cli-q').value=c.nombre;
+  document.getElementById('lp-sim-cli-drop').style.display='none';
+  const listaId=_clienteListaMap[id];
+  if(listaId){const sel=document.getElementById('lp-sim-lista');if(sel)sel.value=listaId;}
+}
+function lpSimDropPro(){
+  const q=(document.getElementById('lp-sim-pro-q').value||'').toLowerCase();
+  const drop=document.getElementById('lp-sim-pro-drop');
+  if(q.length<1){drop.style.display='none';return;}
+  const m=_productos.filter(p=>(p.nombre||'').toLowerCase().includes(q)).slice(0,10);
+  drop.innerHTML=m.map(p=>`<div onmousedown="lpSimSelPro(${p.id})"
+    style="padding:10px 12px;cursor:pointer;border-bottom:0.5px solid var(--brd)"
+    onmouseover="this.style.background='var(--PL)'" onmouseout="this.style.background=''">
+    <div style="font-weight:600">${p.nombre}</div>
+    <div style="font-size:11px;color:var(--txt2)">${fmt(p.precio||0)} base · costo ${fmt(p.costo||0)}</div>
+  </div>`).join('');
+  drop.style.display=m.length?'block':'none';
+}
+function lpSimSelPro(id){
+  const p=_productos.find(x=>x.id===id);if(!p)return;
+  _lpSimProActual=p;
+  document.getElementById('lp-sim-pro-q').value=p.nombre;
+  document.getElementById('lp-sim-pro-drop').style.display='none';
+}
+function lpSimAgregar(){
+  const p=_lpSimProActual;if(!p){alert('Seleccioná un producto');return;}
+  const cant=parseFloat(document.getElementById('lp-sim-cant').value)||1;
+  const listaId=document.getElementById('lp-sim-lista').value;
+  const precioLista=listaId?getPrecioLista(p.id,listaId):null;
+  const precioBase=p.precio||0;
+  const precioFinal=precioLista!=null?precioLista:precioBase;
+  const idx=_lpSimItems.findIndex(i=>i.id===p.id);
+  const item={id:p.id,nom:p.nombre,cant,precioBase,precioLista:precioFinal,listaId};
+  if(idx>=0)_lpSimItems[idx]=item;else _lpSimItems.push(item);
+  document.getElementById('lp-sim-pro-q').value='';
+  document.getElementById('lp-sim-cant').value='1';
+  _lpSimProActual=null;
+  lpSimRender();
+}
+function lpSimRender(){
+  const el=document.getElementById('lp-sim-items');
+  const totDiv=document.getElementById('lp-sim-totales');
+  if(!_lpSimItems.length){
+    el.innerHTML='<div class="empty" style="padding:12px 0">Agregá productos para simular</div>';
+    if(totDiv)totDiv.style.display='none';
+    return;
+  }
+  el.innerHTML=`<div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:6px">
+    <thead><tr style="background:var(--bg2)">
+      <th style="padding:7px 10px;text-align:left">Producto</th>
+      <th style="padding:7px 10px;text-align:right">Cant.</th>
+      <th style="padding:7px 10px;text-align:right">P. base</th>
+      <th style="padding:7px 10px;text-align:right">P. lista</th>
+      <th style="padding:7px 10px;text-align:right">Total base</th>
+      <th style="padding:7px 10px;text-align:right">Total lista</th>
+      <th style="padding:7px 10px"></th>
+    </tr></thead>
+    <tbody>${_lpSimItems.map((i,idx)=>{
+      const totBase=i.cant*i.precioBase;
+      const totLista=i.cant*i.precioLista;
+      const dif=totLista-totBase;
+      return `<tr style="border-bottom:0.5px solid var(--brd)">
+        <td style="padding:6px 10px;font-weight:500">${i.nom}</td>
+        <td style="padding:6px 10px;text-align:right">${i.cant}</td>
+        <td style="padding:6px 10px;text-align:right;color:var(--txt2)">${fmt(i.precioBase)}</td>
+        <td style="padding:6px 10px;text-align:right;color:var(--PD);font-weight:600">${fmt(i.precioLista)}</td>
+        <td style="padding:6px 10px;text-align:right;color:var(--txt2)">${fmt(totBase)}</td>
+        <td style="padding:6px 10px;text-align:right;font-weight:700">${fmt(totLista)}</td>
+        <td style="padding:6px 10px;text-align:right">
+          <span style="font-size:11px;color:${dif>=0?'var(--P)':'var(--D)'}">${dif>=0?'+':''}${fmt(dif)}</span>
+          <button onclick="_lpSimItems.splice(${idx},1);lpSimRender()" style="background:none;border:none;color:var(--D);cursor:pointer;font-size:14px;padding:0 4px">✕</button>
+        </td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table></div>`;
+  const totalBase=_lpSimItems.reduce((s,i)=>s+i.cant*i.precioBase,0);
+  const totalLista=_lpSimItems.reduce((s,i)=>s+i.cant*i.precioLista,0);
+  const dif=totalLista-totalBase;
+  if(totDiv){
+    totDiv.style.display='block';
+    document.getElementById('lp-sim-tot-val').textContent=fmt(totalLista);
+    document.getElementById('lp-sim-tot-base').textContent=fmt(totalBase);
+    const difEl=document.getElementById('lp-sim-tot-diff');
+    difEl.textContent=(dif>=0?'+':'')+fmt(dif);
+    difEl.style.color=dif>=0?'var(--P)':'var(--D)';
+  }
+}
 function initComisiones(){
   cargarComPersonas();renderComPersonas();
   const hoy=new Date().toISOString().split('T')[0];
@@ -9538,6 +9976,7 @@ function go(p){
     if(bd) bd.style.display=(usuarioActual?.esAdmin||usuarioActual?.rol==='admin')?'inline-flex':'none';
     setTimeout(()=>{const q=document.getElementById('ped-q');if(q)q.focus();},100);
   }
+  if(p==='listas-precios')initListasPrecios();
   if(p==='maestro-proveedores')renderProveedores();
   if(p==='comisiones')initComisiones();
   if(p==='contrib-zona')initContribZona();
@@ -9553,7 +9992,7 @@ function go(p){
   document.querySelectorAll(`[data-p="${p}"]`).forEach(b=>b.classList.add('on'));
   document.querySelectorAll('.sidebar-group').forEach(g=>g.classList.remove('active'));
   const grupoMap={
-    'clientes':'maestros','cuentas':'maestros','productos':'maestros','stock':'maestros','maestro-proveedores':'maestros',
+    'clientes':'maestros','cuentas':'maestros','productos':'maestros','stock':'maestros','maestro-proveedores':'maestros','listas-precios':'maestros',
     'pedidos':'ventas','pedido-movil':'ventas','carga':'ventas','remitos':'ventas','remito-rapido':'ventas','nc':'ventas',
     'cobranza':'tesoreria','tesoreria':'tesoreria','cheques':'tesoreria','contabilidad':'tesoreria',
     'informes':'informes','rendicion':'informes','comisiones':'informes','contrib-zona':'informes','gastos-fijos':'informes','importar-historico':'informes'
@@ -10088,18 +10527,19 @@ async function informeCMGProductos(){
 async function informeCMGClientes(){
   const desde = document.getElementById('cmgc-desde').value;
   const hasta = document.getElementById('cmgc-hasta').value;
+  const listaSimId = document.getElementById('cmgc-lista-sim')?.value||'';
+  const listaSim = listaSimId?_listasPrecios.find(l=>l.id==listaSimId):null;
   const el = document.getElementById('cmgc-res');
   el.innerHTML = '<div class="loading">Calculando...</div>';
 
   const {data:rems} = await sb.from('remitos').select('*').gte('fecha', desde).lte('fecha', hasta);
   if(!rems || !rems.length){ el.innerHTML = '<div class="empty">Sin datos en ese período</div>'; return; }
 
-  // Acumular por cliente
   const clis = {};
   rems.forEach(r => {
     const cid = r.cliente_id;
     const nom = r.cliente || 'Sin nombre';
-    if(!clis[cid]) clis[cid] = {nom, venta:0, costo:0, cmg:0, productos:{}, remitos:0};
+    if(!clis[cid]) clis[cid] = {nom, venta:0, costo:0, cmg:0, ventaSim:0, cmgSim:0, productos:{}, remitos:0};
     clis[cid].remitos++;
 
     (r.items||[]).forEach(it => {
@@ -10117,6 +10557,16 @@ async function informeCMGClientes(){
       clis[cid].costo += costoTotal;
       clis[cid].cmg += cmg;
 
+      if(listaSim && prod){
+        const precioSim = getPrecioLista(prod.id, listaSimId) || precio;
+        const ventaSim = precioSim * cant * (1 - dto/100);
+        clis[cid].ventaSim += ventaSim;
+        clis[cid].cmgSim += ventaSim - costoTotal;
+      } else {
+        clis[cid].ventaSim += venta;
+        clis[cid].cmgSim += cmg;
+      }
+
       if(!clis[cid].productos[nomProd]) clis[cid].productos[nomProd] = {venta:0, costo:0, cmg:0, cant:0};
       clis[cid].productos[nomProd].venta += venta;
       clis[cid].productos[nomProd].costo += costoTotal;
@@ -10127,29 +10577,41 @@ async function informeCMGClientes(){
 
   const arr = Object.entries(clis).map(([cid, d]) => ({
     cid, ...d,
-    pct: d.venta > 0 ? d.cmg/d.venta*100 : 0
+    pct: d.venta > 0 ? d.cmg/d.venta*100 : 0,
+    pctSim: d.ventaSim > 0 ? d.cmgSim/d.ventaSim*100 : 0
   })).sort((a,b) => b.cmg - a.cmg);
 
   const totalVenta = arr.reduce((a,x) => a+x.venta, 0);
   const totalCMG = arr.reduce((a,x) => a+x.cmg, 0);
+  const totalCMGSim = arr.reduce((a,x) => a+x.cmgSim, 0);
   const pctTotal = totalVenta > 0 ? totalCMG/totalVenta*100 : 0;
 
-  // Guardar datos para renderizar el detalle al hacer clic
   window._cmgcData = arr;
+
+  const simBadge = listaSim ? `<span style="background:var(--PL);color:var(--PD);font-size:11px;border-radius:4px;padding:1px 6px;margin-left:6px">sim: ${listaSim.nombre}</span>` : '';
 
   const rows = arr.map((x, idx) => {
     const color = x.pct >= 20 ? 'var(--P)' : x.pct >= 10 ? 'var(--W)' : 'var(--D)';
+    const colorSim = x.pctSim >= 20 ? 'var(--P)' : x.pctSim >= 10 ? 'var(--W)' : 'var(--D)';
+    const diffCMG = x.cmgSim - x.cmg;
+    const simCol = listaSim ? `
+      <div style="text-align:right;min-width:80px">
+        <div style="font-size:11px;color:var(--txt2)">CMG sim.</div>
+        <div style="font-weight:700;color:${colorSim}">${fmt(x.cmgSim)}</div>
+        <div style="font-size:10px;color:${diffCMG>=0?'var(--P)':'var(--D)'}">${diffCMG>=0?'+':''}${fmt(diffCMG)}</div>
+      </div>` : '';
     return `<div class="cmgc-card" style="border:1px solid var(--brd);border-radius:8px;margin-bottom:8px">
       <div onclick="toggleCMGCliente(${idx},this)" style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;cursor:pointer;background:var(--bg2);border-radius:8px;user-select:none">
         <div>
           <span style="font-weight:600;font-size:13px">${x.nom}</span>
           <span style="font-size:11px;color:var(--txt2);margin-left:8px">${x.remitos} remito(s)</span>
         </div>
-        <div style="display:flex;gap:16px;align-items:center;text-align:right">
+        <div style="display:flex;gap:12px;align-items:center;text-align:right;flex-wrap:wrap">
           <div><div style="font-size:11px;color:var(--txt2)">Venta</div><div style="font-weight:600">${fmt(x.venta)}</div></div>
           <div><div style="font-size:11px;color:var(--txt2)">Costo</div><div style="font-weight:600;color:var(--D)">${fmt(x.costo)}</div></div>
           <div><div style="font-size:11px;color:var(--txt2)">CMG</div><div style="font-weight:700;color:${color}">${fmt(x.cmg)}</div></div>
           <div><div style="font-size:11px;color:var(--txt2)">%CMG</div><div style="font-weight:700;color:${color}">${x.pct.toFixed(1)}%</div></div>
+          ${simCol}
           <span class="cmgc-arrow" style="color:var(--txt2);font-size:18px;line-height:1;transition:transform .2s">▸</span>
         </div>
       </div>
@@ -10157,12 +10619,15 @@ async function informeCMGClientes(){
     </div>`;
   }).join('');
 
+  const simTotal = listaSim ? `<div class="stat"><div class="n" style="color:var(--PD)">${fmt(totalCMGSim)}</div><div class="l">CMG simulado${simBadge}</div></div>` : '';
+
   el.innerHTML = `
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
       <div class="stat"><div class="n">${arr.length}</div><div class="l">Clientes activos</div></div>
       <div class="stat"><div class="n">${fmt(totalVenta)}</div><div class="l">Venta total</div></div>
       <div class="stat"><div class="n" style="color:var(--P)">${fmt(totalCMG)}</div><div class="l">CMG total</div></div>
       <div class="stat"><div class="n" style="color:var(--P)">${pctTotal.toFixed(1)}%</div><div class="l">% CMG promedio</div></div>
+      ${simTotal}
     </div>
     ${rows}`;
 }
