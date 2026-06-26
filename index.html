@@ -437,6 +437,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
 
     </div><!-- /vh-bloques -->
+    <div id="vh-comision-card" style="padding:0 16px 16px"></div>
 
   </div>
 </div>
@@ -636,7 +637,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div class="fg"><label>Nro. Comprobante</label><input id="comp-nro" style="width:100%" placeholder="Ej: 0001-00012345"
         onkeydown="if(event.key==='Tab'){event.preventDefault();document.getElementById('comp-tipo').focus();}"></div>
       <div class="fg"><label>Tipo</label>
-        <select id="comp-tipo" style="width:100%">
+        <select id="comp-tipo" style="width:100%"
+          onkeydown="if(event.key==='Tab'){event.preventDefault();document.getElementById('comp-desc').focus();}">
           <option value="factura">Factura</option>
           <option value="nota_credito">Nota de crédito (NC)</option>
           <option value="nota_debito">Nota de débito (ND)</option>
@@ -2568,7 +2570,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div class="fg">
       <label>Motivo</label>
-      <select id="nc-motivo" style="width:100%">
+      <select id="nc-motivo" style="width:100%" onchange="toggleNCItems()">
         <option value="devolucion">Devolución de mercadería</option>
         <option value="descuento">Descuento / Bonificación</option>
         <option value="anulacion">Anulación de factura</option>
@@ -2602,6 +2604,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
   <!-- MODO PRODUCTO: cargar items manualmente -->
   <div id="nc-sec-producto">
+    <div class="nc-grid-items">
     <div class="fg drop-wrap" style="margin-bottom:6px">
       <label>Producto &nbsp;<span style="font-size:10px;color:var(--txt2)">[código o nombre]</span></label>
       <div style="display:flex;gap:4px">
@@ -2635,6 +2638,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <span style="font-weight:600;color:var(--PD)">Total NC</span>
       <span id="nc-total-show" style="font-size:20px;font-weight:700;color:var(--PD)">$0</span>
     </div>
+    </div><!-- /nc-grid-items -->
   </div>
 
   <!-- Imputar contra factura (modo producto) -->
@@ -3500,7 +3504,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260625-15';
+const APP_VERSION = '20260626-01';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function _mostrarBannerUpdate(){
@@ -3556,13 +3560,23 @@ async function initVersionCheck(){
     // Forzar chequeo ahora (por si hubo deploy entre que el script de head registró y acá)
     reg.update().catch(()=>{});
 
-  }catch(e){
-    // Fallback: polling HTTP cada 5 min (para browsers muy viejos o error de SW)
-    let _tag=null;
-    const getTag=async()=>{try{const r=await fetch(location.pathname+'?_vc='+Date.now(),{method:'HEAD',cache:'no-store'});return r.headers.get('etag')||r.headers.get('last-modified');}catch{return null;}};
-    _tag=await getTag();
-    setInterval(async()=>{const t=await getTag();if(t&&_tag&&t!==_tag)_mostrarBannerUpdate();},5*60*1000);
-  }
+  }catch(e){}
+
+  // Verificación directa de versión — más confiable en iOS/Android
+  // Compara el APP_VERSION del HTML servido con el actual
+  const _chkVer=async()=>{
+    try{
+      const r=await fetch(location.origin+location.pathname+'?_v='+Date.now(),{cache:'no-store',headers:{'Accept':'text/html'}});
+      if(!r.ok)return;
+      const txt=await r.text();
+      const m=txt.match(/APP_VERSION\s*=\s*'([^']+)'/);
+      if(m&&m[1]&&m[1]!==APP_VERSION)_mostrarBannerUpdate();
+    }catch{}
+  };
+  // Chequear al volver de fondo (muy común en celulares)
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')_chkVer();});
+  // Chequear cada 20 minutos (sesiones largas)
+  setInterval(_chkVer, 20*60*1000);
 }
 
 // ─── LOGIN ───
@@ -6408,9 +6422,18 @@ async function cargarNCs(){const {data}=await sb.from('notas_credito').select('*
 function toggleNCItems(){
   const motivo=document.getElementById('nc-motivo').value;
   const esDevolucion=motivo==='devolucion';
-  document.getElementById('nc-items-section').style.display=esDevolucion?'block':'none';
-  document.getElementById('nc-importe-section').style.display=esDevolucion?'none':'block';
-  document.getElementById('nc-totbar').style.display=esDevolucion&&_ncItems.length?'flex':'none';
+  // Sección de items (campos producto + lista) — visible solo en devolución
+  const secProd=document.getElementById('nc-sec-producto');
+  if(secProd){
+    // Dentro de nc-sec-producto, el buscador y la grilla siempre visibles en devolución
+    // En modo descuento/error/anulación mostrar solo el campo importe
+    const gridItem=secProd.querySelector('.nc-grid-items');
+    if(gridItem)gridItem.style.display=esDevolucion?'':'none';
+  }
+  const impWrap=document.getElementById('nc-importe-wrap');
+  if(impWrap)impWrap.style.display=esDevolucion?'none':'block';
+  const tb=document.getElementById('nc-totbar');if(tb)tb.style.display=esDevolucion&&_ncItems.length?'flex':'none';
+  if(!esDevolucion){_ncItems=[];const li=document.getElementById('nc-items-lista');if(li)li.innerHTML='';}
 }
 function ncSetModo(modo){
   const isF=modo==='factura';
@@ -6442,6 +6465,7 @@ function abrirNC(){
   const fecha=document.getElementById('nc-fecha-m');if(fecha)fecha.value=new Date().toISOString().split('T')[0];
   const hist=document.getElementById('nc-historial-precio');if(hist)hist.style.display='none';
   ncSetModo('producto');
+  toggleNCItems();
   document.getElementById('m-nc').classList.add('on');
 }
 function dropCliNC(){
@@ -8314,6 +8338,50 @@ async function guardarCobMovil(){
 // ─── PEDIDO MÓVIL (estilo Moviler) ───
 let _pmCliId=null, _pmCarrito=[], _pmMarcaActual=null, _pmProdActual=null;
 
+function _renderComisionCard(){
+  const card=document.getElementById('vh-comision-card');
+  if(!card)return;
+  const ven=(usuarioActual?.nombre||'').toLowerCase();
+  const hoy=new Date().toISOString().split('T')[0];
+  const iniMes=hoy.substring(0,7)+'-01';
+  const misCobros=(_cobros||[]).filter(c=>{
+    return (c.vendedor||'').toLowerCase()===ven&&c.fecha>=iniMes&&c.fecha<=hoy;
+  });
+  const misRemitos=(_remitos||[]).filter(r=>{
+    return (r.vendedor||'').toLowerCase()===ven&&r.fecha>=iniMes&&r.fecha<=hoy;
+  });
+  const totalV=misRemitos.reduce((s,r)=>s+(r.total||0),0);
+  const totalC=misCobros.reduce((s,c)=>s+(c.importe||0),0);
+  cargarComPersonas();
+  const persona=_comPersonas.find(p=>(p.nombre||'').toLowerCase()===ven);
+  const pctV=persona?.pct_ventas??2;
+  const pctC=persona?.pct_cobranza??1;
+  const comision=totalV*(pctV/100)+totalC*(pctC/100);
+  const mesLabel=new Date(hoy+'T12:00').toLocaleDateString('es-AR',{month:'long'}).toUpperCase();
+  card.innerHTML=`
+    <div onclick="go('cobranza');setTimeout(()=>document.getElementById('cobmc-tab-mes')?.click(),300)"
+      style="background:linear-gradient(135deg,#7c3aed,#5b21b6);border-radius:20px;padding:16px 18px;box-shadow:0 3px 16px rgba(124,58,237,.25);cursor:pointer;-webkit-tap-highlight-color:transparent">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:1px">Comisión ${mesLabel}</div>
+        <div style="font-size:10px;color:rgba(255,255,255,.5)">${pctV}% v + ${pctC}% c →</div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <div style="flex:1;background:rgba(255,255,255,.1);border-radius:12px;padding:10px 12px;text-align:center">
+          <div style="font-size:10px;color:rgba(255,255,255,.6);margin-bottom:3px">Vendido</div>
+          <div style="font-size:16px;font-weight:700;color:#fff">${fmt(totalV)}</div>
+        </div>
+        <div style="flex:1;background:rgba(255,255,255,.1);border-radius:12px;padding:10px 12px;text-align:center">
+          <div style="font-size:10px;color:rgba(255,255,255,.6);margin-bottom:3px">Cobrado</div>
+          <div style="font-size:16px;font-weight:700;color:#fff">${fmt(totalC)}</div>
+        </div>
+        <div style="flex:1;background:rgba(255,255,255,.2);border-radius:12px;padding:10px 12px;text-align:center;border:1.5px solid rgba(255,255,255,.3)">
+          <div style="font-size:10px;color:rgba(255,255,255,.75);margin-bottom:3px">Comisión</div>
+          <div style="font-size:16px;font-weight:700;color:#fff">${fmt(comision)}</div>
+        </div>
+      </div>
+    </div>`;
+}
+
 function renderVendedorHome(){
   const bloques=document.getElementById('vh-bloques');
   if(!bloques)return;
@@ -8339,9 +8407,11 @@ function renderVendedorHome(){
           style="display:flex;align-items:center;gap:16px;width:100%;padding:20px 22px;background:var(--W);color:#fff;border:none;border-radius:14px;font-size:19px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;box-shadow:0 3px 10px rgba(234,88,12,.25)">
           <span style="font-size:28px;line-height:1">📋</span><span>Registrar devolución</span>
         </button>
-      </div>`;
+      </div>
+      <div id="vh-comision-card"></div>`;
   }
   // Para vendedores el HTML ya está en el DOM, no se modifica
+  _renderComisionCard();
 }
 
 function abrirPedidoMovil(){
@@ -9457,9 +9527,14 @@ function go(p){
   if(p==='remitos'){setTimeout(()=>{const q=document.getElementById('rem-q');if(q)q.focus();},100);}
   if(p==='maestro-proveedores'){setTimeout(()=>{const q=document.getElementById('prov-q');if(q)q.focus();},100);}
   if(p==='pedidos'){
+    // Para vendedores sin admin: usar la vista móvil unificada (hoy)
+    if((usuarioActual?.rol==='vendedor'||usuarioActual?.rol==='repartidor')&&!usuarioActual?.esAdmin&&usuarioActual?.rol_original!=='admin'){
+      verMisPedidosHoy();
+      return;
+    }
     const bv=document.getElementById('pedidos-btn-volver-movil');
     const bd=document.getElementById('btn-nuevo-pedido-desk');
-    if(bv) bv.style.display=(usuarioActual?.rol==='vendedor'&&!usuarioActual?.esAdmin)?'block':'none';
+    if(bv) bv.style.display='none';
     if(bd) bd.style.display=(usuarioActual?.esAdmin||usuarioActual?.rol==='admin')?'inline-flex':'none';
     setTimeout(()=>{const q=document.getElementById('ped-q');if(q)q.focus();},100);
   }
