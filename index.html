@@ -3615,7 +3615,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260626-02';
+const APP_VERSION = '20260626-03';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function _mostrarBannerUpdate(){
@@ -8145,6 +8145,7 @@ function cobmRenderMisCobranzas(){
   });
 
   const ven=(usuarioActual?.nombre||'').toLowerCase();
+  const venAlt=(usuarioActual?.vendedor||'').toLowerCase(); // campo vendedor como fallback
   const hoy=new Date().toISOString().split('T')[0];
   let desde,hasta=hoy;
   if(_cobmcPeriodo==='semana'){
@@ -8157,16 +8158,17 @@ function cobmRenderMisCobranzas(){
     desde=hoy.substring(0,7)+'-01';
   }
 
-  // Cobros propios en período
+  // Cobros propios en período — coincide nombre o campo vendedor
   let misCobros=(_cobros||[]).filter(c=>{
     const cv=(c.vendedor||'').toLowerCase();
-    return cv===ven&&c.fecha>=desde&&c.fecha<=hasta;
+    const matches=cv===ven||(venAlt&&cv===venAlt);
+    return matches&&c.fecha>=desde&&c.fecha<=hasta;
   });
 
   // Remitos propios en período (para total vendido)
   let misRemitos=(_remitos||[]).filter(r=>{
     const rv=(r.vendedor||'').toLowerCase();
-    return rv===ven&&r.fecha>=desde&&r.fecha<=hasta;
+    return (rv===ven||(venAlt&&rv===venAlt))&&r.fecha>=desde&&r.fecha<=hasta;
   });
 
   // Chips de zona a partir de los cobros del período
@@ -8871,7 +8873,7 @@ function mostrarConfirmacionMovil(tipo, cliente, detalle){
           style="width:100%;padding:14px;background:var(--P);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:600;cursor:pointer">
           ${esCobranza?'💰 Nuevo cobro':'📋 Nuevo pedido'}
         </button>
-        <button onclick="${esCobranza?'verCobranzaHoy()':'verMisPedidosHoy()'}" 
+        <button onclick="${esCobranza?'go(\'cobranza\');setTimeout(()=>cobmAbrirMisCobranzas(),50);setTimeout(()=>cobmSetPeriodo(\'dia\'),80)':'verMisPedidosHoy()'}"
           style="width:100%;padding:14px;background:var(--bg2);color:var(--PD);border:2px solid var(--P);border-radius:10px;font-size:15px;font-weight:600;cursor:pointer">
           ${esCobranza?'📊 Ver mis cobros de hoy':'📋 Ver mis pedidos de hoy'}
         </button>
@@ -8887,16 +8889,16 @@ function mostrarConfirmacionMovil(tipo, cliente, detalle){
 function verCobranzaHoy(){
   go('cobranza-hoy');
   const hoy = new Date().toISOString().split('T')[0];
-  const nombre = usuarioActual?.nombre||'';
-  
-  // Filtrar cobros del día del vendedor actual
-  // Filtrar cobros del día — si es vendedor puro filtrar por nombre, si es admin ver todos
-  const esVendedorPuro = usuarioActual?.rol==='vendedor' && !usuarioActual?.esAdmin;
+  const nombre = (usuarioActual?.nombre||'').toLowerCase();
+  const vendedor = (usuarioActual?.vendedor||'').toLowerCase();
+
+  // Admin y usuarios con esAdmin ven todos; vendedores/repartidores solo los suyos
+  const esAdmin = usuarioActual?.esAdmin || usuarioActual?.rol==='admin' || usuarioActual?.rol_original==='admin';
   const cobrosHoy = _cobros.filter(c => {
     if(c.fecha !== hoy) return false;
-    if(!esVendedorPuro) return true;
-    return (c.vendedor||'').toLowerCase() === nombre.toLowerCase() ||
-           (c.vendedor||'').toLowerCase() === (usuarioActual?.vendedor||'').toLowerCase();
+    if(esAdmin) return true;
+    const cv = (c.vendedor||'').toLowerCase();
+    return cv === nombre || (vendedor && cv === vendedor);
   });
 
   // Título
