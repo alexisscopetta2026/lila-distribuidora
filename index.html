@@ -10150,7 +10150,7 @@ function go(p){
   if(p==='contabilidad'){contTab(_pendingContTab||'gastos');_pendingContTab=null;}
   if(p==='nc')renderNCs();
   if(p==='hoja-ruta')hrInit();
-  if(p==='cuentas'){setTimeout(()=>{const q=document.getElementById('cc-q');if(q)q.focus();},100);}
+  if(p==='cuentas'){Promise.all([cargarRemitos(),cargarCobros(),cargarClientes()]).then(()=>renderCC());setTimeout(()=>{const q=document.getElementById('cc-q');if(q)q.focus();},100);}
   if(p==='clientes'){setTimeout(()=>{const q=document.getElementById('cli-q');if(q)q.focus();},100);}
   if(p==='productos'){setTimeout(()=>{const q=document.getElementById('pro-q');if(q)q.focus();},100);}
   if(p==='remitos'){setTimeout(()=>{const q=document.getElementById('rem-q');if(q)q.focus();},100);}
