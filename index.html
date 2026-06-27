@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -5258,25 +5258,21 @@ function selCliCob(id){
   const lista=document.getElementById('cob-remitos-pendientes');
   if(remsPend.length){
     if(seccion)seccion.style.display='block';
-    if(lista)lista.innerHTML=remsPend.map(r=>`
-      <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--brd)">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:14px;font-weight:700;color:var(--PD)">R-${String(r.id).padStart(4,'0')}</div>
-          <div style="font-size:11px;color:var(--txt2)">${r.fecha}</div>
-        </div>
-        <div style="text-align:right;min-width:90px">
-          <div style="font-size:11px;color:var(--txt2)">Saldo</div>
-          <div style="font-size:15px;font-weight:700;color:var(--D)">${fmt(r.saldo_pendiente||r.total)}</div>
-        </div>
-        <input type="number" id="imp-rem-${r.id}" value="0" min="0" max="${r.saldo_pendiente||r.total}" step="0.01"
-          style="width:120px;padding:8px 10px;border:2px solid var(--brd);border-radius:8px;text-align:right;font-size:16px;font-weight:700"
-          placeholder="0" oninput="limitarImputacion(this,${r.saldo_pendiente||r.total});calcTotalDesdeImputacion()"
-          ondblclick="imputarTotal(${r.id},${r.saldo_pendiente||r.total});this.select();"
-          title="Doble clic = imputar total"
-          onkeydown="if(event.key==='F'){event.preventDefault();imputarTotal(parseInt(this.id.replace('imp-rem-','')),parseFloat(this.max)||0);return;}if(event.key==='Tab'||event.key==='Enter'){event.preventDefault();const inputs=[...document.querySelectorAll('[id^=imp-rem-]')];const idx=inputs.indexOf(this);if(idx<inputs.length-1){inputs[idx+1].focus();inputs[idx+1].select();}else{document.getElementById('cob-obs2')?.focus();}}">
-        <button class="btn P" onclick="imputarTotal(${r.id},${r.saldo_pendiente||r.total})"
-          style="padding:8px 14px;font-size:13px;white-space:nowrap">✓ Todo</button>
-      </div>`).join('');
+     if(lista)lista.innerHTML=remsPend.map(r=>"
+       <div style="display:flex;align-items:center;gap:6px;padding:7px 0;border-bottom:1px solid var(--brd)">
+         <button onclick="verRemitoEnCobro(${r.id})" title="Ver detalle" style="background:none;border:none;font-size:13px;font-weight:700;color:var(--P);cursor:pointer;padding:0 4px;white-space:nowrap;text-decoration:underline">R-${String(r.id).padStart(4,'0')}</button>
+         <span style="font-size:11px;color:var(--txt2);min-width:72px">${r.fecha}</span>
+         <span style="font-size:14px;font-weight:700;color:var(--D);min-width:80px;text-align:right">${fmt(r.saldo_pendiente||r.total)}</span>
+         <input type="number" id="imp-rem-${r.id}" value="0" min="0" max="${r.saldo_pendiente||r.total}" step="0.01"
+           style="width:100px;padding:6px 8px;border:2px solid var(--brd);border-radius:8px;text-align:right;font-size:15px;font-weight:700"
+           placeholder="0" oninput="limitarImputacion(this,${r.saldo_pendiente||r.total});calcTotalDesdeImputacion()"
+           ondblclick="imputarTotal(${r.id},${r.saldo_pendiente||r.total});this.select();"
+           title="F = todo · → o Tab = botón Todo"
+           onkeydown="cobImpKeydown(event,${r.id},${r.saldo_pendiente||r.total})">
+         <button id="todo-rem-${r.id}" class="btn P" onclick="imputarTotal(${r.id},${r.saldo_pendiente||r.total})"
+           style="padding:6px 10px;font-size:12px;white-space:nowrap"
+           onkeydown="cobTodoKeydown(event,${r.id})">✓ Todo</button>
+       </div>`).join('');
   } else {
     if(seccion)seccion.style.display='none';
     if(lista)lista.innerHTML='<span style="font-size:12px;color:var(--txt2);font-style:italic">Sin facturas pendientes</span>';
@@ -5290,6 +5286,62 @@ function selCliCob(id){
     if(ti){ti.value=Math.round(c.saldo);calcTotalDesdeImputacion();}
   }
   // foco manejado por buscarCodCli o dropdown
+}
+function cobImpKeydown(e,remId,max){
+  if(e.key==='F'){e.preventDefault();imputarTotal(remId,max);return;}
+  if(e.key==='ArrowRight'||e.key==='Tab'){e.preventDefault();document.getElementById('todo-rem-'+remId)?.focus();return;}
+  if(e.key==='Enter'){
+    e.preventDefault();
+    const inputs=[...document.querySelectorAll('[id^=imp-rem-]')];
+    const inp=document.getElementById('imp-rem-'+remId);
+    const idx=inputs.indexOf(inp);
+    if(idx<inputs.length-1){inputs[idx+1].focus();inputs[idx+1].select();}else{document.getElementById('cob-obs2')?.focus();}
+  }
+}
+function cobTodoKeydown(e,remId){
+  if(e.key==='Enter'){imputarTotal(remId,parseFloat(document.getElementById('imp-rem-'+remId)?.max)||0);return;}
+  if(e.key==='ArrowLeft'){document.getElementById('imp-rem-'+remId)?.focus();return;}
+  if(e.key==='Tab'||e.key==='ArrowDown'||e.key==='ArrowRight'){
+    e.preventDefault();
+    const inputs=[...document.querySelectorAll('[id^=imp-rem-]')];
+    const inp=document.getElementById('imp-rem-'+remId);
+    const idx=inputs.indexOf(inp);
+    if(idx<inputs.length-1){inputs[idx+1].focus();inputs[idx+1].select();}else{document.getElementById('cob-obs2')?.focus();}
+  }
+}
+function verRemitoEnCobro(id){
+  const r=_remitos.find(x=>x.id===id);if(!r)return;
+  const num='R-'+String(r.id).padStart(4,'0');
+  const rows=(r.items||[]).map(it=>{
+    const q=it.esPeso?(it.peso||it.cant||0):it.cant;
+    const sub=it.precio*q*(1-(it.dto||0)/100);
+    return `<tr><td style="padding:6px 10px;border-bottom:1px solid var(--brd)">${it.nom}</td><td style="padding:6px 10px;border-bottom:1px solid var(--brd);text-align:center">${q}</td><td style="padding:6px 10px;border-bottom:1px solid var(--brd);text-align:center;color:var(--txt2)">${it.un||''}</td><td style="padding:6px 10px;border-bottom:1px solid var(--brd);text-align:right">${fmt(sub)}</td></tr>`;
+  }).join('');
+  const ov=document.createElement('div');
+  ov.id='cob-rem-popup';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9990;display:flex;align-items:center;justify-content:center';
+  ov.innerHTML=`<div style="background:var(--bg);border-radius:12px;padding:20px;max-width:520px;width:92%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.25)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span style="font-size:16px;font-weight:700;color:var(--P)">${num}</span>
+      <button onclick="document.getElementById('cob-rem-popup').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--txt2);line-height:1">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--txt2);margin-bottom:12px">${r.cliente} · ${r.fecha}</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:var(--bg2)">
+        <th style="padding:6px 10px;text-align:left;font-weight:600">Producto</th>
+        <th style="padding:6px 10px;text-align:center;font-weight:600">Cant.</th>
+        <th style="padding:6px 10px;text-align:center;font-weight:600">Un.</th>
+        <th style="padding:6px 10px;text-align:right;font-weight:600">Subtotal</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div style="text-align:right;font-size:16px;font-weight:700;color:var(--PD);margin-top:12px;border-top:2px solid var(--brd);padding-top:10px">Total: ${fmt(r.total)}</div>
+    <div style="text-align:center;margin-top:14px">
+      <button onclick="document.getElementById('cob-rem-popup').remove()" class="btn" style="padding:8px 28px">Cerrar</button>
+    </div>
+  </div>`;
+  ov.onclick=e=>{if(e.target===ov)ov.remove();};
+  document.body.appendChild(ov);
 }
 function limitarImputacion(input, maxRemito){
   const val = parseFloat(input.value)||0;
@@ -5899,7 +5951,7 @@ async function guardarProducto(){
 }
 
 // ─── REMITO RÁPIDO ───
-let _rrItems=[], _rrProTemp=null;
+let _rrItems=[], _rrProTemp=null, _rrPedidoId=null;
 function initRR(){
   document.getElementById('rr-fecha').value=new Date().toISOString().split('T')[0];
   _rrItems=[];_rrProTemp=null;
@@ -6171,6 +6223,7 @@ function selCliRR(id){
 
 function cargarItemsDePedido(pedId){
   const ped=_pedidos.find(x=>x.id===pedId);if(!ped)return;
+  _rrPedidoId=pedId;
   const cid=document.getElementById('rr-cli-id').value;
   const c=_clientes.find(x=>x.id==cid);
   
@@ -6403,9 +6456,10 @@ function renderItemsRR(){
 function updItemRR(i,k,v){_rrItems[i][k]=parseFloat(v)||0;renderItemsRR();}
 function delItemRR(i){_rrItems.splice(i,1);renderItemsRR();}
 function limpiarRR(){
-  _rrItems=[];_rrProTemp=null;
+  _rrItems=[];_rrProTemp=null;_rrPedidoId=null;
   document.getElementById('rr-cli-q').value='';
   document.getElementById('rr-cli-id').value='';
+  const cc=document.getElementById('rr-cli-cod');if(cc){cc.value='';cc.style.borderColor='';}
   document.getElementById('rr-cli-info').style.display='none';
   document.getElementById('rr-obs').value='';
   const pedPanel=document.getElementById('rr-pedido-panel');
@@ -6470,7 +6524,8 @@ async function emitirRemitoRapido(){
     await sb.from('asientos_detalle').insert(detalle);
   }
   await descontarStock(_rrItems);
-  await Promise.all([cargarRemitos(),cargarClientes(),cargarProductos()]);
+  if(_rrPedidoId){await sb.from('pedidos').update({estado:'remitado',remito_id:rem.id}).eq('id',_rrPedidoId);}
+  await Promise.all([cargarRemitos(),cargarClientes(),cargarProductos(),cargarPedidos()]);
   limpiarRR();
   setTimeout(()=>{const el=document.getElementById('rr-cli-cod');if(el){el.focus();el.select();}},80);
   renderDash();renderCC();renderRemitos();
