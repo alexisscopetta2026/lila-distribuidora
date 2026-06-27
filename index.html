@@ -3786,12 +3786,22 @@ function doLogin(){
       const dashBtn=document.querySelector('.sidebar-dash[data-p="dash"]');
       if(dashBtn){dashBtn.classList.add('on');}
       go('dash');
-      // Foco automático en sidebar: primero en Dashboard, luego en el primer grupo
+      // Foco automático en primer botón visible del sidebar
       setTimeout(()=>{
-        const firstGroup=document.querySelector('#sidebar .sidebar-group-btn');
-        const focusTarget=firstGroup||dashBtn;
-        if(focusTarget){focusTarget.setAttribute('tabindex','0');focusTarget.focus();}
-      },500);
+        const firstBtn=document.querySelector('#sidebar .sidebar-dash:not([style*="display:none"])');
+        if(firstBtn)firstBtn.focus();
+      },400);
+      // Navegación con flechas entre ítems del sidebar
+      document.getElementById('sidebar').addEventListener('keydown',function(e){
+        if(e.key!=='ArrowDown'&&e.key!=='ArrowUp')return;
+        e.preventDefault();
+        const btns=[...this.querySelectorAll('.sidebar-dash,.sidebar-group-btn,.sidebar-item')]
+          .filter(b=>b.offsetParent!==null);
+        const idx=btns.indexOf(document.activeElement);
+        if(idx===-1)return;
+        const next=e.key==='ArrowDown'?btns[idx+1]:btns[idx-1];
+        if(next)next.focus();
+      });
     });
   }
 }
@@ -6444,6 +6454,7 @@ async function emitirRemitoRapido(){
   await descontarStock(_rrItems);
   await Promise.all([cargarRemitos(),cargarClientes(),cargarProductos()]);
   limpiarRR();
+  setTimeout(()=>{const el=document.getElementById('rr-cli-cod');if(el){el.focus();el.select();}},80);
   renderDash();renderCC();renderRemitos();
   // Guardar remito actual por si quiere imprimir después
   _remActual=rem;_verTipo='remito';
