@@ -238,7 +238,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="right">
     <span id="top-fecha"></span>
     <span id="top-usuario"></span>
-    <button onclick="logout()">Salir</button>
+    <button onclick="logout()" tabindex="-1">Salir</button>
   </div>
 </div>
 <div class="nav" id="main-nav" style="display:none"></div>
@@ -1542,7 +1542,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
             <div class="fg" style="width:110px;flex-shrink:0">
               <label style="font-size:11px">Código &nbsp;<span style="font-size:10px;color:var(--txt2)">[F2]</span></label>
               <div style="display:flex;gap:3px">
-                <input id="rr-cli-cod" placeholder="40" onkeydown="if(event.key==='F2'){event.preventDefault();abrirBuscadorCli('rr');}else if(event.key==='Enter'||(event.key==='Tab'&&this.value.trim())){event.preventDefault();buscarPorCodCli();}" autocomplete="off" style="font-size:15px;font-weight:600;width:70px;text-align:center">
+                <input id="rr-cli-cod" placeholder="40" tabindex="1" onkeydown="if(event.key==='F2'){event.preventDefault();abrirBuscadorCli('rr');}else if(event.key==='Enter'||(event.key==='Tab'&&this.value.trim())){event.preventDefault();buscarPorCodCli();}" autocomplete="off" style="font-size:15px;font-weight:600;width:70px;text-align:center">
                 <button class="btn sm" onclick="abrirBuscadorCli('rr')" title="Buscar (F2)" style="padding:4px 6px;font-size:12px">🔍</button>
               </div>
             </div>
@@ -1567,20 +1567,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
             <div class="fg" style="width:110px">
               <label>Código &nbsp;<span style="font-size:10px;color:var(--txt2)">[F2]</span></label>
               <div style="display:flex;gap:3px">
-                <input id="rr-cod" placeholder="Ej: 102" onkeydown="if(event.key==='F2'){event.preventDefault();abrirBuscadorPro('rr');}else if(event.key==='Enter'||(event.key==='Tab'&&this.value.trim())){event.preventDefault();buscarPorCodigoRR();}" autocomplete="off" style="flex:1;min-width:0">
+                <input id="rr-cod" placeholder="Ej: 102" tabindex="2" onkeydown="if(event.key==='F2'){event.preventDefault();abrirBuscadorPro('rr');}else if(event.key==='Enter'||(event.key==='Tab'&&this.value.trim())){event.preventDefault();buscarPorCodigoRR();}" autocomplete="off" style="flex:1;min-width:0">
                 <button class="btn sm" onclick="abrirBuscadorPro('rr')" title="Buscar por nombre (F2)" style="padding:4px 6px;font-size:12px">🔍</button>
               </div>
             </div>
             <div class="fg drop-wrap" style="flex:2;min-width:150px">
               <label>Producto</label>
-              <input id="rr-pro-q" placeholder="Buscar..." oninput="dropProRR()" autocomplete="off" onkeydown="navDropProRR(event)">
+              <input id="rr-pro-q" placeholder="Buscar..." tabindex="3" oninput="dropProRR()" autocomplete="off" onkeydown="navDropProRR(event)">
               <div class="drop" id="rr-pro-drop"></div>
             </div>
-            <div class="fg" style="width:75px"><label>Cantidad</label><input id="rr-cant" type="number" value="1" min="0.01" step="0.01"></div>
-            <div class="fg" style="width:80px"><label>Peso kg</label><input id="rr-peso" type="number" value="0" min="0" step="0.01" placeholder="0" title="Solo para productos por kg"></div>
-            <div class="fg" style="width:95px"><label>Precio ($)</label><input id="rr-precio" type="number" value="0"></div>
-            <div class="fg" style="width:65px"><label>Dto%</label><input id="rr-dto" type="number" value="0"></div>
-            <button class="btn P" onclick="agregarItemRR()" style="align-self:flex-end">+ Agregar</button>
+            <div class="fg" style="width:75px"><label>Cantidad</label><input id="rr-cant" type="number" value="1" min="0.01" step="0.01" tabindex="4"></div>
+            <div class="fg" style="width:80px"><label>Peso kg</label><input id="rr-peso" type="number" value="0" min="0" step="0.01" placeholder="0" title="Solo para productos por kg" tabindex="5"></div>
+            <div class="fg" style="width:95px"><label>Precio ($)</label><input id="rr-precio" type="number" value="0" tabindex="6"></div>
+            <div class="fg" style="width:65px"><label>Dto%</label><input id="rr-dto" type="number" value="0" tabindex="7"></div>
+            <button class="btn P" onclick="agregarItemRR()" style="align-self:flex-end" tabindex="8">+ Agregar</button>
           </div>
         </div>
 
@@ -1609,7 +1609,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn" onclick="limpiarRR()">Limpiar</button>
-      <button class="btn P" onclick="emitirRemitoRapido()" style="min-width:140px">🧾 Emitir remito</button>
+      <button class="btn P" onclick="emitirRemitoRapido()" style="min-width:140px" tabindex="9">🧾 Emitir remito</button>
     </div>
   </div>
 </div>
@@ -6109,13 +6109,29 @@ function buscarCodPro(pfx){
   }
 }
 function buscarPorCodCli(){buscarCodCli('rr');}
+function ajustarDrop(inputEl,dropEl){
+  const rect=inputEl.getBoundingClientRect();
+  const spaceBelow=window.innerHeight-rect.bottom;
+  if(spaceBelow<230&&rect.top>spaceBelow){
+    dropEl.style.top='auto';dropEl.style.bottom='100%';
+  } else {
+    dropEl.style.top='100%';dropEl.style.bottom='auto';
+  }
+}
 function dropCliRR(){
-  const q=(document.getElementById('rr-cli-q').value||'').toLowerCase();
+  const inp=document.getElementById('rr-cli-q');
+  const q=(inp.value||'').toLowerCase();
   const drop=document.getElementById('rr-cli-drop');
   if(q.length<1){drop.style.display='none';return;}
-  const m=_clientes.filter(c=>(c.nombre||'').toLowerCase().includes(q)||(c.telefono||'').includes(q)).slice(0,8);
+  const esAdmin=!!(usuarioActual?.esAdmin||usuarioActual?.rol_original==='admin');
+  const ven=(esAdmin?'':(usuarioActual?.vendedor||usuarioActual?.nombre||'')).toLowerCase();
+  const m=_clientes.filter(c=>{
+    const matchQ=(c.nombre||'').toLowerCase().includes(q)||(c.telefono||'').includes(q);
+    if(!ven)return matchQ;
+    return matchQ&&(c.vendedor||'').toLowerCase().includes(ven);
+  }).slice(0,8);
   drop.innerHTML=m.map(c=>`<div onmousedown="selCliRR(${c.id})"><strong>${c.nombre}</strong> <span style="color:var(--txt2);font-size:11px">${c.localidad} · Z${c.zona}</span></div>`).join('');
-  drop.style.display=m.length?'block':'none';
+  if(m.length){ajustarDrop(inp,drop);drop.style.display='block';}else{drop.style.display='none';}
 }
 function selCliRR(id){
   const c=_clientes.find(x=>x.id===id);if(!c)return;
@@ -6149,6 +6165,8 @@ function selCliRR(id){
   info.innerHTML=`<div style="font-weight:600;font-size:13px;margin-bottom:3px">${c.nombre}</div>
     <div style="font-size:12px;color:var(--txt2)">${c.direccion?'📍 '+c.direccion+', ':''} ${c.localidad||''} · Z${c.zona||'-'} | 📞 ${c.telefono||'—'} | Lista: <b>${c.lista||1}</b> | Dto: <b>${c.descuento||0}%</b> | Saldo CC: <b style="${(c.saldo||0)>0?'color:var(--D)':''}">${fmt(c.saldo)}</b>${dias!==null?` | Último rem: <b>${dias} días</b>`:''}</div>`;
   info.style.display='block';
+  // Foco automático al campo código de producto
+  setTimeout(()=>{const f=document.getElementById('rr-cod');if(f){f.focus();f.select();}},120);
 }
 
 function cargarItemsDePedido(pedId){
