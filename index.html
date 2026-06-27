@@ -5662,10 +5662,11 @@ function cobroRapido(id){
   go('cobranza');
 }
 function histCliente(id){
-  const c=_clientes.find(x=>x.id===id);if(!c)return;
-  const rems=_remitos.filter(r=>r.cliente_id===id).sort((a,b)=>a.fecha.localeCompare(b.fecha));
-  const cobs=_cobros.filter(r=>r.cliente_id===id).sort((a,b)=>a.fecha.localeCompare(b.fecha));
-  const ncs=_ncs?_ncs.filter(r=>r.cliente_id===id).sort((a,b)=>a.fecha.localeCompare(b.fecha)):[];
+  const sid=String(id);
+  const c=_clientes.find(x=>String(x.id)===sid)||_clientes.find(x=>x.id==id);if(!c)return;
+  const rems=_remitos.filter(r=>String(r.cliente_id)===sid&&!r.anulado).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const cobs=_cobros.filter(r=>String(r.cliente_id)===sid).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const ncs=_ncs?_ncs.filter(r=>String(r.cliente_id)===sid).sort((a,b)=>a.fecha.localeCompare(b.fecha)):[];
   const dias=diasDesde(c.ultimo_remito);
 
   // Armar movimientos unificados con saldo acumulado
