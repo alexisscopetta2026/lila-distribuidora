@@ -5258,7 +5258,7 @@ function selCliCob(id){
   const lista=document.getElementById('cob-remitos-pendientes');
   if(remsPend.length){
     if(seccion)seccion.style.display='block';
-     if(lista)lista.innerHTML=remsPend.map(r=>"
+     if(lista)lista.innerHTML=remsPend.map(r=>`
        <div style="display:flex;align-items:center;gap:6px;padding:7px 0;border-bottom:1px solid var(--brd)">
          <button onclick="verRemitoEnCobro(${r.id})" title="Ver detalle" style="background:none;border:none;font-size:13px;font-weight:700;color:var(--P);cursor:pointer;padding:0 4px;white-space:nowrap;text-decoration:underline">R-${String(r.id).padStart(4,'0')}</button>
          <span style="font-size:11px;color:var(--txt2);min-width:72px">${r.fecha}</span>
