@@ -3646,7 +3646,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260628-03';
+const APP_VERSION = '20260628-04';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function actualizarApp(){
@@ -5654,6 +5654,12 @@ function cobroRapido(id){
   setTimeout(()=>selCliCob(id),50);
   go('cobranza');
 }
+function colorDias(dias,condPago){
+  const cp=condPago||0;
+  if(dias<=cp)return 'color:var(--P)';
+  if(dias>cp+5)return 'color:var(--D);font-weight:600';
+  return 'color:var(--W)';
+}
 function histCliente(id){
   const sid=String(id);
   const c=_clientes.find(x=>String(x.id)===sid)||_clientes.find(x=>x.id==id);
@@ -5703,7 +5709,7 @@ function histCliente(id){
       <span>Zona: <b>${c.zona||'—'}</b></span>
       <span>Cond. pago: <b>${c.condicion_pago?c.condicion_pago+' días':'Contado'}</b></span>
       <span>Dto: <b>${c.descuento||0}%</b></span>
-      ${dias!==null?`<span>Días deuda: <b class="${colorDias(dias,c.condicion_pago)}">${dias}d</b></span>`:''}
+      ${dias!==null?`<span>Días deuda: <b style="${colorDias(dias,c.condicion_pago)}">${dias}d</b></span>`:''}
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;background:${(c.saldo||0)>0?'var(--DL)':'var(--PL)'};border-radius:8px;padding:10px 14px;margin-bottom:12px">
       <span style="font-weight:600;font-size:13px">Saldo actual</span>
