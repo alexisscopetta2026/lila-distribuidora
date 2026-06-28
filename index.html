@@ -3646,7 +3646,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260628-04';
+const APP_VERSION = '20260628-05';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function actualizarApp(){
@@ -5665,7 +5665,7 @@ function histCliente(id){
   const c=_clientes.find(x=>String(x.id)===sid)||_clientes.find(x=>x.id==id);
   if(!c){console.warn('[CC-DEBUG] histCliente id='+id+' NO en _clientes. length='+_clientes.length+' primeros IDs=',_clientes.slice(0,8).map(x=>x.id));return;}
   const rems=_remitos.filter(r=>String(r.cliente_id)===sid&&!r.anulado).sort((a,b)=>a.fecha.localeCompare(b.fecha));
-  const cobs=_cobros.filter(r=>String(r.cliente_id)===sid).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const cobs=_cobros.filter(r=>String(r.cliente_id)===sid||(r.cliente&&c.nombre&&r.cliente.trim().toLowerCase()===c.nombre.trim().toLowerCase())).sort((a,b)=>a.fecha.localeCompare(b.fecha));
   const ncs=_ncs?_ncs.filter(r=>String(r.cliente_id)===sid).sort((a,b)=>a.fecha.localeCompare(b.fecha)):[];
   const dias=diasDesde(c.ultimo_remito);
 
