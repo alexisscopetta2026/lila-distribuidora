@@ -5632,7 +5632,11 @@ function renderCC(){
     const venc=c.saldo>0&&dias!==null&&dias>(c.condicion_pago||0)+5;
     const okF=f===''||(f==='deuda'&&c.saldo>0)||(f==='ok'&&c.saldo<=0)||(f==='vencido'&&venc);
     return okQ&&okF;
-  }).sort((a,b)=>b.saldo-a.saldo);
+  }).sort((a,b)=>{
+    const sa=a.saldo||0,sb=b.saldo||0;
+    if(sb!==sa)return sb-sa;
+    return (b.ultimo_remito||'').localeCompare(a.ultimo_remito||'');
+  });
   const tot=data.length,sl=data.slice((_ccPg-1)*PP,_ccPg*PP);
   const tbody=document.getElementById('cc-tbody');
   tbody.innerHTML=sl.length?sl.map(c=>{
