@@ -3646,7 +3646,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260628-06';
+const APP_VERSION = '20260628-07';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function actualizarApp(){
@@ -8857,12 +8857,12 @@ async function verSaldoMovil(){
 
   const [{data:remitos},{data:cobros}]=await Promise.all([
     sb.from('remitos').select('fecha,total,numero,saldo_pendiente,cobrado').eq('cliente_id',c.id).gte('fecha',desdeStr).order('fecha',{ascending:false}).limit(40),
-    sb.from('cobros').select('fecha,total,medio').eq('cliente_id',c.id).gte('fecha',desdeStr).order('fecha',{ascending:false}).limit(40),
+    sb.from('cobros').select('fecha,importe,forma').eq('cliente_id',c.id).gte('fecha',desdeStr).order('fecha',{ascending:false}).limit(40),
   ]);
 
   const movs=[
     ...(remitos||[]).map(r=>({fecha:r.fecha,tipo:'remito',desc:'Remito #'+(r.numero||r.id),importe:r.total,cobrado:r.cobrado})),
-    ...(cobros||[]).map(co=>({fecha:co.fecha,tipo:'cobro',desc:'Cobro '+co.medio,importe:co.total})),
+    ...(cobros||[]).map(co=>({fecha:co.fecha,tipo:'cobro',desc:'Cobro '+co.forma,importe:co.importe})),
   ].sort((a,b)=>b.fecha.localeCompare(a.fecha));
 
   const lista=document.getElementById('cc-movil-lista');
