@@ -3649,76 +3649,65 @@ const PP=200;
 const APP_VERSION = '20260628-01';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
-function _mostrarBannerUpdate(){
-  if(document.getElementById('update-banner')) return;
-  const d = document.createElement('div');
-  d.id = 'update-banner';
-  d.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9990;background:#1a3c5e;color:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 -3px 20px rgba(0,0,0,0.32);font-family:inherit';
-  d.innerHTML = `<div><div style="font-size:15px;font-weight:600">🔄 Nueva versión disponible</div><div style="font-size:11px;opacity:.75;margin-top:2px">Toca Actualizar para cargar los últimos cambios</div></div><button onclick="actualizarApp()" style="background:#fff;color:#1a3c5e;border:none;border-radius:8px;padding:11px 22px;font-size:15px;font-weight:700;cursor:pointer;flex-shrink:0">Actualizar</button>`;
-  document.body.appendChild(d);
-}
-
 function actualizarApp(){
-  const b = document.getElementById('update-banner');
-  if(b) b.innerHTML = '<div style="font-size:14px;opacity:.85">⏳ Actualizando...</div>';
-  // Si hay SW esperando, decirle que active ya
   if('serviceWorker' in navigator){
     navigator.serviceWorker.getRegistration().then(reg=>{
-      if(reg?.waiting) reg.waiting.postMessage({type:'SW_SKIP_WAITING'});
+      if(reg?.waiting)reg.waiting.postMessage({type:'SW_SKIP_WAITING'});
     });
   }
-  setTimeout(()=>location.reload(), 300);
+  location.reload();
 }
 
 async function initVersionCheck(){
-  // Mostrar banner si quedó pendiente de antes de que esta función existiera
-  if(window._pendingSwUpdate){ _mostrarBannerUpdate(); window._pendingSwUpdate=false; }
+  let _updateReady=false;
+  let _bgDesde=0;
 
-  if(!('serviceWorker' in navigator)) return;
-
-  try{
-    // SW ya fue registrado en <head> — solo obtener el registro existente
-    const reg = await navigator.serviceWorker.getRegistration('/lila-distribuidora/');
-    if(!reg) return;
-
-    // SW esperando (descargado pero no activado — puede pasar si varias pestañas abiertas)
-    if(reg.waiting) _mostrarBannerUpdate();
-
-    // Nuevo SW encontrado durante esta sesión → banner cuando termine de instalarse
-    reg.addEventListener('updatefound', ()=>{
-      const sw = reg.installing; if(!sw) return;
-      sw.addEventListener('statechange', ()=>{
-        if(sw.state==='installed' && navigator.serviceWorker.controller)
-          _mostrarBannerUpdate();
-      });
-    });
-
-    // Cuando el usuario vuelve al celular después de tenerlo en segundo plano:
-    // forzar chequeo de sw.js para detectar deploys que ocurrieron mientras tanto
-    document.addEventListener('visibilitychange', ()=>{
-      if(document.visibilityState==='visible') reg.update().catch(()=>{});
-    });
-
-    // Forzar chequeo ahora (por si hubo deploy entre que el script de head registró y acá)
-    reg.update().catch(()=>{});
-
-  }catch(e){}
-
-  // Verificación directa de versión — más confiable en iOS/Android
-  // Compara el APP_VERSION del HTML servido con el actual
-  const _chkVer=async()=>{
+  // Recarga silenciosa: si hay diferencia de versión, recargar directamente
+  const _autoReload=async()=>{
     try{
       const r=await fetch(location.origin+location.pathname+'?_v='+Date.now(),{cache:'no-store',headers:{'Accept':'text/html'}});
       if(!r.ok)return;
       const txt=await r.text();
       const m=txt.match(/APP_VERSION\s*=\s*'([^']+)'/);
-      if(m&&m[1]&&m[1]!==APP_VERSION)_mostrarBannerUpdate();
+      if(m&&m[1]&&m[1]!==APP_VERSION)location.reload();
     }catch{}
   };
-  // Chequear al volver de fondo (muy común en celulares)
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')_chkVer();});
-  // Chequear cada 20 minutos (sesiones largas)
-  setInterval(_chkVer, 20*60*1000);
+
+  // El SW avisa cuando activó una versión nueva
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.addEventListener('message',e=>{
+      if(e.data?.type==='SW_ACTUALIZADO'){
+        _updateReady=true;
+        // Si la app está en fondo (celular bloqueado), recargar ya
+        if(document.hidden)location.reload();
+      }
+    });
+  }
+
+  // Gestión de fondo/frente
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='hidden'){
+      _bgDesde=Date.now();
+      // Recargar en fondo si hay update pendiente
+      if(_updateReady)setTimeout(()=>location.reload(),400);
+    } else {
+      // Volviendo al frente: si había update listo → recargar antes de que el usuario haga nada
+      if(_updateReady){location.reload();return;}
+      // Si estuvo más de 1 minuto en fondo → verificar versión en servidor
+      if(_bgDesde&&Date.now()-_bgDesde>60000)_autoReload();
+    }
+  });
+
+  // Verificar al iniciar y cada 15 minutos
+  _autoReload();
+  setInterval(_autoReload,15*60*1000);
+
+  // Forzar update del SW por las dudas
+  if(!('serviceWorker' in navigator))return;
+  try{
+    const reg=await navigator.serviceWorker.getRegistration('/lila-distribuidora/');
+    if(reg)reg.update().catch(()=>{});
+  }catch(e){}
 }
 
 // ─── LOGIN ───
