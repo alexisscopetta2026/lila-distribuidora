@@ -3646,7 +3646,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260628-02';
+const APP_VERSION = '20260628-03';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function actualizarApp(){
@@ -5656,7 +5656,8 @@ function cobroRapido(id){
 }
 function histCliente(id){
   const sid=String(id);
-  const c=_clientes.find(x=>String(x.id)===sid)||_clientes.find(x=>x.id==id);if(!c)return;
+  const c=_clientes.find(x=>String(x.id)===sid)||_clientes.find(x=>x.id==id);
+  if(!c){console.warn('[CC-DEBUG] histCliente id='+id+' NO en _clientes. length='+_clientes.length+' primeros IDs=',_clientes.slice(0,8).map(x=>x.id));return;}
   const rems=_remitos.filter(r=>String(r.cliente_id)===sid&&!r.anulado).sort((a,b)=>a.fecha.localeCompare(b.fecha));
   const cobs=_cobros.filter(r=>String(r.cliente_id)===sid).sort((a,b)=>a.fecha.localeCompare(b.fecha));
   const ncs=_ncs?_ncs.filter(r=>String(r.cliente_id)===sid).sort((a,b)=>a.fecha.localeCompare(b.fecha)):[];
@@ -6559,6 +6560,11 @@ async function emitirRemitoRapido(){
   await descontarStock(_rrItems);
   if(_rrPedidoId){await sb.from('pedidos').update({estado:'remitado',remito_id:rem.id}).eq('id',_rrPedidoId);}
   await Promise.all([cargarRemitos(),cargarClientes(),cargarProductos(),cargarPedidos()]);
+  // DEBUG: verificar si el cliente sigue en _clientes después del remito
+  {const _dbgC=_clientes.find(x=>x.id==cid||String(x.id)===String(cid));
+  console.log('[CC-DEBUG] Post-remito → _clientes.length='+_clientes.length+' | cliente id='+cid+':'+ (_dbgC?'OK saldo='+_dbgC.saldo:'NO ENCONTRADO'));
+  const _dbgQ=document.getElementById('cc-q')?.value||'';const _dbgF=document.getElementById('cc-f')?.value||'';
+  console.log('[CC-DEBUG] Filtros activos → cc-q="'+_dbgQ+'" cc-f="'+_dbgF+'" _ccPg='+_ccPg);}
   limpiarRR();
   setTimeout(()=>{const el=document.getElementById('rr-cli-cod');if(el){el.focus();el.select();}},80);
   renderDash();renderCC();renderRemitos();
@@ -10143,7 +10149,7 @@ function go(p){
   if(p==='contabilidad'){contTab(_pendingContTab||'gastos');_pendingContTab=null;}
   if(p==='nc')renderNCs();
   if(p==='hoja-ruta')hrInit();
-  if(p==='cuentas'){const _ccf=document.getElementById('cc-f');if(_ccf)_ccf.value='';_ccPg=1;Promise.all([cargarRemitos(),cargarCobros(),cargarClientes()]).then(()=>renderCC());setTimeout(()=>{const q=document.getElementById('cc-q');if(q)q.focus();},100);}
+  if(p==='cuentas'){const _ccf=document.getElementById('cc-f');if(_ccf)_ccf.value='';const _ccq=document.getElementById('cc-q');if(_ccq)_ccq.value='';_ccPg=1;Promise.all([cargarRemitos(),cargarCobros(),cargarClientes()]).then(()=>{console.log('[CC-DEBUG] go(cuentas) post-load → _clientes.length='+_clientes.length);renderCC();});setTimeout(()=>{const q=document.getElementById('cc-q');if(q)q.focus();},100);}
   if(p==='clientes'){setTimeout(()=>{const q=document.getElementById('cli-q');if(q)q.focus();},100);}
   if(p==='productos'){setTimeout(()=>{const q=document.getElementById('pro-q');if(q)q.focus();},100);}
   if(p==='remitos'){setTimeout(()=>{const q=document.getElementById('rem-q');if(q)q.focus();},100);}
