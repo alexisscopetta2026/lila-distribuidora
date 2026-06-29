@@ -3646,7 +3646,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260628-07';
+const APP_VERSION = '20260628-08';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function actualizarApp(){
@@ -3844,7 +3844,7 @@ async function cargarPedidos(){
   _pedidos=usuarioActual.vendedor?(data||[]).filter(p=>{const v=p.vendedor||'';return v===''||v.toLowerCase().includes(usuarioActual.vendedor.toLowerCase());}):data||[];
 }
 async function cargarRemitos(){const {data}=await sb.from('remitos').select('*').order('created_at',{ascending:false});_remitos=data||[];}
-async function cargarCobros(){const {data}=await sb.from('cobros').select('*').order('id',{ascending:false});_cobros=data||[];}
+async function cargarCobros(){const {data,error}=await sb.from('cobros').select('id,cliente_id,cliente,fecha,forma,importe,efectivo,transferencia,cheque_propio,cheque_terceros,ret_ganancias,ret_ing_brutos,ret_otras,estado_transferencia,estado_rendicion,reparto,vendedor,imputaciones,observaciones,comprobante_url,saldo_favor,remito_id,banco_cheque,nro_cheque,fecha_cheque,fecha_emision').order('id',{ascending:false});if(error)console.error('[cobros]',error.message,error.details);_cobros=data||[];}
 async function cargarCargas(){const {data}=await sb.from('cargas').select('*').order('created_at',{ascending:false});_cargas=data||[];}
 
 function poblarZonas(){
