@@ -3646,7 +3646,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260629-02';
+const APP_VERSION = '20260629-03';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function actualizarApp(){
@@ -3844,7 +3844,7 @@ async function cargarPedidos(){
   _pedidos=usuarioActual.vendedor?(data||[]).filter(p=>{const v=p.vendedor||'';return v===''||v.toLowerCase().includes(usuarioActual.vendedor.toLowerCase());}):data||[];
 }
 async function cargarRemitos(){const {data}=await sb.from('remitos').select('*').order('created_at',{ascending:false});_remitos=data||[];}
-async function cargarCobros(){const {data,error}=await sb.from('cobros').select('id,cliente_id,cliente,fecha,forma,importe,referencia,total,efectivo,transferencia,cheque_propio,cheque_tercero,retencion_ganancias,retencion_ing_brutos,retencion_otras,estado_transferencia,estado_rendicion,reparto,tipo_cobrador,vendedor,imputaciones,observaciones,comprobante_url,saldo_favor,banco_cheque,nro_cheque,nombre_transferencia,created_at').order('id',{ascending:false});if(error)console.error('[cobros]',error.message,error.details);_cobros=data||[];}
+async function cargarCobros(){const {data,error}=await sb.from('cobros').select('id,cliente_id,cliente,fecha,forma,importe,referencia,total,efectivo,transferencia,cheque_propio,cheque_terceros,retencion_ganancias,retencion_ing_brutos,retencion_otras,estado_transferencia,estado_rendicion,reparto,tipo_cobrador,vendedor,imputaciones,observaciones,comprobante_url,saldo_favor,banco_cheque,nro_cheque,nombre_transferencia,created_at').order('id',{ascending:false});if(error)console.error('[cobros]',error.message,error.details);_cobros=data||[];}
 async function cargarCargas(){const {data}=await sb.from('cargas').select('*').order('created_at',{ascending:false});_cargas=data||[];}
 
 function poblarZonas(){
@@ -4632,7 +4632,7 @@ async function cobrarRemito(id){
       fecha: hoy, importe: imp, forma: medio,
       efectivo: medio==='efectivo'?imp:0,
       transferencia: medio==='transferencia'?imp:0,
-      cheque_tercero: medio==='cheque'?imp:0,
+      cheque_terceros: medio==='cheque'?imp:0,
       vendedor: r.vendedor||usuarioActual?.nombre||'',
       estado_rendicion:'pendiente',
       imputaciones:[{remito_id:id,monto:imp}]
@@ -5473,7 +5473,7 @@ async function guardarCobro(){
     cliente_id:parseInt(cid),cliente:c?.nombre||'?',
     fecha:document.getElementById('cob-fecha').value,
     forma:formas.join('+')||'efectivo',importe:imp,
-    efectivo:ef,transferencia:tr,cheque_tercero:ch3,
+    efectivo:ef,transferencia:tr,cheque_terceros:ch3,
     retencion_ganancias:rg,retencion_ing_brutos:rib,retencion_otras:ro,
     estado_rendicion:'pendiente',
     banco_cheque:document.getElementById('cob-banco')?.value||'',
@@ -5531,7 +5531,7 @@ function renderCobros(){
     const formas=[];
     if(r.efectivo>0)formas.push(`Ef:${fmt(r.efectivo)}`);
     if(r.transferencia>0)formas.push(`Transf:${fmt(r.transferencia)}`);
-    if((r.cheque_propio||0)+(r.cheque_tercero||0)>0)formas.push(`Cheq:${fmt((r.cheque_propio||0)+(r.cheque_tercero||0))}`);
+    if((r.cheque_propio||0)+(r.cheque_terceros||0)>0)formas.push(`Cheq:${fmt((r.cheque_propio||0)+(r.cheque_terceros||0))}`);
     if((r.retencion_ganancias||0)+(r.retencion_ing_brutos||0)+(r.retencion_otras||0)>0)formas.push(`Ret:${fmt((r.retencion_ganancias||0)+(r.retencion_ing_brutos||0)+(r.retencion_otras||0))}`);
     const tieneTransf=(r.transferencia||0)>0;
     const est=r.estado_transferencia||'pendiente';
@@ -5593,7 +5593,7 @@ function imprimirRecibo(id){
     ${(r.efectivo||0)>0?`<div class="row"><span>Efectivo</span><span>${fmt(r.efectivo)}</span></div>`:''}
     ${(r.transferencia||0)>0?`<div class="row"><span>Transferencia</span><span>${fmt(r.transferencia)}</span></div>`:''}
     ${(r.cheque_propio||0)>0?`<div class="row"><span>Cheque propio</span><span>${fmt(r.cheque_propio)}</span></div>`:''}
-    ${(r.cheque_tercero||0)>0?`<div class="row"><span>Cheque de terceros ${r.banco_cheque?'('+r.banco_cheque+')':''} ${r.nro_cheque?'Nro:'+r.nro_cheque:''}</span><span>${fmt(r.cheque_tercero)}</span></div>`:''}
+    ${(r.cheque_terceros||0)>0?`<div class="row"><span>Cheque de terceros ${r.banco_cheque?'('+r.banco_cheque+')':''} ${r.nro_cheque?'Nro:'+r.nro_cheque:''}</span><span>${fmt(r.cheque_terceros)}</span></div>`:''}
     ${(r.retencion_ganancias||0)>0?`<div class="row"><span>Retención Ganancias</span><span>${fmt(r.retencion_ganancias)}</span></div>`:''}
     ${(r.retencion_ing_brutos||0)>0?`<div class="row"><span>Retención Ing. Brutos</span><span>${fmt(r.retencion_ing_brutos)}</span></div>`:''}
     ${(r.retencion_otras||0)>0?`<div class="row"><span>Otras retenciones</span><span>${fmt(r.retencion_otras)}</span></div>`:''}
@@ -7128,7 +7128,7 @@ async function exportarTodo(){
     ].map(r=>r.map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(',')).join('\n'),
     [`cobros_${hoy}.csv`]:[
       ['Fecha','Cliente','Forma','Efectivo','Transferencia','Cheque','Retenciones','Total','Reparto','Vendedor'],
-      ..._cobros.map(c=>[c.fecha||'',c.cliente||'',c.forma||'',c.efectivo||0,c.transferencia||0,(c.cheque_propio||0)+(c.cheque_tercero||0),(c.retencion_ganancias||0)+(c.retencion_ing_brutos||0)+(c.retencion_otras||0),c.importe||0,c.reparto||'',c.vendedor||''])
+      ..._cobros.map(c=>[c.fecha||'',c.cliente||'',c.forma||'',c.efectivo||0,c.transferencia||0,(c.cheque_propio||0)+(c.cheque_terceros||0),(c.retencion_ganancias||0)+(c.retencion_ing_brutos||0)+(c.retencion_otras||0),c.importe||0,c.reparto||'',c.vendedor||''])
     ].map(r=>r.map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(',')).join('\n'),
   };
   for(const [nombre,contenido] of Object.entries(datos)){
@@ -7325,7 +7325,7 @@ async function generarRendicion(){
   const totalGeneral=cobros.reduce((a,c)=>a+(c.importe||0),0);
   const totalEf=cobros.reduce((a,c)=>a+(c.efectivo||0),0);
   const totalTr=cobros.reduce((a,c)=>a+(c.transferencia||0),0);
-  const totalCh=cobros.reduce((a,c)=>a+(c.cheque_propio||0)+(c.cheque_tercero||0),0);
+  const totalCh=cobros.reduce((a,c)=>a+(c.cheque_propio||0)+(c.cheque_terceros||0),0);
   const totalRet=cobros.reduce((a,c)=>a+(c.retencion_ganancias||0)+(c.retencion_ing_brutos||0)+(c.retencion_otras||0),0);
 
   // Efectivo contado
@@ -7347,7 +7347,7 @@ async function generarRendicion(){
     porReparto[k].total+=c.importe||0;
     porReparto[k].ef+=(c.efectivo||0);
     porReparto[k].tr+=(c.transferencia||0);
-    porReparto[k].ch+=(c.cheque_propio||0)+(c.cheque_tercero||0);
+    porReparto[k].ch+=(c.cheque_propio||0)+(c.cheque_terceros||0);
     porReparto[k].ret+=(c.retencion_ganancias||0)+(c.retencion_ing_brutos||0)+(c.retencion_otras||0);
   });
 
@@ -8658,7 +8658,7 @@ async function guardarCobMovil(){
     forma:_cobMovilForma,importe,
     efectivo:_cobMovilForma==='efectivo'?importe:0,
     transferencia:_cobMovilForma==='transferencia'?importe:0,
-    cheque_tercero:_cobMovilForma==='cheque'?importe:0,
+    cheque_terceros:_cobMovilForma==='cheque'?importe:0,
     vendedor:usuarioActual?.nombre||'',
     observaciones:document.getElementById('cobm-obs')?.value||'',
     imputaciones,saldo_favor:resto>0?resto:0,
@@ -9109,7 +9109,7 @@ function verCobranzaHoy(){
   // Formas de pago
   const ef = cobrosHoy.reduce((a,c)=>a+(c.efectivo||0),0);
   const tr = cobrosHoy.reduce((a,c)=>a+(c.transferencia||0),0);
-  const ch = cobrosHoy.reduce((a,c)=>a+(c.cheque_tercero||0),0);
+  const ch = cobrosHoy.reduce((a,c)=>a+(c.cheque_terceros||0),0);
   const elFormas = document.getElementById('cob-hoy-formas');
   if(elFormas){
     let html = '<div style="display:flex;gap:8px;flex-wrap:wrap">';
@@ -9131,7 +9131,7 @@ function verCobranzaHoy(){
         const formas=[];
         if(c.efectivo>0)formas.push('Ef:'+fmt(c.efectivo));
         if(c.transferencia>0)formas.push('Tr:'+fmt(c.transferencia));
-        if(c.cheque_tercero>0)formas.push('Ch:'+fmt(c.cheque_tercero));
+        if(c.cheque_terceros>0)formas.push('Ch:'+fmt(c.cheque_terceros));
         return `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--brd)">
           <div>
             <div style="font-size:14px;font-weight:600">${c.cliente}</div>
@@ -11845,7 +11845,7 @@ function renderTesCobros(){
   data.sort((a,b)=>b.fecha.localeCompare(a.fecha));
   const totEf=data.reduce((a,c)=>a+(c.efectivo||0),0);
   const totTr=data.reduce((a,c)=>a+(c.transferencia||0),0);
-  const totCh=data.reduce((a,c)=>a+(c.cheque_tercero||0)+(c.cheque_propio||0),0);
+  const totCh=data.reduce((a,c)=>a+(c.cheque_terceros||0)+(c.cheque_propio||0),0);
   const totImp=data.reduce((a,c)=>a+(c.importe||0),0);
   document.getElementById('tco-kpis').innerHTML=`
     <div class="stat"><div class="n">${fmt(totEf)}</div><div class="l">💵 Efectivo</div></div>
@@ -11859,7 +11859,7 @@ function renderTesCobros(){
     <td style="font-size:11px">${(r.forma||'').split('+').map(f=>f==='efectivo'?'💵 Ef':f==='transf'?'🏦 Tr':f==='cheque'?'📋 Ch':f).join(' · ')||'—'}</td>
     <td style="color:var(--P)">${(r.efectivo||0)>0?fmt(r.efectivo):'—'}</td>
     <td style="color:var(--A)">${(r.transferencia||0)>0?fmt(r.transferencia):'—'}</td>
-    <td style="color:var(--W)">${((r.cheque_tercero||0)+(r.cheque_propio||0))>0?fmt((r.cheque_tercero||0)+(r.cheque_propio||0)):'—'}</td>
+    <td style="color:var(--W)">${((r.cheque_terceros||0)+(r.cheque_propio||0))>0?fmt((r.cheque_terceros||0)+(r.cheque_propio||0)):'—'}</td>
     <td style="font-weight:700">${fmt(r.importe||0)}</td>
     <td style="color:var(--txt2);font-size:12px">${r.vendedor||'—'}</td>
   </tr>`).join(''):'<tr><td colspan="8"><div class="empty">Sin cobros para el período seleccionado</div></td></tr>';
@@ -11956,7 +11956,7 @@ function renderTesCaja(){
   const cobs=_cobros.filter(c=>(!fd||c.fecha>=fd)&&(!fh||c.fecha<=fh));
   const cobEf=cobs.reduce((a,c)=>a+(c.efectivo||0),0);
   const cobTr=cobs.reduce((a,c)=>a+(c.transferencia||0),0);
-  const cobCh=cobs.reduce((a,c)=>a+(c.cheque_tercero||0)+(c.cheque_propio||0),0);
+  const cobCh=cobs.reduce((a,c)=>a+(c.cheque_terceros||0)+(c.cheque_propio||0),0);
   const cobTot=cobEf+cobTr+cobCh;
   const pags=_pagosProv.filter(p=>(!fd||p.fecha>=fd)&&(!fh||p.fecha<=fh));
   const pagEf=pags.filter(p=>p.forma==='efectivo').reduce((a,p)=>a+(p.importe||0),0);
