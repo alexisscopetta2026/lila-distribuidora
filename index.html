@@ -3646,7 +3646,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260629-03';
+const APP_VERSION = '20260629-04';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function actualizarApp(){
@@ -4628,7 +4628,7 @@ async function cobrarRemito(id){
     // Registrar cobro
     const hoy = new Date().toISOString().split('T')[0];
     await sb.from('cobros').insert({
-      cliente_id: r.cliente_id, remito_id: id,
+      cliente_id: r.cliente_id,
       fecha: hoy, importe: imp, forma: medio,
       efectivo: medio==='efectivo'?imp:0,
       transferencia: medio==='transferencia'?imp:0,
@@ -5478,8 +5478,6 @@ async function guardarCobro(){
     estado_rendicion:'pendiente',
     banco_cheque:document.getElementById('cob-banco')?.value||'',
     nro_cheque:document.getElementById('cob-nrocheque')?.value||'',
-    fecha_emision:document.getElementById('cob-fecha-emision')?.value||'',
-    fecha_cheque:document.getElementById('cob-fecha-cheque')?.value||'',
     reparto:document.getElementById('cob-reparto')?.value||'',
     tipo_cobrador:document.getElementById('cob-tipo-cobrador')?.value||'',
     vendedor:document.getElementById('cob-ven-nom')?.value||'',
@@ -8663,7 +8661,7 @@ async function guardarCobMovil(){
     observaciones:document.getElementById('cobm-obs')?.value||'',
     imputaciones,saldo_favor:resto>0?resto:0,
     comprobante_url,
-    nombre_transf:nombreTransf||null
+    nombre_transferencia:nombreTransf||null
   });
   for(const imp of imputaciones){
     const rem=_remitos.find(r=>r.id===imp.remito_id);
