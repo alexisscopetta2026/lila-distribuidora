@@ -102,8 +102,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .nav-dropdown button{display:block;width:100%;padding:11px 18px;background:none;border:none;color:rgba(255,255,255,.85);font-size:13px;cursor:pointer;text-align:left;font-family:inherit;transition:background .1s;border-bottom:1px solid rgba(255,255,255,.06)}
 .nav-dropdown button:hover{background:rgba(255,255,255,.15);color:#fff}
 .nav-dropdown button.on{background:rgba(255,255,255,.2);color:#fff;font-weight:600}
-.body{flex:1;padding:14px;overflow-y:auto;min-width:0;scroll-behavior:smooth}
+.body{flex:1;padding:14px;overflow-y:auto;min-width:0;min-height:0;scroll-behavior:smooth}
 .panel{display:none!important;width:100%;box-sizing:border-box}.panel.on{display:block!important;width:100%}#p-informes.on,#p-cuentas.on,#p-remitos.on,#p-remito-rapido.on{display:flex!important;flex-direction:column;height:100%;overflow:hidden}
+#p-rendicion.on{display:flex!important;flex-direction:column;height:100%;overflow:hidden}
+#p-rendicion.on .rend-scroll{flex:1;overflow-y:auto;min-height:0}
 
 /* Cards */
 .card{background:var(--bg);border:1px solid var(--brd);border-radius:10px;padding:14px;margin-bottom:12px}
@@ -1485,7 +1487,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <!-- RENDICION -->
 <div class="panel" id="p-rendicion">
-  <div class="sech"><h2>💼 Rendición de cobranza</h2></div>
+  <div class="sech" style="flex-shrink:0"><h2>💼 Rendición de cobranza</h2></div>
+  <div class="rend-scroll">
   <div class="card">
     <div class="fr x3">
       <div class="fg"><label>Desde</label><input type="date" id="rend-desde"></div>
@@ -1522,6 +1525,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
 
   <div id="rend-resultado"></div>
+  </div><!-- fin rend-scroll -->
 </div>
 
 <!-- REMITO RAPIDO -->
@@ -3687,7 +3691,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260630-04';
+const APP_VERSION = '20260630-05';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function actualizarApp(){
