@@ -1438,8 +1438,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <h2>Productos / Stock</h2>
     <div style="display:flex;gap:6px">
       <div style="position:relative" id="pro-export-wrap">
-        <button class="btn" onclick="document.getElementById('pro-export-menu').classList.toggle('hidden')" style="gap:4px">🖨️ Imprimir / Exportar ▾</button>
+        <button class="btn" onclick="document.getElementById('pro-export-menu').classList.toggle('hidden');document.getElementById('pro-export-count').textContent=_getProductosFiltrados().length+' productos'" style="gap:4px">🖨️ Imprimir / Exportar ▾</button>
         <div id="pro-export-menu" class="hidden" style="position:absolute;right:0;top:110%;background:#fff;border:1px solid var(--brd);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:200;min-width:160px;overflow:hidden">
+          <div id="pro-export-count" style="padding:6px 14px;font-size:11px;color:var(--txt2);background:var(--bg2);border-bottom:1px solid var(--brd)"></div>
           <button onclick="imprimirProductos();document.getElementById('pro-export-menu').classList.add('hidden')" style="display:block;width:100%;padding:10px 14px;text-align:left;border:none;background:none;cursor:pointer;font-size:13px">🖨️ Imprimir</button>
           <button onclick="exportarProductosCSV();document.getElementById('pro-export-menu').classList.add('hidden')" style="display:block;width:100%;padding:10px 14px;text-align:left;border:none;background:none;cursor:pointer;font-size:13px;border-top:1px solid var(--brd)">📊 Exportar a Excel</button>
         </div>
@@ -3664,7 +3665,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260701-09';
+const APP_VERSION = '20260701-10';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function actualizarApp(){
@@ -6043,8 +6044,30 @@ function _getProductosFiltrados(){
     return okQ&&okC&&okSC&&okPr&&okA;
   });
 }
+function _getFiltrosDesc(){
+  const partes=[];
+  const prov=document.getElementById('pro-prov')?.value||'';
+  const cat=document.getElementById('pro-cat')?.value||'';
+  const subcat=document.getElementById('pro-subcat')?.value||'';
+  const q=document.getElementById('pro-q')?.value||'';
+  const activo=document.getElementById('pro-activo')?.value||'activos';
+  if(prov)partes.push('Proveedor: '+prov);
+  if(cat)partes.push('Categoría: '+cat);
+  if(subcat)partes.push('Subcategoría: '+subcat);
+  if(q)partes.push('Búsqueda: "'+q+'"');
+  if(activo==='inactivos')partes.push('Solo inactivos');
+  else if(activo==='todos')partes.push('Activos + inactivos');
+  return partes.length?partes.join(' · '):'Sin filtros (todos los productos activos)';
+}
+function _getSufijoCsv(){
+  const prov=(document.getElementById('pro-prov')?.value||'').replace(/\s+/g,'_');
+  const cat=(document.getElementById('pro-cat')?.value||'').replace(/\s+/g,'_');
+  const parts=[prov,cat].filter(Boolean);
+  return parts.length?'_'+parts.join('_'):'';
+}
 function imprimirProductos(){
   const data=_getProductosFiltrados();
+  const filtrosDesc=_getFiltrosDesc();
   const filas=data.map(p=>{
     const costo=p.costo||0,precio=p.precio||0;
     const margen=costo>0?((precio-costo)/costo*100).toFixed(1)+'%':'—';
@@ -6052,7 +6075,7 @@ function imprimirProductos(){
     return `<tr><td>${p.codigo||''}</td><td>${p.nombre}</td><td>${p.proveedor_nom||'—'}</td><td>${p.unidad||'—'}</td><td style="text-align:right">${fmt(costo)}</td><td style="text-align:right;font-weight:bold">${fmt(precio)}</td><td style="text-align:right">${margen}</td><td style="text-align:center">${p.stock||0}</td><td>${estado}</td></tr>`;
   }).join('');
   const w=window.open('','_blank');
-  w.document.write(`<!DOCTYPE html><html><head><title>Listado de Productos</title><style>body{font-family:Arial,sans-serif;padding:20px;font-size:12px}h2{font-size:15px;margin-bottom:12px}table{width:100%;border-collapse:collapse}th,td{padding:5px 8px;border:1px solid #ddd;vertical-align:top}th{background:#f0f0f0;font-size:11px;text-transform:uppercase}tr:nth-child(even){background:#fafafa}@media print{button{display:none}}</style></head><body><h2>🌸 Distribuidora Lila — Listado de Productos (${new Date().toLocaleDateString('es-AR')})</h2><p style="font-size:11px;color:#666;margin-bottom:12px">${data.length} productos</p><table><thead><tr><th>Código</th><th>Nombre / Descripción</th><th>Proveedor</th><th>Unidad</th><th style="text-align:right">Costo</th><th style="text-align:right">Precio Vta.</th><th style="text-align:right">Margen</th><th style="text-align:center">Stock</th><th>Estado</th></tr></thead><tbody>${filas}</tbody></table><br><button onclick="window.print()" style="padding:8px 20px;font-size:13px;cursor:pointer">🖨️ Imprimir</button></body></html>`);
+  w.document.write(`<!DOCTYPE html><html><head><title>Listado de Productos</title><style>body{font-family:Arial,sans-serif;padding:20px;font-size:12px}h2{font-size:15px;margin-bottom:6px}.filtros{font-size:11px;color:#555;background:#f5f5f5;border:1px solid #ddd;border-radius:4px;padding:5px 10px;margin-bottom:12px;display:inline-block}table{width:100%;border-collapse:collapse}th,td{padding:5px 8px;border:1px solid #ddd;vertical-align:top}th{background:#f0f0f0;font-size:11px;text-transform:uppercase}tr:nth-child(even){background:#fafafa}@media print{button{display:none}}</style></head><body><h2>🌸 Distribuidora Lila — Listado de Productos (${new Date().toLocaleDateString('es-AR')})</h2><div class="filtros">🔍 Filtros: ${filtrosDesc} &nbsp;·&nbsp; ${data.length} productos</div><br><table><thead><tr><th>Código</th><th>Nombre / Descripción</th><th>Proveedor</th><th>Unidad</th><th style="text-align:right">Costo</th><th style="text-align:right">Precio Vta.</th><th style="text-align:right">Margen</th><th style="text-align:center">Stock</th><th>Estado</th></tr></thead><tbody>${filas}</tbody></table><br><button onclick="window.print()" style="padding:8px 20px;font-size:13px;cursor:pointer">🖨️ Imprimir</button></body></html>`);
   w.document.close();
 }
 function exportarProductosCSV(){
@@ -6068,7 +6091,7 @@ function exportarProductosCSV(){
   const csv=BOM+[hdr.map(h=>`"${h}"`).join(';'),...rows].join('\r\n');
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
-  a.download=`productos_${new Date().toISOString().split('T')[0]}.csv`;
+  a.download=`productos${_getSufijoCsv()}_${new Date().toISOString().split('T')[0]}.csv`;
   a.click();
 }
 function recalcPrecioSugerido(){
