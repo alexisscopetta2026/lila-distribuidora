@@ -1436,19 +1436,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="panel" id="p-productos">
   <div class="sech">
     <h2>Productos / Stock</h2>
-    <div style="display:flex;gap:6px">
-      <div style="position:relative" id="pro-export-wrap">
-        <button class="btn" onclick="document.getElementById('pro-export-menu').classList.toggle('hidden');document.getElementById('pro-export-count').textContent=_getProductosFiltrados().length+' productos'" style="gap:4px">🖨️ Imprimir / Exportar ▾</button>
-        <div id="pro-export-menu" class="hidden" style="position:absolute;right:0;top:110%;background:#fff;border:1px solid var(--brd);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:200;min-width:160px;overflow:hidden">
-          <div id="pro-export-count" style="padding:6px 14px;font-size:11px;color:var(--txt2);background:var(--bg2);border-bottom:1px solid var(--brd)"></div>
-          <button onclick="imprimirProductos();document.getElementById('pro-export-menu').classList.add('hidden')" style="display:block;width:100%;padding:10px 14px;text-align:left;border:none;background:none;cursor:pointer;font-size:13px">🖨️ Imprimir</button>
-          <button onclick="exportarProductosCSV();document.getElementById('pro-export-menu').classList.add('hidden')" style="display:block;width:100%;padding:10px 14px;text-align:left;border:none;background:none;cursor:pointer;font-size:13px;border-top:1px solid var(--brd)">📊 Exportar a Excel</button>
-        </div>
-      </div>
-      <button class="btn P" onclick="abrirProducto()">+ Nuevo</button>
-    </div>
+    <button class="btn P" onclick="abrirProducto()">+ Nuevo</button>
   </div>
-  <div class="tb">
+  <div class="tb" style="position:relative">
     <input id="pro-q" placeholder="Nombre, código..." oninput="renderProductos();resetNav('pro-tbody')" onkeydown="navProductos(event)" title="↑↓ navegar · Enter abrir · Esc volver">
     <select id="pro-cat" onchange="poblarSubcats('pro-cat','pro-subcat');renderProductos()">
       <option value="">Todas las categorías</option>
@@ -1463,6 +1453,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <option value="todos">Todos</option>
       <option value="inactivos">Solo inactivos</option>
     </select>
+    <div style="position:relative;margin-left:auto" id="pro-export-wrap">
+      <button class="btn" onclick="document.getElementById('pro-export-menu').classList.toggle('hidden');document.getElementById('pro-export-count').textContent=_getProductosFiltrados().length+' productos'">🖨️ Exportar ▾</button>
+      <div id="pro-export-menu" class="hidden" style="position:absolute;right:0;top:calc(100% + 4px);background:#fff;border:1px solid var(--brd);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:300;min-width:180px;overflow:hidden">
+        <div id="pro-export-count" style="padding:6px 14px;font-size:11px;color:var(--txt2);background:var(--bg2);border-bottom:1px solid var(--brd)"></div>
+        <button onclick="imprimirProductos();document.getElementById('pro-export-menu').classList.add('hidden')" style="display:block;width:100%;padding:10px 14px;text-align:left;border:none;background:none;cursor:pointer;font-size:13px">🖨️ Imprimir</button>
+        <button onclick="exportarProductosCSV();document.getElementById('pro-export-menu').classList.add('hidden')" style="display:block;width:100%;padding:10px 14px;text-align:left;border:none;background:none;cursor:pointer;font-size:13px;border-top:1px solid var(--brd)">📊 Exportar a Excel</button>
+      </div>
+    </div>
   </div>
   <div style="flex:1;overflow-y:auto;min-height:0">
     <div class="tbl-wrap"><table class="tbl">
@@ -3665,7 +3663,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260701-10';
+const APP_VERSION = '20260701-11';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function actualizarApp(){
