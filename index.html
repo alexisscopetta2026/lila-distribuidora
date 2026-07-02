@@ -3651,7 +3651,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260701-05';
+const APP_VERSION = '20260701-06';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function actualizarApp(){
@@ -5888,7 +5888,7 @@ function histCliente(id){
 }
 
 // ─── CLIENTES ───
-const _VEN_NOMBRES={'1':'Alexis','2':'Franco','3':'David'};
+const _VEN_NOMBRES={'1':'Alexis','2':'Franco','3':'David','Vendedor 1':'Alexis','Vendedor 2':'Franco','Vendedor 3':'David','vendedor 1':'Alexis','vendedor 2':'Franco','vendedor 3':'David'};
 function nomVendedor(v){const s=String(v||'').trim();return _VEN_NOMBRES[s]||s||'—';}
 function renderClientes(){
   const q=(document.getElementById('cli-q').value||'').toLowerCase();
