@@ -1436,9 +1436,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   </div>
   <div class="tb" style="position:relative">
     <input id="pro-q" placeholder="Nombre, código..." oninput="renderProductos();resetNav('pro-tbody')" onkeydown="navProductos(event)" title="↑↓ navegar · Enter abrir · Esc volver">
-    <select id="pro-cat" onchange="poblarSubcats('pro-cat','pro-subcat');renderProductos()">
+      <select id="pro-cat" onchange="poblarSubcats('pro-cat','pro-subcat');renderProductos()">
       <option value="">Todas las categorías</option>
-      ${Object.keys(CATS).map(c=>`<option value="${c}">${c}</option>`).join('')}
+  <option value="Fiambres">Fiambres</option><option value="Quesos">Quesos</option><option value="Lácteos">Lácteos</option><option value="Condimentos">Condimentos</option><option value="Conservas">Conservas</option><option value="Snacks">Snacks</option><option value="Congelados">Congelados</option><option value="Otros">Otros</option>
     </select>
     <select id="pro-subcat" onchange="renderProductos()" disabled>
       <option value="">Todas las subcategorías</option>
