@@ -103,7 +103,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .nav-dropdown button:hover{background:rgba(255,255,255,.15);color:#fff}
 .nav-dropdown button.on{background:rgba(255,255,255,.2);color:#fff;font-weight:600}
 .body{flex:1;padding:14px;overflow-y:auto;min-width:0;min-height:0;scroll-behavior:smooth}
-.panel{display:none!important;width:100%;box-sizing:border-box}.panel.on{display:block!important;width:100%}#p-informes.on,#p-cuentas.on,#p-remitos.on,#p-remito-rapido.on{display:flex!important;flex-direction:column;height:100%;overflow:hidden}
+.panel{display:none!important;width:100%;box-sizing:border-box}.panel.on{display:block!important;width:100%}#p-informes.on,#p-cuentas.on,#p-remitos.on,#p-remito-rapido.on,#p-clientes.on,#p-productos.on{display:flex!important;flex-direction:column;height:100%;overflow:hidden}
 #p-rendicion.on{display:flex!important;flex-direction:column;height:100%;overflow:hidden}
 #p-rendicion.on .rend-scroll{flex:1;overflow-y:auto;min-height:0}
 
@@ -1423,11 +1423,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <option value="">Todas las localidades</option>
     </select>
   </div>
-  <div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>Nombre</th><th>Localidad</th><th>Teléfono</th><th>Zona</th><th>Vendedor</th><th>Dto%</th><th>Saldo</th><th></th></tr></thead>
-    <tbody id="cli-tbody"></tbody>
-  </table></div>
-  <div class="pg" id="cli-pg"></div>
+  <div style="flex:1;overflow-y:auto;min-height:0">
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Nombre</th><th>Localidad</th><th>Teléfono</th><th>Zona</th><th>Vendedor</th><th>Dto%</th><th>Saldo</th><th></th></tr></thead>
+      <tbody id="cli-tbody"></tbody>
+    </table></div>
+    <div class="pg" id="cli-pg"></div>
+  </div>
 </div>
 
 <!-- PRODUCTOS -->
@@ -1461,11 +1463,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <option value="inactivos">Solo inactivos</option>
     </select>
   </div>
-  <div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>Código</th><th>Nombre</th><th>Proveedor</th><th>Unidad</th><th>Costo</th><th>Precio vta</th><th>Margen real</th><th>Margen obj</th><th>Estado</th><th>Stock</th><th></th></tr></thead>
-    <tbody id="pro-tbody"></tbody>
-  </table></div>
-  <div class="pg" id="pro-pg"></div>
+  <div style="flex:1;overflow-y:auto;min-height:0">
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Código</th><th>Nombre</th><th>Proveedor</th><th>Unidad</th><th>Costo</th><th>Precio vta</th><th>Margen real</th><th>Margen obj</th><th>Estado</th><th>Stock</th><th></th></tr></thead>
+      <tbody id="pro-tbody"></tbody>
+    </table></div>
+    <div class="pg" id="pro-pg"></div>
+  </div>
 </div>
 
 <!-- NOTAS DE CREDITO -->
@@ -3660,7 +3664,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260701-07';
+const APP_VERSION = '20260701-09';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function actualizarApp(){
