@@ -1470,66 +1470,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <!-- RENDICION -->
 <div class="panel" id="p-rendicion">
-  <div class="sech" style="flex-shrink:0"><h2>💼 Rendición de cobranza</h2></div>
+  <div class="sech" style="flex-shrink:0;display:flex;justify-content:space-between;align-items:center">
+    <h2>💼 Rendición de cobranza</h2>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;color:#fff">
+      <input type="checkbox" id="rend-mostrar-todos" style="width:15px;height:15px" onchange="renderRendicion()">
+      Mostrar todos
+    </label>
+  </div>
   <div class="rend-scroll">
-
-  <!-- Cobros — validar o rechazar -->
-  <div class="card" style="margin-bottom:10px">
-    <div style="font-weight:700;font-size:13px;color:var(--PD);margin-bottom:8px">🧾 Cobros registrados</div>
-    <div style="display:flex;gap:7px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
-      <input id="cob-q" placeholder="Buscar cliente..." oninput="renderCobros();resetNav('cob-tbody')" onkeydown="navCobros(event)" style="padding:7px 10px;border:1px solid var(--brd);border-radius:8px;font-size:13px;flex:1;min-width:120px">
-      <select id="cob-f" onchange="renderCobros()" style="padding:7px 10px;border:1px solid var(--brd);border-radius:8px;font-size:13px">
-        <option value="">Todas las formas</option>
-        <option value="efectivo">Efectivo</option>
-        <option value="transferencia">Transferencia</option>
-        <option value="cheque">Cheque</option>
-      </select>
-    </div>
-    <div class="tbl-wrap"><table class="tbl">
-      <thead><tr><th>Fecha</th><th>Cliente</th><th>Formas de pago</th><th>Reparto</th><th>Total</th><th>Vendedor</th><th>Estado Transf.</th><th>Rendición</th><th></th></tr></thead>
-      <tbody id="cob-tbody"></tbody>
-    </table></div>
-    <div class="pg" id="cob-pg"></div>
+    <div id="rend-resultado"></div>
   </div>
-
-  <!-- Generar rendición -->
-  <div class="card">
-    <div class="fr x3">
-      <div class="fg"><label>Desde</label><input type="date" id="rend-desde"></div>
-      <div class="fg"><label>Hasta</label><input type="date" id="rend-hasta"></div>
-      <div class="fg"><label>Nro reparto</label><input id="rend-reparto" placeholder="Ej: 1, 1/1 o vacío=todos"></div>
-    </div>
-    <div class="fr">
-      <div class="fg"><label>Cobrador / Vendedor</label>
-        <input id="rend-cobrador-nom" placeholder="Nombre o vacío=todos">
-      </div>
-      <div class="fg">
-        <label>💰 Monto entregado al salir</label>
-        <input type="number" id="rend-monto-entrega" placeholder="0" min="0" step="0.01"
-          style="font-size:15px;font-weight:600">
-      </div>
-      <div class="fg" style="display:flex;flex-direction:column;gap:6px">
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
-          <input type="checkbox" id="rend-solo-pendientes" style="width:16px;height:16px">
-          Solo pendientes de validación
-        </label>
-        <button class="btn P" onclick="generarRendicion()" style="width:100%">📊 Generar rendición</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Desglose de billetes -->
-  <div class="card">
-    <div style="font-weight:600;font-size:13px;margin-bottom:10px;color:var(--PD)">💵 Conteo de efectivo</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px" id="billetes-grid"></div>
-    <div style="display:flex;justify-content:space-between;align-items:center;background:var(--PL);border-radius:8px;padding:10px 14px;margin-top:10px">
-      <span style="font-weight:600;color:var(--PD)">Total efectivo contado</span>
-      <span style="font-size:20px;font-weight:700;color:var(--PD)" id="total-efectivo-contado">$0</span>
-    </div>
-  </div>
-
-  <div id="rend-resultado"></div>
-  </div><!-- fin rend-scroll -->
 </div>
 
 <!-- REMITO RAPIDO -->
@@ -3695,7 +3645,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260701-03';
+const APP_VERSION = '20260701-04';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function actualizarApp(){
@@ -5560,11 +5510,12 @@ async function guardarCobro(){
   limpiarModalCobro();
 }
 function renderCobros(){
-  const q=(document.getElementById('cob-q').value||'').toLowerCase();
-  const f=document.getElementById('cob-f').value;
+  const tbody=document.getElementById('cob-tbody');
+  if(!tbody)return;
+  const q=(document.getElementById('cob-q')?.value||'').toLowerCase();
+  const f=document.getElementById('cob-f')?.value||'';
   let data=_cobros.filter(c=>(!q||(c.cliente||'').toLowerCase().includes(q)||(c.fecha||'').includes(q)||(c.reparto||'').toLowerCase().includes(q)||(c.vendedor||'').toLowerCase().includes(q))&&(!f||(c.forma||'').includes(f)));
   const tot=data.length,sl=data.slice((_cobPg-1)*PP,_cobPg*PP);
-  const tbody=document.getElementById('cob-tbody');
   tbody.innerHTML=sl.length?sl.map(r=>{
     const formas=[];
     if(r.efectivo>0)formas.push(`Ef:${fmt(r.efectivo)}`);
@@ -5628,7 +5579,7 @@ async function validarCobro(id){
     await sb.from('clientes').update({saldo:nuevoSaldo}).eq('id',cli.id);
   }
   await Promise.all([cargarCobros(),cargarClientes(),cargarRemitos()]);
-  renderCobros();renderCC();renderDash();renderRemitos();
+  renderRendicion();renderCobros();renderCC();renderDash();renderRemitos();
   toast('✅ Cobro validado — saldo aplicado');
 }
 async function rechazarCobro(id){
@@ -5636,7 +5587,106 @@ async function rechazarCobro(id){
   const {error}=await sb.from('cobros').update({estado_rendicion:'rechazado'}).eq('id',id);
   if(error){toast('Error al rechazar cobro: '+error.message,'err');return;}
   const c=_cobros.find(x=>x.id===id);if(c)c.estado_rendicion='rechazado';
-  renderCobros();toast('❌ Cobro rechazado');
+  await cargarCobros();renderRendicion();renderCobros();toast('❌ Cobro rechazado');
+}
+function renderRendicion(){
+  const el=document.getElementById('rend-resultado');if(!el)return;
+  const mostrarTodos=document.getElementById('rend-mostrar-todos')?.checked;
+  const esAdmin=usuarioActual?.esAdmin||usuarioActual?.rol_original==='admin';
+  const cobros=mostrarTodos?[..._cobros]:_cobros.filter(c=>(c.estado_rendicion||'pendiente')==='pendiente');
+  if(!cobros.length){
+    el.innerHTML=`<div style="text-align:center;padding:48px 20px;color:var(--txt2);font-size:14px">No hay cobros${mostrarTodos?'':' pendientes'}.</div>`;
+    return;
+  }
+  // Agrupar por vendedor → (fecha, reparto) → zona
+  const porVendedor={};
+  for(const cob of cobros){
+    const v=(cob.vendedor||'').trim()||'—';
+    if(!porVendedor[v])porVendedor[v]={};
+    const fecha=cob.fecha||'?';
+    const reparto=(cob.reparto||'').trim();
+    const key=fecha+'|'+reparto;
+    if(!porVendedor[v][key])porVendedor[v][key]={fecha,reparto,cobros:[]};
+    porVendedor[v][key].cobros.push(cob);
+  }
+  let html='';
+  for(const [vendedor,rendByKey] of Object.entries(porVendedor).sort((a,b)=>a[0].localeCompare(b[0]))){
+    // Asignar número de rendición por persona+día (orden ascendente dentro del día)
+    const rendList=Object.values(rendByKey).sort((a,b)=>{
+      const d=a.fecha.localeCompare(b.fecha);
+      return d!==0?d:(a.reparto||'').localeCompare(b.reparto||'');
+    });
+    const dayIdx={};
+    for(const r of rendList){dayIdx[r.fecha]=(dayIdx[r.fecha]||0)+1;r.rendNum=dayIdx[r.fecha];}
+    // Mostrar de más reciente a más antigua
+    rendList.sort((a,b)=>{const d=b.fecha.localeCompare(a.fecha);return d!==0?d:(a.reparto||'').localeCompare(b.reparto||'');});
+    html+=`<div style="margin-bottom:20px"><div style="font-size:16px;font-weight:700;color:var(--PD);padding:10px 14px;background:var(--PL);border-radius:10px;margin-bottom:8px">👤 ${vendedor}</div>`;
+    for(const rend of rendList){
+      const total=rend.cobros.reduce((s,c)=>s+(c.importe||0),0);
+      const pendientes=rend.cobros.filter(c=>(c.estado_rendicion||'pendiente')==='pendiente');
+      const fechaFmt=rend.fecha?rend.fecha.split('-').reverse().join('/'):'?';
+      const pendIds=pendientes.map(c=>c.id);
+      const rk=`rb-${vendedor.replace(/[^a-z0-9]/gi,'_')}-${rend.fecha}-${rend.rendNum}`;
+      // Agrupar cobros de esta rendición por zona del cliente
+      const porZona={};
+      for(const cob of rend.cobros){
+        const cli=_clientes.find(x=>String(x.id)===String(cob.cliente_id));
+        const zona=(cli?.zona||cli?.localidad||'—').trim()||'—';
+        if(!porZona[zona])porZona[zona]=[];
+        porZona[zona].push(cob);
+      }
+      html+=`<div style="border:1px solid var(--brd);border-radius:8px;overflow:hidden;margin-bottom:10px">`;
+      html+=`<div style="background:var(--bg2);padding:10px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none" onclick="document.getElementById('${rk}').style.display=document.getElementById('${rk}').style.display==='none'?'':'none'">`;
+      html+=`<div style="font-weight:700;font-size:13px">${vendedor} — ${fechaFmt} — Rendición #${rend.rendNum}${rend.reparto?` <span style="font-weight:400;font-size:11px;color:var(--txt2)">(Rep. ${rend.reparto})</span>`:''}</div>`;
+      html+=`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-weight:700;font-size:15px;color:var(--PD)">${fmt(total)}</span>`;
+      if(pendientes.length&&esAdmin)html+=`<button class="btn sm P" onclick="event.stopPropagation();aprobarTodoRendicion([${pendIds.join(',')}])" style="font-size:11px;white-space:nowrap">✅ Aprobar todo (${pendientes.length})</button>`;
+      html+=`</div></div>`;
+      html+=`<div id="${rk}">`;
+      for(const [zona,cobs] of Object.entries(porZona).sort()){
+        html+=`<div style="padding:8px 14px 2px;font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px;background:var(--bg)">📍 ${zona}</div>`;
+        html+=`<div class="tbl-wrap"><table class="tbl" style="font-size:12px"><thead><tr><th>Cliente</th><th>Importe</th><th>Forma</th><th>Estado</th><th></th></tr></thead><tbody>`;
+        for(const cob of cobs){
+          const est=cob.estado_rendicion||'pendiente';
+          const badge=est==='validado'?'<span class="b bP">✅ Validado</span>':est==='rechazado'?'<span class="b bD">❌ Rechazado</span>':'<span class="b bW">⏳ Pendiente</span>';
+          const bots=esAdmin&&est==='pendiente'?`<button class="btn sm" style="background:var(--G);color:#fff;font-size:10px" onclick="validarCobro(${cob.id})">✅</button><button class="btn sm D" style="font-size:10px" onclick="rechazarCobro(${cob.id})">❌</button>`:'';
+          const compLink=cob.comprobante_url?`<a href="${cob.comprobante_url}" target="_blank" style="font-size:14px;margin-left:4px">📎</a>`:'';
+          html+=`<tr><td style="font-weight:500">${cob.cliente||'?'}</td><td style="text-align:right;font-weight:700;color:var(--P)">${fmt(cob.importe)}</td><td style="font-size:11px;color:var(--txt2)">${cob.forma||'—'}</td><td>${badge}</td><td style="white-space:nowrap">${bots}${compLink}</td></tr>`;
+        }
+        html+=`</tbody></table></div>`;
+      }
+      html+=`</div></div>`;
+    }
+    html+=`</div>`;
+  }
+  el.innerHTML=html;
+}
+async function aprobarTodoRendicion(ids){
+  if(!confirm(`¿Aprobar ${ids.length} cobro(s)? Se descontará el saldo de los clientes y sus remitos.`))return;
+  const esAdmin=usuarioActual?.esAdmin||usuarioActual?.rol_original==='admin';
+  if(!esAdmin){toast('Solo el admin puede aprobar cobros','err');return;}
+  let ok=0,err=0;
+  for(const id of ids){
+    const cob=_cobros.find(x=>x.id===id);if(!cob||cob.estado_rendicion!=='pendiente')continue;
+    const {error}=await sb.from('cobros').update({estado_rendicion:'validado'}).eq('id',id);
+    if(error){err++;continue;}
+    const imps=Array.isArray(cob.imputaciones)?cob.imputaciones:[];
+    for(const imp of imps){
+      const rem=_remitos.find(r=>r.id===imp.remito_id);
+      if(rem){
+        const nuevoSaldo=Math.max(0,(rem.saldo_pendiente!=null?rem.saldo_pendiente:rem.total)-imp.monto);
+        await sb.from('remitos').update({saldo_pendiente:nuevoSaldo,cobrado:nuevoSaldo<=0,forma_cobro:nuevoSaldo<=0?(cob.forma||'efectivo'):rem.forma_cobro}).eq('id',rem.id);
+      }
+    }
+    const cli=_clientes.find(x=>x.id===cob.cliente_id||(cob.cliente&&x.nombre&&x.nombre.trim().toLowerCase()===cob.cliente.trim().toLowerCase()));
+    if(cli){
+      const nuevoSaldo=Math.max(0,(cli.saldo||0)-cob.importe);
+      await sb.from('clientes').update({saldo:nuevoSaldo}).eq('id',cli.id);
+    }
+    ok++;
+  }
+  await Promise.all([cargarCobros(),cargarClientes(),cargarRemitos()]);
+  renderRendicion();renderCobros();renderCC();renderDash();renderRemitos();
+  toast(err>0?`✅ ${ok} aprobados, ${err} errores`:`✅ ${ok} cobro(s) aprobados — saldo aplicado`);
 }
 function imprimirRecibo(id){
   const r=_cobros.find(x=>x.id===id);if(!r)return;
@@ -7355,16 +7405,7 @@ function imprimirStock(){
 }
 
 function initRendicion(){
-  const hoy=new Date().toISOString().split('T')[0];
-  const hace7=new Date(Date.now()-7*864e5).toISOString().split('T')[0];
-  document.getElementById('rend-desde').value=hace7;
-  document.getElementById('rend-hasta').value=hoy;
-  renderCobros();
-  const grid=document.getElementById('billetes-grid');
-  if(grid&&!grid.hasChildNodes()){
-    const billetes=[20000,10000,2000,1000,500,200,100,50,20,10];
-    grid.innerHTML=billetes.map(b=>'<div style="display:flex;align-items:center;gap:6px;background:var(--bg2);border-radius:6px;padding:6px 8px"><span style="font-size:12px;color:var(--txt2);width:55px">$'+b.toLocaleString('es-AR')+'</span><input type="number" id="bill-'+b+'" value="0" min="0" style="width:50px;text-align:center;padding:3px 5px;border:1px solid var(--brd);border-radius:4px" oninput="calcEfectivo()"><span style="font-size:11px;color:var(--txt2)" id="bill-sub-'+b+'">/bin/sh</span></div>').join('');
-  }
+  renderRendicion();
 }
 function calcEfectivo(){
   const billetes=[20000,10000,2000,1000,500,200,100,50,20,10];
