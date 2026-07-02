@@ -3869,7 +3869,7 @@ function poblarZonas(){
   // Poblar proveedores desde la tabla real de proveedores
   const selProv=document.getElementById('pro-prov');
   if(selProv){
-    const provs=_proveedores.map(p=>p.nombre).filter(Boolean).sort();
+    const provs=[...new Set(_productos.map(p=>p.proveedor_nom||'').filter(Boolean))].sort();
     selProv.innerHTML='<option value="">Todos los proveedores</option>';
     provs.forEach(pv=>{const o=document.createElement('option');o.value=pv;o.textContent=pv;selProv.appendChild(o);});
   }
