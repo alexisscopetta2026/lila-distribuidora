@@ -3660,7 +3660,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260701-12';
+const APP_VERSION = '20260701-13';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function actualizarApp(){
@@ -3867,10 +3867,10 @@ function poblarZonas(){
   sel.innerHTML='<option value="">Todas las zonas</option>';
   zonas.forEach(z=>{const o=document.createElement('option');o.value=z;o.textContent='Zona '+z;sel.appendChild(o);});
   
-  // Poblar proveedores
-  const provs=[...new Set(_productos.map(p=>p.proveedor_nom).filter(Boolean))].sort();
+  // Poblar proveedores desde la tabla real de proveedores
   const selProv=document.getElementById('pro-prov');
   if(selProv){
+    const provs=_proveedores.map(p=>p.nombre).filter(Boolean).sort();
     selProv.innerHTML='<option value="">Todos los proveedores</option>';
     provs.forEach(pv=>{const o=document.createElement('option');o.value=pv;o.textContent=pv;selProv.appendChild(o);});
   }
