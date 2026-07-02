@@ -1101,7 +1101,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <input id="cob-reparto" placeholder="—"
           onkeydown="if(event.key==='Tab'||event.key==='Enter'){event.preventDefault();document.getElementById('cob-total-imputar').focus();}">
       </div>
-      <button class="btn sm" onclick="toggleListaCobros()">📋 Historial</button>
     </div>
 
     <!-- Info cliente -->
@@ -1233,24 +1232,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div id="cob-imputado-label" style="display:none"></div>
   </div>
 
-  <!-- Historial -->
-  <div id="cob-historial-section" style="display:none;margin-top:8px">
-    <div style="display:flex;gap:7px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
-      <input id="cob-q" placeholder="Buscar cliente..." oninput="renderCobros();resetNav('cob-tbody')" onkeydown="navCobros(event)" style="padding:7px 10px;border:1px solid var(--brd);border-radius:8px;font-size:13px;flex:1;min-width:120px">
-      <select id="cob-f" onchange="renderCobros()" style="padding:7px 10px;border:1px solid var(--brd);border-radius:8px;font-size:13px">
-        <option value="">Todas las formas</option>
-        <option value="efectivo">Efectivo</option>
-        <option value="transferencia">Transferencia</option>
-        <option value="cheque">Cheque</option>
-      </select>
-      <button class="btn sm" onclick="toggleListaCobros()">✕ Cerrar</button>
-    </div>
-    <div class="tbl-wrap"><table class="tbl">
-      <thead><tr><th>Fecha</th><th>Cliente</th><th>Formas de pago</th><th>Reparto</th><th>Total</th><th>Vendedor</th><th>Estado Transf.</th><th>Rendición</th><th></th></tr></thead>
-      <tbody id="cob-tbody"></tbody>
-    </table></div>
-    <div class="pg" id="cob-pg"></div>
-  </div>
+  <!-- CC inline del cliente seleccionado -->
+  <div id="cob-cc-inline" style="display:none;margin-top:8px;border:1px solid var(--brd);border-radius:8px;padding:10px 12px;background:#fff"></div>
 </div><!-- fin cob-form-inline admin -->
 </div><!-- fin p-cobranza -->
 
@@ -1489,6 +1472,27 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="panel" id="p-rendicion">
   <div class="sech" style="flex-shrink:0"><h2>💼 Rendición de cobranza</h2></div>
   <div class="rend-scroll">
+
+  <!-- Cobros — validar o rechazar -->
+  <div class="card" style="margin-bottom:10px">
+    <div style="font-weight:700;font-size:13px;color:var(--PD);margin-bottom:8px">🧾 Cobros registrados</div>
+    <div style="display:flex;gap:7px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
+      <input id="cob-q" placeholder="Buscar cliente..." oninput="renderCobros();resetNav('cob-tbody')" onkeydown="navCobros(event)" style="padding:7px 10px;border:1px solid var(--brd);border-radius:8px;font-size:13px;flex:1;min-width:120px">
+      <select id="cob-f" onchange="renderCobros()" style="padding:7px 10px;border:1px solid var(--brd);border-radius:8px;font-size:13px">
+        <option value="">Todas las formas</option>
+        <option value="efectivo">Efectivo</option>
+        <option value="transferencia">Transferencia</option>
+        <option value="cheque">Cheque</option>
+      </select>
+    </div>
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Fecha</th><th>Cliente</th><th>Formas de pago</th><th>Reparto</th><th>Total</th><th>Vendedor</th><th>Estado Transf.</th><th>Rendición</th><th></th></tr></thead>
+      <tbody id="cob-tbody"></tbody>
+    </table></div>
+    <div class="pg" id="cob-pg"></div>
+  </div>
+
+  <!-- Generar rendición -->
   <div class="card">
     <div class="fr x3">
       <div class="fg"><label>Desde</label><input type="date" id="rend-desde"></div>
@@ -3691,7 +3695,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260630-05';
+const APP_VERSION = '20260701-03';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function actualizarApp(){
@@ -5216,7 +5220,24 @@ function limpiarModalCobro(){
   const codEl=document.getElementById('cob-cli-cod');if(codEl)codEl.style.borderColor='';
   _cobRestoSaldoFavor=0;
   clearComprobante();
+  const ccInline=document.getElementById('cob-cc-inline');if(ccInline){ccInline.style.display='none';ccInline.innerHTML='';}
   setTimeout(()=>{const f=document.getElementById('cob-cli-cod');if(f)f.focus();},100);
+}
+function renderCCInlineCobro(cid){
+  const el=document.getElementById('cob-cc-inline');if(!el)return;
+  const sid=String(cid);
+  const c=_clientes.find(x=>String(x.id)===sid);
+  if(!c){el.style.display='none';return;}
+  const rems=_remitos.filter(r=>String(r.cliente_id)===sid&&!r.anulado)
+    .map(r=>({fecha:r.fecha,tipo:'Remito',desc:`R-${String(r.id).padStart(4,'0')}`,importe:r.total,estado:r.cobrado?'✅ Cobrado':'⏳ Pendiente',color:'var(--A)'}));
+  const cobs=_cobros.filter(r=>String(r.cliente_id)===sid||(r.cliente&&c.nombre&&r.cliente.trim().toLowerCase()===c.nombre.trim().toLowerCase()))
+    .map(r=>({fecha:r.fecha,tipo:'Cobro',desc:r.forma||'efectivo',importe:r.importe,
+      estado:r.estado_rendicion==='validado'?'✅ Val':r.estado_rendicion==='rechazado'?'❌ Rech':'⏳ Pend',color:'var(--P)'}));
+  const movs=[...rems,...cobs].sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,15);
+  if(!movs.length){el.style.display='none';return;}
+  el.style.display='block';
+  const filas=movs.map(m=>`<tr><td>${m.fecha}</td><td style="color:${m.color};font-weight:600">${m.tipo}</td><td style="color:var(--txt2)">${m.desc}</td><td style="text-align:right;font-weight:600">${fmt(m.importe)}</td><td style="font-size:10px">${m.estado}</td></tr>`).join('');
+  el.innerHTML=`<div style="font-size:11px;font-weight:700;color:var(--PD);text-transform:uppercase;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center"><span>📋 CC — ${c.nombre}</span><span style="font-size:14px;font-weight:700;color:${(c.saldo||0)>0?'var(--D)':'var(--G)'}">${fmt(c.saldo||0)}</span></div><div class="tbl-wrap"><table class="tbl" style="font-size:11px"><thead><tr><th>Fecha</th><th>Tipo</th><th>Detalle</th><th style="text-align:right">Importe</th><th>Estado</th></tr></thead><tbody>${filas}</tbody></table></div>`;
 }
 // Sube un comprobante de transferencia al bucket "comprobantes" de Supabase Storage.
 // Retorna la URL pública o '' si falla. Muestra toast con mensaje claro si el bucket no existe.
@@ -5313,6 +5334,7 @@ function selCliCob(id){
     const ti=document.getElementById('cob-total-imputar');
     if(ti){ti.value=Math.round(c.saldo);calcTotalDesdeImputacion();}
   }
+  renderCCInlineCobro(id);
   // foco manejado por buscarCodCli o dropdown
 }
 function cobImpKeydown(e,remId,max){
@@ -7337,6 +7359,7 @@ function initRendicion(){
   const hace7=new Date(Date.now()-7*864e5).toISOString().split('T')[0];
   document.getElementById('rend-desde').value=hace7;
   document.getElementById('rend-hasta').value=hoy;
+  renderCobros();
   const grid=document.getElementById('billetes-grid');
   if(grid&&!grid.hasChildNodes()){
     const billetes=[20000,10000,2000,1000,500,200,100,50,20,10];
@@ -10328,7 +10351,6 @@ function go(p){
       document.getElementById('cob-movil').style.display='none';
       document.getElementById('cob-form-inline').style.display='block';
       limpiarModalCobro();
-      setTimeout(()=>{const q=document.getElementById('cob-q');if(q)q.focus();},100);
     }
   }
   if(p==='vendedor-home'){
