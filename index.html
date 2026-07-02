@@ -1412,9 +1412,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <input id="cli-q" placeholder="Nombre, teléfono, localidad..." oninput="renderClientes();resetNav('cli-tbody')" onkeydown="navCliTabla(event)" title="↑↓ navegar · Enter abrir · Esc volver">
     <select id="cli-ven-f" onchange="renderClientes()">
       <option value="">Todos los vendedores</option>
-      <option value="Alexis">Alexis</option>
-      <option value="Franco">Franco</option>
-      <option value="David">David</option>
     </select>
     <select id="cli-zon" onchange="renderClientes()">
       <option value="">Todas las zonas</option>
@@ -3663,7 +3660,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260701-11';
+const APP_VERSION = '20260701-12';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function actualizarApp(){
@@ -5900,30 +5897,33 @@ function histCliente(id){
 }
 
 // ─── CLIENTES ───
-const _VEN_NOMBRES={'1':'Alexis','2':'Franco','3':'David','Vendedor 1':'Alexis','Vendedor 2':'Franco','Vendedor 3':'David','vendedor 1':'Alexis','vendedor 2':'Franco','vendedor 3':'David'};
-function nomVendedor(v){const s=String(v||'').trim();return _VEN_NOMBRES[s]||s||'—';}
 function renderClientes(){
   const q=(document.getElementById('cli-q').value||'').toLowerCase();
   const zon=document.getElementById('cli-zon').value;
   const loc=document.getElementById('cli-loc')?.value||'';
   const venF=document.getElementById('cli-ven-f')?.value||'';
-  // Poblar localidades dinámicamente
+  // Poblar dropdowns dinámicamente en el primer render
   const selLoc=document.getElementById('cli-loc');
-  if(selLoc && selLoc.options.length<=1){
+  if(selLoc&&selLoc.options.length<=1){
     const locs=[...new Set(_clientes.map(c=>c.localidad||'').filter(Boolean))].sort();
     locs.forEach(l=>{const o=document.createElement('option');o.value=l;o.textContent=l;selLoc.appendChild(o);});
+  }
+  const selVen=document.getElementById('cli-ven-f');
+  if(selVen&&selVen.options.length<=1){
+    const vens=[...new Set(_clientes.map(c=>(c.vendedor||'').trim()).filter(Boolean))].sort();
+    vens.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;selVen.appendChild(o);});
   }
   let data=_clientes.filter(c=>
     (!q||(c.nombre||'').toLowerCase().includes(q)||(c.telefono||'').includes(q)||(c.localidad||'').toLowerCase().includes(q)||(c.codigo||'').toString().includes(q)||(c.cuit||'').includes(q))&&
     (!zon||c.zona===zon)&&
     (!loc||(c.localidad||'')=== loc)&&
-    (!venF||nomVendedor(c.vendedor)===venF)
+    (!venF||(c.vendedor||'').trim()===venF)
   );
   const tot=data.length,sl=data.slice((_cliPg-1)*PP,_cliPg*PP);
   const tbody=document.getElementById('cli-tbody');
   tbody.innerHTML=sl.length?sl.map(c=>`<tr>
     <td style="font-weight:600">${c.nombre}</td><td>${c.localidad||''}</td><td>${c.telefono||''}</td>
-    <td><span class="b bA">Z${c.zona||'-'}</span></td><td>${nomVendedor(c.vendedor)}</td>
+    <td><span class="b bA">Z${c.zona||'-'}</span></td><td>${(c.vendedor||'').trim()||'—'}</td>
     <td>${c.descuento||0}%</td>
     <td style="${(c.saldo||0)>0?'color:var(--D);font-weight:600':''}">${fmt(c.saldo)}</td>
     <td style="display:flex;gap:3px">
