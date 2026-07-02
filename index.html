@@ -9123,7 +9123,7 @@ function abrirPedidoMovil(){
   actualizarCarritoBar();
   setTimeout(()=>document.getElementById('pm-cli-q')?.focus(),100);
 }
-
+function pmBuscarPorCod(){const cod=(document.getElementById('pm-cli-cod')?.value||'').trim();if(!cod)return;const c=_clientes.find(x=>String(x.codigo||x.id)===cod);if(c){selClienteMovil(c.id);document.getElementById('pm-cli-cod').style.borderColor='var(--P)';}else{document.getElementById('pm-cli-cod').style.borderColor='var(--D)';}}
 function buscarClienteMovil(){
   const q=(document.getElementById('pm-cli-q').value||'').toLowerCase();
   const lista=document.getElementById('pm-cli-lista');
