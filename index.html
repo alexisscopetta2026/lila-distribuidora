@@ -1434,7 +1434,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <div class="panel" id="p-productos">
   <div class="sech">
     <h2>Productos / Stock</h2>
-    <button class="btn P" onclick="abrirProducto()">+ Nuevo</button>
+    <div style="display:flex;gap:6px">
+      <div style="position:relative" id="pro-export-wrap">
+        <button class="btn" onclick="document.getElementById('pro-export-menu').classList.toggle('hidden')" style="gap:4px">🖨️ Imprimir / Exportar ▾</button>
+        <div id="pro-export-menu" class="hidden" style="position:absolute;right:0;top:110%;background:#fff;border:1px solid var(--brd);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:200;min-width:160px;overflow:hidden">
+          <button onclick="imprimirProductos();document.getElementById('pro-export-menu').classList.add('hidden')" style="display:block;width:100%;padding:10px 14px;text-align:left;border:none;background:none;cursor:pointer;font-size:13px">🖨️ Imprimir</button>
+          <button onclick="exportarProductosCSV();document.getElementById('pro-export-menu').classList.add('hidden')" style="display:block;width:100%;padding:10px 14px;text-align:left;border:none;background:none;cursor:pointer;font-size:13px;border-top:1px solid var(--brd)">📊 Exportar a Excel</button>
+        </div>
+      </div>
+      <button class="btn P" onclick="abrirProducto()">+ Nuevo</button>
+    </div>
   </div>
   <div class="tb">
     <input id="pro-q" placeholder="Nombre, código..." oninput="renderProductos();resetNav('pro-tbody')" onkeydown="navProductos(event)" title="↑↓ navegar · Enter abrir · Esc volver">
@@ -3651,7 +3660,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260701-06';
+const APP_VERSION = '20260701-07';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function actualizarApp(){
@@ -5994,7 +6003,7 @@ function renderProductos(){
   const tbody=document.getElementById('pro-tbody');
   tbody.innerHTML=sl.length?sl.map(p=>{
     const costo=p.costo||0;const precio=p.precio||0;
-    const mReal=precio>0?Math.round((precio-costo)/precio*1000)/10:0;
+    const mReal=costo>0?Math.round((precio-costo)/costo*1000)/10:0;
     const mObj=p.margen_objetivo||0;
     const dif=Math.round((mReal-mObj)*10)/10;
     const badge=mReal<0?'<span class="b bD">📉 Pérdida</span>':dif>=-5&&dif<0?`<span class="b bW" title="${dif}%">⚠️ -${Math.abs(dif)}%</span>`:dif<-5?`<span class="b bD" title="${dif}%">🔴 -${Math.abs(dif)}%</span>`:'<span class="b bP">✅ OK</span>';
@@ -6013,6 +6022,50 @@ function renderProductos(){
     <td><button class="btn sm" onclick="editarProducto(${p.id})">✏️</button></td>
   </tr>`;}).join(''):'<tr><td colspan="11"><div class="empty">Sin productos</div></td></tr>';
   pag('pro-pg',tot,_proPg,p=>{_proPg=p;renderProductos();});
+}
+function _getProductosFiltrados(){
+  const q=(document.getElementById('pro-q')?.value||'').toLowerCase();
+  const cat=document.getElementById('pro-cat')?.value||'';
+  const subcat=document.getElementById('pro-subcat')?.value||'';
+  const prov=document.getElementById('pro-prov')?.value||'';
+  const activoFiltro=document.getElementById('pro-activo')?.value||'activos';
+  return _productos.filter(p=>{
+    const okQ=!q||(p.nombre||'').toLowerCase().includes(q)||(p.codigo||'').toString().includes(q)||(p.proveedor_nom||'').toLowerCase().includes(q);
+    const okC=!cat||(p.rubro||'')===cat;
+    const okSC=!subcat||(p.linea||'')===subcat;
+    const okPr=!prov||(p.proveedor_nom||'')===prov;
+    const esActivo=p.activo!==false;
+    const okA=activoFiltro==='todos'||(activoFiltro==='activos'&&esActivo)||(activoFiltro==='inactivos'&&!esActivo);
+    return okQ&&okC&&okSC&&okPr&&okA;
+  });
+}
+function imprimirProductos(){
+  const data=_getProductosFiltrados();
+  const filas=data.map(p=>{
+    const costo=p.costo||0,precio=p.precio||0;
+    const margen=costo>0?((precio-costo)/costo*100).toFixed(1)+'%':'—';
+    const estado=p.activo===false?'INACTIVO':'Activo';
+    return `<tr><td>${p.codigo||''}</td><td>${p.nombre}</td><td>${p.proveedor_nom||'—'}</td><td>${p.unidad||'—'}</td><td style="text-align:right">${fmt(costo)}</td><td style="text-align:right;font-weight:bold">${fmt(precio)}</td><td style="text-align:right">${margen}</td><td style="text-align:center">${p.stock||0}</td><td>${estado}</td></tr>`;
+  }).join('');
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><title>Listado de Productos</title><style>body{font-family:Arial,sans-serif;padding:20px;font-size:12px}h2{font-size:15px;margin-bottom:12px}table{width:100%;border-collapse:collapse}th,td{padding:5px 8px;border:1px solid #ddd;vertical-align:top}th{background:#f0f0f0;font-size:11px;text-transform:uppercase}tr:nth-child(even){background:#fafafa}@media print{button{display:none}}</style></head><body><h2>🌸 Distribuidora Lila — Listado de Productos (${new Date().toLocaleDateString('es-AR')})</h2><p style="font-size:11px;color:#666;margin-bottom:12px">${data.length} productos</p><table><thead><tr><th>Código</th><th>Nombre / Descripción</th><th>Proveedor</th><th>Unidad</th><th style="text-align:right">Costo</th><th style="text-align:right">Precio Vta.</th><th style="text-align:right">Margen</th><th style="text-align:center">Stock</th><th>Estado</th></tr></thead><tbody>${filas}</tbody></table><br><button onclick="window.print()" style="padding:8px 20px;font-size:13px;cursor:pointer">🖨️ Imprimir</button></body></html>`);
+  w.document.close();
+}
+function exportarProductosCSV(){
+  const data=_getProductosFiltrados();
+  const BOM='﻿';
+  const hdr=['Código','Nombre / Descripción','Proveedor','Unidad','Costo','Precio Venta','Margen %','Stock','Estado'];
+  const rows=data.map(p=>{
+    const costo=p.costo||0,precio=p.precio||0;
+    const margen=costo>0?((precio-costo)/costo*100).toFixed(1):'';
+    const estado=p.activo===false?'INACTIVO':'Activo';
+    return [p.codigo||'',p.nombre,p.proveedor_nom||'',p.unidad||'',costo,precio,margen,p.stock||0,estado].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';');
+  });
+  const csv=BOM+[hdr.map(h=>`"${h}"`).join(';'),...rows].join('\r\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download=`productos_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
 }
 function recalcPrecioSugerido(){
   const costo=parseFloat(document.getElementById('pro-costo')?.value)||0;
