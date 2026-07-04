@@ -6,6 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
+<meta name="theme-color" content="#1a7a52">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Lila">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
 <!-- v20260624190000 --><title>Distribuidora Lila — Sistema de Gestión</title>
 
 <!-- ── SERVICE WORKER: registrar ANTES del login para interceptar desde la primera carga ── -->
@@ -3614,7 +3621,9 @@ function gerUpdateDetalle() {
 // ─── SUPABASE CONFIG ───
 const SB_URL = 'https://ixniwmrjawlbpksdmbfo.supabase.co';
 const SB_KEY = 'sb_publishable_PAsjtdtFMb7Q7ZBUe-SQ6A_BnzZC-wQ';
-const sb = supabase.createClient(SB_URL, SB_KEY);
+const sb = supabase.createClient(SB_URL, SB_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, storageKey: 'lila-auth' }
+});
 
 // ─── USUARIOS (locales, simples) ───
 const USUARIOS = [
@@ -3659,7 +3668,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260701-13';
+const APP_VERSION = '20260704-01';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function actualizarApp(){
