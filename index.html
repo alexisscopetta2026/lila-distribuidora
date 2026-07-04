@@ -3668,7 +3668,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260704-01';
+const APP_VERSION = '20260704-02';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function actualizarApp(){
@@ -3757,6 +3757,7 @@ function doLogin(){
   const found=USUARIOS.find(x=>x.user===u&&x.pass===p);
   if(!found){document.getElementById('login-err').textContent='Usuario o contraseña incorrectos';return;}
   usuarioActual=found;
+  localStorage.setItem('lila-sesion', found.user);
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app').style.display='flex';
   document.getElementById('app').style.flexDirection='column';
@@ -3818,9 +3819,23 @@ function doLogin(){
 }
 function logout(){
   usuarioActual=null;
+  localStorage.removeItem('lila-sesion');
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('app').style.display='none';
 }
+
+// ─── AUTO-SESIÓN ───
+(function(){
+  const saved=localStorage.getItem('lila-sesion');
+  if(!saved)return;
+  const found=USUARIOS.find(x=>x.user===saved);
+  if(!found)return;
+  document.addEventListener('DOMContentLoaded',function(){
+    document.getElementById('login-user').value=found.user;
+    document.getElementById('login-pass').value=found.pass;
+    doLogin();
+  });
+})();
 
 // ─── CARGA INICIAL ───
 async function recargarTodo(){
