@@ -5621,11 +5621,30 @@ async function validarCobro(id){
   toast('✅ Cobro validado — saldo aplicado');
 }
 async function rechazarCobro(id){
-  if(!confirm('¿Rechazar este cobro? El saldo del cliente no será afectado.'))return;
+  if(!confirm('¿Rechazar este cobro?'))return;
+  const cob=_cobros.find(x=>x.id===id);if(!cob)return;
+  const imps=Array.isArray(cob.imputaciones)?cob.imputaciones:[];
+  const remImpactados=imps.map(imp=>_remitos.find(r=>r.id===imp.remito_id)).filter(r=>r&&r.cobrado);
+  const yaImpacto=remImpactados.length>0||cob.estado_rendicion==='validado';
   const {error}=await sb.from('cobros').update({estado_rendicion:'rechazado'}).eq('id',id);
   if(error){toast('Error al rechazar cobro: '+error.message,'err');return;}
-  const c=_cobros.find(x=>x.id===id);if(c)c.estado_rendicion='rechazado';
-  await cargarCobros();renderRendicion();renderCobros();toast('❌ Cobro rechazado');
+  if(yaImpacto){
+    for(const imp of imps){
+      const rem=_remitos.find(r=>r.id===imp.remito_id);
+      if(rem){
+        const saldoRevertido=(rem.saldo_pendiente!=null?rem.saldo_pendiente:0)+imp.monto;
+        await sb.from('remitos').update({saldo_pendiente:saldoRevertido,cobrado:false,forma_cobro:null}).eq('id',rem.id);
+      }
+    }
+    const cli=_clientes.find(x=>x.id===cob.cliente_id||(cob.cliente&&x.nombre&&x.nombre.trim().toLowerCase()===cob.cliente.trim().toLowerCase()));
+    if(cli){
+      const saldoRevertido=(cli.saldo||0)+cob.importe;
+      await sb.from('clientes').update({saldo:saldoRevertido}).eq('id',cli.id);
+    }
+  }
+  await Promise.all([cargarCobros(),cargarClientes(),cargarRemitos()]);
+  renderRendicion();renderCobros();renderCC();renderDash();renderRemitos();
+  toast('❌ Cobro rechazado'+(yaImpacto?' — saldo revertido':''));
 }
 function renderRendicion(){
   const el=document.getElementById('rend-resultado');if(!el)return;
