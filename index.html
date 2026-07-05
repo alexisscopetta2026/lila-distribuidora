@@ -5220,7 +5220,7 @@ function renderCCInlineCobro(cid){
     .map(r=>({fecha:r.fecha,tipo:'Remito',desc:`R-${String(r.id).padStart(4,'0')}`,importe:r.total,estado:r.cobrado?'✅ Cobrado':'⏳ Pendiente',color:'var(--A)'}));
   const cobs=_cobros.filter(r=>String(r.cliente_id)===sid||(r.cliente&&c.nombre&&r.cliente.trim().toLowerCase()===c.nombre.trim().toLowerCase()))
     .map(r=>({fecha:r.fecha,tipo:'Cobro',desc:r.forma||'efectivo',importe:r.importe,
-      estado:r.estado_rendicion==='validado'?'✅ Val':r.estado_rendicion==='rechazado'?'❌ Rech':'⏳ Pend',color:'var(--P)'}));
+    estado:r.estado_rendicion==='validado'?'✅ Val':'⏳ Pend',color:'var(--P)'}));
   const movs=[...rems,...cobs].sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,15);
   if(!movs.length){el.style.display='none';return;}
   el.style.display='block';
