@@ -2993,7 +2993,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </div>
       <div class="fg" style="min-width:140px">
         <label>Período</label>
-        <input id="imp-periodo" placeholder="Ej: Mayo 2026" style="width:100%">
+        <input id="imp-periodo" placeholder="Ej: 05-2026 o Mayo 2026" style="width:100%">
+        <div style="font-size:11px;color:var(--txt2);margin-top:3px">Se guarda siempre como MM-AAAA</div>
       </div>
       <div class="fg" style="min-width:200px">
         <label>Archivo Excel (.xlsx / .xls)</label>
@@ -11718,9 +11719,53 @@ async function cargarPeriodosImport() {
     sb.from('importaciones_saldos').select('periodo').order('periodo'),
     sb.from('importaciones_resultado').select('periodo').order('periodo'),
   ]);
-  _impPeriodos.ventas = [...new Set((v.data||[]).map(x=>x.periodo))];
-  _impPeriodos.saldos = [...new Set((s.data||[]).map(x=>x.periodo))];
-  _impPeriodos.resultado = [...new Set((r.data||[]).map(x=>x.periodo))];
+  const ordCrono = (a,b) => periodoKey(a).localeCompare(periodoKey(b));
+  _impPeriodos.ventas = [...new Set((v.data||[]).map(x=>x.periodo))].sort(ordCrono);
+  _impPeriodos.saldos = [...new Set((s.data||[]).map(x=>x.periodo))].sort(ordCrono);
+  _impPeriodos.resultado = [...new Set((r.data||[]).map(x=>x.periodo))].sort(ordCrono);
+}
+
+// Normaliza cualquier forma de escribir un período a "MM-AAAA". Devuelve null si no se puede interpretar.
+// Acepta: "Mayo 2026", "05-2026", "05 2026", "5/2026", "2026-05", "05.2026"
+function normalizarPeriodo(txt) {
+  if (!txt) return null;
+  const t = String(txt).trim().toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // saca tildes
+  const meses = {enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,setiembre:9,octubre:10,noviembre:11,diciembre:12};
+  let mm = 0, aaaa = 0, m;
+  if ((m = t.match(/^([a-z]+)[\s\-\/]+(\d{4})$/))) {            // "mayo 2026"
+    mm = meses[m[1]] || 0; aaaa = parseInt(m[2]);
+  } else if ((m = t.match(/^(\d{1,2})[\s\-\/\.]+(\d{4})$/))) {  // "05-2026", "5/2026", "05 2026"
+    mm = parseInt(m[1]); aaaa = parseInt(m[2]);
+  } else if ((m = t.match(/^(\d{4})[\s\-\/\.]+(\d{1,2})$/))) {  // "2026-05"
+    aaaa = parseInt(m[1]); mm = parseInt(m[2]);
+  }
+  if (mm < 1 || mm > 12 || aaaa < 2020 || aaaa > 2035) return null;
+  return String(mm).padStart(2, '0') + '-' + aaaa;
+}
+
+// Clave ordenable "AAAA-MM" para cualquier período (MM-AAAA nuevo o "Mayo 2026" legado). Lo no interpretable va al final.
+function periodoKey(p) {
+  const n = normalizarPeriodo(p);
+  if (!n) return '9999-99 ' + String(p);
+  return n.slice(3) + '-' + n.slice(0, 2);
+}
+
+// Valida que el Excel sea un ranking de VENTAS POR CLIENTE y no otro reporte (ej: ranking de productos).
+function validarRankingClientes(rows) {
+  const cab = rows.slice(0, 12).map(r => (r || []).join(' ').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')).join(' | ');
+  // Marcadores de ranking de PRODUCTOS (reporte "resultado"): rechazar
+  const marcasProducto = ['kilos', 'venta neta', 'costo', 'diferencia', '% margen', 'cantidad'];
+  const encontradas = marcasProducto.filter(mk => cab.includes(mk));
+  if (encontradas.length >= 2) {
+    return { ok: false, motivo: 'El archivo parece un ranking de PRODUCTOS (encabezados: ' + encontradas.join(', ') + '). Elegí el tipo "Resultado / CMG por producto" o cargá el ranking de clientes correcto.' };
+  }
+  // Marcador esperado del ranking de clientes: "Cpra Total" / "Compra"
+  if (!cab.includes('cpra') && !cab.includes('compra')) {
+    return { ok: false, motivo: 'No se encontró la columna "Cpra Total" en los encabezados. Verificá que sea el ranking de ventas por cliente del FoxPro.' };
+  }
+  return { ok: true };
 }
 
 async function importarHistorico() {
@@ -11731,7 +11776,19 @@ async function importarHistorico() {
 
   if (!fileEl.files.length) { alert('Seleccioná un archivo Excel'); return; }
   if (!tipo) { alert('Seleccioná el tipo de archivo'); return; }
-  if (!periodo) { alert('Ingresá el período (ej: Mayo 2026)'); return; }
+  if (!periodo) { alert('Ingresá el período (ej: Mayo 2026 o 05-2026)'); return; }
+
+  // Normalizar SIEMPRE a MM-AAAA: una sola etiqueta posible por mes
+  const periodoNorm = normalizarPeriodo(periodo);
+  if (!periodoNorm) {
+    alert('No pude interpretar el período "' + periodo + '".\nEscribilo como "05-2026" o "Mayo 2026".');
+    return;
+  }
+
+  // Si el mes ya existe para este tipo, avisar que se va a PISAR (no apilar)
+  if ((_impPeriodos[tipo] || []).some(p => normalizarPeriodo(p) === periodoNorm)) {
+    if (!confirm('El período ' + periodoNorm + ' ya tiene datos importados de "' + ({ventas:'Ventas por cliente',saldos:'Saldos',resultado:'Resultado/CMG'}[tipo]) + '".\n\nSe van a REEMPLAZAR por los del archivo nuevo. ¿Continuar?')) return;
+  }
 
   const file = fileEl.files[0];
   status.textContent = 'Leyendo archivo...';
@@ -11746,6 +11803,9 @@ async function importarHistorico() {
       let registros = [];
 
       if (tipo === 'ventas') {
+        // Rechazar archivos que no sean el ranking de ventas por cliente
+        const val = validarRankingClientes(rows);
+        if (!val.ok) throw new Error(val.motivo);
         // Encabezado filas 1-5, datos desde fila 6 (índice 5)
         // Columnas: Código | Descripción (cliente) | Cpra Total
         for (let i = 5; i < rows.length; i++) {
@@ -11754,13 +11814,14 @@ async function importarHistorico() {
           const nombre = String(r[1]||'').trim();
           const monto = parseFloat(String(r[2]||'').replace(',','.')) || 0;
           if (!cod || !nombre || monto <= 0) continue;
-          registros.push({ periodo, codigo_cliente: cod, nombre_cliente: nombre, monto_vendido: monto });
+          registros.push({ periodo: periodoNorm, codigo_cliente: cod, nombre_cliente: nombre, monto_vendido: monto });
         }
-        await sb.from('importaciones_ventas').delete().eq('periodo', periodo);
-        if (registros.length) {
-          const { error } = await sb.from('importaciones_ventas').insert(registros);
-          if (error) throw error;
-        }
+        if (!registros.length) throw new Error('El archivo no tiene filas válidas de clientes (Código | Cliente | Cpra Total desde la fila 6). No se importó nada.');
+        // Pisar el mes: borrar la etiqueta normalizada Y cualquier variante vieja del mismo mes
+        const variantes = [...new Set([periodoNorm, ...(_impPeriodos.ventas||[]).filter(p => normalizarPeriodo(p) === periodoNorm)])];
+        await sb.from('importaciones_ventas').delete().in('periodo', variantes);
+        const { error } = await sb.from('importaciones_ventas').insert(registros);
+        if (error) throw error;
 
       } else if (tipo === 'saldos') {
         // Datos desde fila 3 (índice 2)
@@ -11773,13 +11834,13 @@ async function importarHistorico() {
           const localidad = String(r[3]||'').trim();
           const saldo = parseFloat(String(r[4]||'').replace(',','.')) || 0;
           if (!cod || !nombre) continue;
-          registros.push({ periodo, codigo_cliente: cod, nombre_cliente: nombre, direccion, localidad, saldo });
+          registros.push({ periodo: periodoNorm, codigo_cliente: cod, nombre_cliente: nombre, direccion, localidad, saldo });
         }
-        await sb.from('importaciones_saldos').delete().eq('periodo', periodo);
-        if (registros.length) {
-          const { error } = await sb.from('importaciones_saldos').insert(registros);
-          if (error) throw error;
-        }
+        if (!registros.length) throw new Error('El archivo no tiene filas válidas de saldos. No se importó nada.');
+        const variantesS = [...new Set([periodoNorm, ...(_impPeriodos.saldos||[]).filter(p => normalizarPeriodo(p) === periodoNorm)])];
+        await sb.from('importaciones_saldos').delete().in('periodo', variantesS);
+        const { error } = await sb.from('importaciones_saldos').insert(registros);
+        if (error) throw error;
 
       } else if (tipo === 'resultado') {
         // Datos desde fila 12 (índice 11)
@@ -11795,16 +11856,19 @@ async function importarHistorico() {
           const diferencia = parseFloat(String(r[6]||'').replace(',','.')) || 0;
           const pct_margen = parseFloat(String(r[7]||'').replace(',','.').replace('%','')) || 0;
           if (!cod || !descripcion || venta_neta <= 0) continue;
-          registros.push({ periodo, codigo_producto: cod, descripcion, cantidad, kilos, venta_neta, costo, diferencia, pct_margen });
+          registros.push({ periodo: periodoNorm, codigo_producto: cod, descripcion, cantidad, kilos, venta_neta, costo, diferencia, pct_margen });
         }
-        await sb.from('importaciones_resultado').delete().eq('periodo', periodo);
-        if (registros.length) {
-          const { error } = await sb.from('importaciones_resultado').insert(registros);
-          if (error) throw error;
-        }
+        if (!registros.length) throw new Error('El archivo no tiene filas válidas de productos. No se importó nada.');
+        const variantesR = [...new Set([periodoNorm, ...(_impPeriodos.resultado||[]).filter(p => normalizarPeriodo(p) === periodoNorm)])];
+        await sb.from('importaciones_resultado').delete().in('periodo', variantesR);
+        const { error } = await sb.from('importaciones_resultado').insert(registros);
+        if (error) throw error;
       }
 
-      status.textContent = `✅ Importados ${registros.length} registros para "${periodo}"`;
+      // Total importado para contrastar contra el control del FoxPro
+      const campoTotal = { ventas: 'monto_vendido', saldos: 'saldo', resultado: 'venta_neta' }[tipo];
+      const totalImp = registros.reduce((a, r) => a + (r[campoTotal] || 0), 0);
+      status.textContent = `✅ ${registros.length} registros importados para ${periodoNorm} — Total: $${totalImp.toLocaleString('es-AR', {maximumFractionDigits: 0})} (verificá contra el control del FoxPro)`;
       status.style.color = 'var(--P)';
       document.getElementById('imp-file').value = '';
 
@@ -12036,8 +12100,9 @@ function _impRenderCompResultado(el, dA, perA, dB, perB) {
 function renderSelectorCruzado() {
   const perVentas = new Set(_impPeriodos.ventas);
   const perSaldos = new Set(_impPeriodos.saldos);
-  const comunes = [...perVentas].filter(p => perSaldos.has(p)).sort();
-  const todos = [...new Set([..._impPeriodos.ventas, ..._impPeriodos.saldos])].sort();
+  const ordCrz = (a,b) => periodoKey(a).localeCompare(periodoKey(b));
+  const comunes = [...perVentas].filter(p => perSaldos.has(p)).sort(ordCrz);
+  const todos = [...new Set([..._impPeriodos.ventas, ..._impPeriodos.saldos])].sort(ordCrz);
   const opciones = comunes.length ? comunes : todos;
   const sel = document.getElementById('imp-cruz-per');
   if (!sel) return;
@@ -12810,14 +12875,8 @@ async function renderDashboardEvolucion(filtro){
   (resS.data||[]).forEach(r=>{ensure(r.periodo);agg[r.periodo].saldos+=(r.saldo||0);});
   (resR.data||[]).forEach(r=>{ensure(r.periodo);agg[r.periodo].venta_neta+=(r.venta_neta||0);agg[r.periodo].cmg+=(r.diferencia||0);});
 
-  // Sort periods (they're strings like "Mayo 2025")
-  const ordenMes={'enero':1,'febrero':2,'marzo':3,'abril':4,'mayo':5,'junio':6,'julio':7,'agosto':8,'septiembre':9,'octubre':10,'noviembre':11,'diciembre':12};
-  let periodos=Object.values(agg).sort((a,b)=>{
-    const pa=a.periodo.toLowerCase().split(' '),pb=b.periodo.toLowerCase().split(' ');
-    const ya=parseInt(pa[1])||0,yb=parseInt(pb[1])||0;
-    if(ya!==yb)return ya-yb;
-    return (ordenMes[pa[0]]||0)-(ordenMes[pb[0]]||0);
-  });
+  // Orden cronológico real: soporta "05-2026", "Mayo 2026" y cualquier variante que entienda normalizarPeriodo
+  let periodos=Object.values(agg).sort((a,b)=>periodoKey(a.periodo).localeCompare(periodoKey(b.periodo)));
 
   // Apply filter
   if(filtro==='2025')periodos=periodos.filter(p=>p.periodo.includes('2025'));
