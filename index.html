@@ -57,7 +57,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-:root{--P:#1a7a52;--PL:#e8f5ef;--PD:#0f5438;--G:#1a7a52;--A:#1a5fa8;--W:#c47a00;--WL:#fff8e6;--D:#c0392b;--DL:#fdecea;--txt:#1a1a1a;--txt2:#6b7280;--bg:#ffffff;--bg2:#f8f9fa;--brd:#e5e7eb}
+:root{--P:#1a7a52;--PL:#e8f5ef;--PD:#0f5438;--G:#1a7a52;--A:#1a5fa8;--W:#c47a00;--WL:#fff8e6;--D:#c0392b;--DL:#fdecea;--txt:#000000;--txt2:#333333;--bg:#ffffff;--bg2:#f2f3f5;--brd:#8b9097}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg2);color:var(--txt);font-size:14px}
 
 /* LOGIN */
@@ -127,9 +127,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 /* Table */
 .tbl-wrap{overflow-x:auto;overflow-y:clip}
-.tbl{width:100%;border-collapse:collapse;font-size:13px}
-.tbl th{padding:8px 10px;text-align:left;font-size:11px;color:var(--txt2);border-bottom:1px solid var(--brd);background:var(--bg2);font-weight:500;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
-.tbl td{padding:7px 10px;border-bottom:1px solid var(--brd);color:var(--txt);vertical-align:middle}
+.tbl{width:100%;border-collapse:collapse;font-size:13px;background:var(--bg)}
+.tbl th{padding:7px 10px;text-align:left;font-size:12px;color:#000;border:1px solid var(--brd);background:#e4e6e9;font-weight:700;white-space:nowrap}
+.tbl td{padding:6px 10px;border:1px solid var(--brd);color:#000;vertical-align:middle}
 .tbl tr:last-child td{border-bottom:none}
 .tbl tr:hover td{background:var(--bg2)}
 
@@ -168,7 +168,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .fr.x3{grid-template-columns:1fr 1fr 1fr}
 @media(max-width:500px){.fr,.fr.x3{grid-template-columns:1fr}}
 .fg{display:flex;flex-direction:column;gap:3px}
-.fg label{font-size:11px;color:var(--txt2);font-weight:500;text-transform:uppercase;letter-spacing:.3px}
+.fg label{font-size:12px;color:#000;font-weight:700}
 .fg input,.fg select,.fg textarea{padding:7px 10px;border:1px solid var(--brd);border-radius:8px;background:var(--bg);color:var(--txt);font-size:13px;font-family:inherit}
 
 /* Pedido items */
@@ -1651,6 +1651,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button id="cont-tab-asientos" class="btn sm" onclick="contTab('asientos')" style="font-size:13px">📖 Asientos</button>
     <button id="cont-tab-mayor" class="btn sm" onclick="contTab('mayor')" style="font-size:13px">📊 Mayor</button>
     <button id="cont-tab-resultado" class="btn sm" onclick="contTab('resultado')" style="font-size:13px">💹 Resultado</button>
+    <button id="cont-tab-mensual" class="btn sm" onclick="contTab('mensual')" style="font-size:13px">📅 Mensual</button>
   </div>
 
   <!-- SECCIÓN GASTOS -->
@@ -1716,6 +1717,80 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </div>
     </div>
     <div id="res-cuerpo"></div>
+  </div>
+
+  <!-- SECCIÓN RESULTADO MENSUAL (datos del FoxPro) -->
+  <div id="cont-mensual" style="display:none">
+    <style>
+      /* Estilo "FoxPro": denso, negro sobre blanco, todo en cuadrícula */
+      #cont-mensual .fox{background:#fff;color:#000;border:1px solid #444;border-radius:4px;padding:10px;font-variant-numeric:tabular-nums}
+      #cont-mensual table.foxt{width:100%;border-collapse:collapse;background:#fff;color:#000}
+      #cont-mensual table.foxt th,#cont-mensual table.foxt td{border:1px solid #666;padding:4px 8px;font-size:13px}
+      #cont-mensual table.foxt th{background:#e8e8e8;color:#000;text-align:left;font-weight:700}
+      #cont-mensual table.foxt td.n,#cont-mensual table.foxt th.n{text-align:right;font-family:inherit}
+      #cont-mensual input.fox-in{border:1px solid #666;border-radius:2px;background:#fff;color:#000;padding:4px 8px;font-size:14px;text-align:right;width:100%;font-variant-numeric:tabular-nums}
+      #cont-mensual input.fox-in.txt{text-align:left}
+      #cont-mensual .fox-lbl{font-size:12px;font-weight:700;color:#000;margin-bottom:2px;display:block}
+      #cont-mensual .fox-tot{font-weight:700;background:#f2f2f2}
+      #cont-mensual tr.rm-hist:hover{background:#eef;cursor:pointer}
+      #cont-mensual .fox-res-pos{color:#0a6b1d;font-weight:700}
+      #cont-mensual .fox-res-neg{color:#b00020;font-weight:700}
+    </style>
+    <div class="sech" style="margin-bottom:10px">
+      <h2>📅 Resultado mensual (datos FoxPro)</h2>
+    </div>
+    <div class="fox" style="margin-bottom:12px">
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px">
+        <div style="width:150px"><span class="fox-lbl">Mes (ej: 06-2026)</span>
+          <input id="rm-periodo" class="fox-in txt" placeholder="06-2026" onkeydown="foxEnter(event)"></div>
+        <button class="btn P sm" onclick="rmCargar()">Abrir mes</button>
+        <span id="rm-msg" style="font-size:12px;color:#444"></span>
+      </div>
+
+      <table class="foxt" style="max-width:640px;margin-bottom:10px">
+        <tr><th style="width:55%">VENTAS DEL MES (FoxPro)</th>
+            <td class="n"><input id="rm-ventas" class="fox-in" onkeydown="foxEnter(event)" oninput="rmCalc()"></td></tr>
+        <tr><th>CONTRIBUCIÓN MARGINAL (FoxPro)</th>
+            <td class="n"><input id="rm-cm" class="fox-in" onkeydown="foxEnter(event)" oninput="rmCalc()"></td></tr>
+        <tr class="fox-tot"><th>CMV (calculado) / CM %</th><td class="n" id="rm-cmv">—</td></tr>
+      </table>
+
+      <table class="foxt" style="max-width:640px;margin-bottom:6px">
+        <thead><tr><th>GASTO DEL MES</th><th class="n" style="width:30%">IMPORTE</th><th style="width:34px"></th></tr></thead>
+        <tbody id="rm-gastos"></tbody>
+        <tfoot><tr class="fox-tot"><th>TOTAL GASTOS</th><td class="n" id="rm-gtot">0,00</td><td></td></tr></tfoot>
+      </table>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button class="btn sm" onclick="rmAgregarGasto()">+ Gasto (Insert)</button>
+        <button class="btn sm" onclick="rmCopiarRubros()">Copiar rubros del mes anterior</button>
+      </div>
+
+      <table class="foxt" style="max-width:640px;margin-bottom:12px">
+        <tr class="fox-tot"><th style="width:55%">RESULTADO DEL MES (CM − gastos)</th>
+            <td class="n" id="rm-resultado">—</td></tr>
+      </table>
+
+      <table class="foxt" style="max-width:640px;margin-bottom:12px">
+        <thead><tr><th colspan="2">CAJA DEL MES (plata real)</th></tr></thead>
+        <tr><th style="width:55%">INGRESÓ (cobranzas)</th>
+            <td class="n"><input id="rm-caja-in" class="fox-in" onkeydown="foxEnter(event)" oninput="rmCalc()"></td></tr>
+        <tr><th>SALIÓ (pagos)</th>
+            <td class="n"><input id="rm-caja-out" class="fox-in" onkeydown="foxEnter(event)" oninput="rmCalc()"></td></tr>
+        <tr class="fox-tot"><th>DIFERENCIA DE CAJA</th><td class="n" id="rm-caja-dif">—</td></tr>
+      </table>
+
+      <button class="btn P" onclick="rmGuardar()">💾 Guardar mes (F10 / Ctrl+Enter)</button>
+    </div>
+
+    <div class="fox">
+      <div style="font-weight:700;margin-bottom:6px">HISTORIAL — clic en un mes para abrirlo</div>
+      <div style="overflow-x:auto">
+      <table class="foxt">
+        <thead><tr><th>MES</th><th class="n">VENTAS</th><th class="n">CM</th><th class="n">CM%</th><th class="n">GASTOS</th><th class="n">RESULTADO</th><th class="n">RES%</th><th class="n">ENTRÓ</th><th class="n">SALIÓ</th><th class="n">DIF CAJA</th></tr></thead>
+        <tbody id="rm-hist"></tbody>
+      </table>
+      </div>
+    </div>
   </div>
 
 </div>
@@ -3626,15 +3701,20 @@ const sb = supabase.createClient(SB_URL, SB_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, storageKey: 'lila-auth' }
 });
 
-// ─── USUARIOS (locales, simples) ───
+// ─── USUARIOS ───
+// Las contraseñas ya NO viven acá: las valida Supabase Auth.
+// Esta lista solo mapea usuario → email y define el rol dentro de la app.
+const EMAIL_DOMINIO = 'lila.local'; // los emails son internos, no reciben correo
 const USUARIOS = [
-  {user:'mauricio',  pass:'lila2024',     nombre:'Mauricio',  rol:'vendedor',    rol_original:'admin'},
-  {user:'alexis',    pass:'lila2024',     nombre:'Alexis',    rol:'vendedor',    esAdmin:true},
-  {user:'franco',    pass:'franco2024',   nombre:'Franco',    rol:'vendedor',    vendedor:'Franco'},
-  {user:'david',     pass:'david2024',    nombre:'David',     rol:'vendedor',    vendedor:'David'},
-  {user:'emiliano',  pass:'emiliano2024', nombre:'Emiliano',  rol:'repartidor',  vendedor:'Emiliano'},
-  {user:'gaston',    pass:'gaston2024',   nombre:'Gastón',    rol:'repartidor',  vendedor:'Gastón'},
+  {user:'mauricio',  nombre:'Mauricio',  rol:'vendedor',    rol_original:'admin'},
+  {user:'alexis',    nombre:'Alexis',    rol:'vendedor',    esAdmin:true},
+  {user:'franco',    nombre:'Franco',    rol:'vendedor',    vendedor:'Franco'},
+  {user:'david',     nombre:'David',     rol:'vendedor',    vendedor:'David'},
+  {user:'emiliano',  nombre:'Emiliano',  rol:'repartidor',  vendedor:'Emiliano'},
+  {user:'gaston',    nombre:'Gastón',    rol:'repartidor',  vendedor:'Gastón'},
 ];
+const emailDe = u => u.user + '@' + EMAIL_DOMINIO;
+const usuarioPorEmail = em => USUARIOS.find(x => emailDe(x) === String(em||'').toLowerCase());
 
 // ─── CATEGORÍAS DE PRODUCTOS ───
 const CATS={
@@ -3669,7 +3749,7 @@ let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260704-02';
+const APP_VERSION = '20260718-02';
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí Y CACHE_VERSION en sw.js
 
 function actualizarApp(){
@@ -3743,22 +3823,38 @@ async function initVersionCheck(){
   if(v){
     const found = USUARIOS.find(x => x.user === v.toLowerCase() || (x.vendedor||'').toLowerCase() === v.toLowerCase());
     if(found){
+      // Solo precarga el usuario; la contraseña la escribe cada uno
+      // (si ya hay sesión guardada de Supabase, entra directo igual por la auto-sesión)
       document.addEventListener('DOMContentLoaded', ()=>{
         document.getElementById('login-user').value = found.user;
-        document.getElementById('login-pass').value = found.pass;
-        setTimeout(doLogin, 100);
+        const pw = document.getElementById('login-pass');
+        if(pw) pw.focus();
       });
     }
   }
 })();
 
-function doLogin(){
+async function doLogin(){
   const u=document.getElementById('login-user').value.trim().toLowerCase();
   const p=document.getElementById('login-pass').value;
-  const found=USUARIOS.find(x=>x.user===u&&x.pass===p);
-  if(!found){document.getElementById('login-err').textContent='Usuario o contraseña incorrectos';return;}
+  const err=document.getElementById('login-err');
+  const found=USUARIOS.find(x=>x.user===u);
+  if(!found){err.textContent='Usuario o contraseña incorrectos';return;}
+  err.textContent='Verificando...';
+  // Autenticación REAL contra Supabase Auth (la contraseña se valida en el servidor)
+  const {error}=await sb.auth.signInWithPassword({email:emailDe(found),password:p});
+  if(error){
+    err.textContent = /invalid/i.test(error.message||'')
+      ? 'Usuario o contraseña incorrectos'
+      : 'No se pudo iniciar sesión: '+(error.message||'error de conexión');
+    return;
+  }
+  err.textContent='';
+  entrarApp(found);
+}
+
+function entrarApp(found){
   usuarioActual=found;
-  localStorage.setItem('lila-sesion', found.user);
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app').style.display='flex';
   document.getElementById('app').style.flexDirection='column';
@@ -3818,25 +3914,25 @@ function doLogin(){
     });
   }
 }
-function logout(){
+async function logout(){
   usuarioActual=null;
-  localStorage.removeItem('lila-sesion');
+  try{ await sb.auth.signOut(); }catch(e){}
+  localStorage.removeItem('lila-sesion'); // limpia restos del sistema viejo
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('app').style.display='none';
 }
 
 // ─── AUTO-SESIÓN ───
-(function(){
-  const saved=localStorage.getItem('lila-sesion');
-  if(!saved)return;
-  const found=USUARIOS.find(x=>x.user===saved);
-  if(!found)return;
-  document.addEventListener('DOMContentLoaded',function(){
-    document.getElementById('login-user').value=found.user;
-    document.getElementById('login-pass').value=found.pass;
-    doLogin();
-  });
-})();
+// Si Supabase tiene una sesión guardada válida, entra directo sin pedir contraseña.
+document.addEventListener('DOMContentLoaded', async function(){
+  try{
+    const {data:{session}} = await sb.auth.getSession();
+    if(!session) return;
+    const found = usuarioPorEmail(session.user?.email);
+    if(!found){ await sb.auth.signOut(); return; }
+    entrarApp(found);
+  }catch(e){ /* sin sesión o sin conexión: queda la pantalla de login */ }
+});
 
 // ─── CARGA INICIAL ───
 async function recargarTodo(){
@@ -7962,6 +8058,167 @@ function _focusActiveSearch(){
 document.addEventListener('click',e=>{
   if(!e.target.closest('.nav-group')&&!e.target.closest('#nav-floating-dropdown'))cerrarNavDropdown();
 });
+// ═══ RESULTADO MENSUAL (datos FoxPro) ═══
+let _rmMeses=[], _rmGastosMes=[];
+
+// Números al estilo argentino: acepta "123.456.789,50", "123456789.5", "123456789"
+function rmParse(s){
+  s=String(s||'').trim().replace(/\$/g,'').replace(/\s/g,'');
+  if(!s)return 0;
+  if(s.includes(','))s=s.replace(/\./g,'').replace(',','.');
+  else if(/^\d{1,3}(\.\d{3})+$/.test(s))s=s.replace(/\./g,'');
+  const n=parseFloat(s);return isNaN(n)?0:n;
+}
+const rmFmt=n=>Number(n||0).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+// Enter = pasar al siguiente casillero (como el FoxPro). F10/Ctrl+Enter = guardar. Insert = nuevo gasto.
+function foxEnter(e){
+  if(e.key==='F10'||(e.key==='Enter'&&e.ctrlKey)){e.preventDefault();rmGuardar();return;}
+  if(e.key==='Insert'){e.preventDefault();rmAgregarGasto();return;}
+  if(e.key!=='Enter')return;
+  e.preventDefault();
+  const ins=[...document.querySelectorAll('#cont-mensual input.fox-in')].filter(i=>i.offsetParent!==null);
+  const i=ins.indexOf(e.target);
+  if(i>=0&&i<ins.length-1){ins[i+1].focus();ins[i+1].select&&ins[i+1].select();}
+}
+
+async function rmInit(){
+  const per=document.getElementById('rm-periodo');
+  if(!per.value){
+    const hoy=new Date();hoy.setMonth(hoy.getMonth()-1); // por defecto, el mes pasado
+    per.value=String(hoy.getMonth()+1).padStart(2,'0')+'-'+hoy.getFullYear();
+  }
+  await rmRefrescarHistorial();
+  rmCargar();
+}
+
+async function rmRefrescarHistorial(){
+  try{
+    const {data,error}=await sb.from('resultado_mensual').select('*');
+    if(error)throw error;
+    _rmMeses=(data||[]).sort((a,b)=>periodoKey(a.periodo).localeCompare(periodoKey(b.periodo)));
+  }catch(e){
+    document.getElementById('rm-msg').textContent='⚠ Falta crear las tablas en Supabase (correr tabla_resultado_mensual.sql)';
+    _rmMeses=[];
+  }
+  rmRenderHistorial();
+}
+
+async function rmCargar(){
+  const norm=normalizarPeriodo(document.getElementById('rm-periodo').value);
+  if(!norm){document.getElementById('rm-msg').textContent='Mes inválido — escribilo como 06-2026';return;}
+  document.getElementById('rm-periodo').value=norm;
+  const m=_rmMeses.find(x=>x.periodo===norm);
+  document.getElementById('rm-ventas').value=m&&m.ventas?rmFmt(m.ventas):'';
+  document.getElementById('rm-cm').value=m&&m.contrib_marginal?rmFmt(m.contrib_marginal):'';
+  document.getElementById('rm-caja-in').value=m&&m.caja_ingresos?rmFmt(m.caja_ingresos):'';
+  document.getElementById('rm-caja-out').value=m&&m.caja_egresos?rmFmt(m.caja_egresos):'';
+  _rmGastosMes=[];
+  try{
+    const {data}=await sb.from('resultado_mensual_gastos').select('*').eq('periodo',norm).order('id');
+    _rmGastosMes=(data||[]).map(g=>({rubro:g.rubro,monto:g.monto}));
+  }catch(e){}
+  if(!_rmGastosMes.length)_rmGastosMes=[{rubro:'',monto:0}];
+  document.getElementById('rm-msg').textContent=m?'Mes '+norm+' cargado (guardado el '+new Date(m.updated_at).toLocaleDateString('es-AR')+')':'Mes '+norm+' — sin datos todavía, cargalos y guardá';
+  rmRenderGastos();rmCalc();
+}
+
+function rmRenderGastos(){
+  const tb=document.getElementById('rm-gastos');
+  tb.innerHTML=_rmGastosMes.map((g,i)=>
+    '<tr><td><input class="fox-in txt" value="'+String(g.rubro||'').replace(/"/g,'&quot;')+'" placeholder="Combustible / Alquiler / Sueldos..." onkeydown="foxEnter(event)" oninput="_rmGastosMes['+i+'].rubro=this.value"></td>'+
+    '<td class="n"><input class="fox-in" value="'+(g.monto?rmFmt(g.monto):'')+'" onkeydown="foxEnter(event)" oninput="_rmGastosMes['+i+'].monto=rmParse(this.value);rmCalc()"></td>'+
+    '<td style="text-align:center"><button class="btn sm" onclick="_rmGastosMes.splice('+i+',1);rmRenderGastos();rmCalc()">✕</button></td></tr>'
+  ).join('');
+}
+
+function rmAgregarGasto(){
+  _rmGastosMes.push({rubro:'',monto:0});
+  rmRenderGastos();
+  const ins=document.querySelectorAll('#rm-gastos input.fox-in.txt');
+  if(ins.length)ins[ins.length-1].focus();
+}
+
+function rmCopiarRubros(){
+  const norm=normalizarPeriodo(document.getElementById('rm-periodo').value);
+  if(!norm)return;
+  const previos=_rmMeses.filter(x=>periodoKey(x.periodo)<periodoKey(norm));
+  if(!previos.length){document.getElementById('rm-msg').textContent='No hay un mes anterior guardado';return;}
+  const ant=previos[previos.length-1];
+  sb.from('resultado_mensual_gastos').select('rubro').eq('periodo',ant.periodo).order('id').then(({data})=>{
+    if(data&&data.length){
+      _rmGastosMes=data.map(g=>({rubro:g.rubro,monto:0}));
+      rmRenderGastos();rmCalc();
+      document.getElementById('rm-msg').textContent='Rubros copiados de '+ant.periodo+' — completá los importes';
+    }
+  });
+}
+
+function rmCalc(){
+  const v=rmParse(document.getElementById('rm-ventas').value);
+  const cm=rmParse(document.getElementById('rm-cm').value);
+  const g=_rmGastosMes.reduce((a,x)=>a+(x.monto||0),0);
+  const res=cm-g;
+  const cin=rmParse(document.getElementById('rm-caja-in').value);
+  const cout=rmParse(document.getElementById('rm-caja-out').value);
+  document.getElementById('rm-cmv').textContent=v||cm?rmFmt(v-cm)+'   |   CM '+(v?(cm/v*100).toFixed(1):'0.0')+'%':'—';
+  document.getElementById('rm-gtot').textContent=rmFmt(g);
+  const er=document.getElementById('rm-resultado');
+  er.textContent=(cm||g)?rmFmt(res)+(v?'   ('+(res/v*100).toFixed(1)+'% s/ventas)':''):'—';
+  er.className='n '+(res>=0?'fox-res-pos':'fox-res-neg');
+  const ec=document.getElementById('rm-caja-dif');
+  ec.textContent=(cin||cout)?rmFmt(cin-cout):'—';
+  ec.className='n '+((cin-cout)>=0?'fox-res-pos':'fox-res-neg');
+}
+
+async function rmGuardar(){
+  const norm=normalizarPeriodo(document.getElementById('rm-periodo').value);
+  if(!norm){alert('Mes inválido');return;}
+  const fila={
+    periodo:norm,
+    ventas:rmParse(document.getElementById('rm-ventas').value),
+    contrib_marginal:rmParse(document.getElementById('rm-cm').value),
+    caja_ingresos:rmParse(document.getElementById('rm-caja-in').value),
+    caja_egresos:rmParse(document.getElementById('rm-caja-out').value),
+    updated_at:new Date().toISOString()
+  };
+  try{
+    const {error}=await sb.from('resultado_mensual').upsert(fila,{onConflict:'periodo'});
+    if(error)throw error;
+    await sb.from('resultado_mensual_gastos').delete().eq('periodo',norm);
+    const gs=_rmGastosMes.filter(g=>g.rubro&&g.monto).map(g=>({periodo:norm,rubro:g.rubro.trim(),monto:g.monto}));
+    if(gs.length){
+      const {error:e2}=await sb.from('resultado_mensual_gastos').insert(gs);
+      if(e2)throw e2;
+    }
+    document.getElementById('rm-msg').textContent='✅ '+norm+' guardado';
+    await rmRefrescarHistorial();
+  }catch(e){
+    document.getElementById('rm-msg').textContent='❌ Error al guardar: '+(e.message||e);
+  }
+}
+
+function rmRenderHistorial(){
+  const tb=document.getElementById('rm-hist');
+  if(!_rmMeses.length){tb.innerHTML='<tr><td colspan="10" style="color:#666;font-style:italic">Sin meses guardados todavía</td></tr>';return;}
+  // Gastos por mes: los traigo todos juntos para no hacer una consulta por fila
+  sb.from('resultado_mensual_gastos').select('periodo,monto').then(({data})=>{
+    const gx={};(data||[]).forEach(g=>{gx[g.periodo]=(gx[g.periodo]||0)+Number(g.monto||0);});
+    tb.innerHTML=_rmMeses.map(m=>{
+      const g=gx[m.periodo]||0, res=Number(m.contrib_marginal||0)-g, v=Number(m.ventas||0);
+      const dif=Number(m.caja_ingresos||0)-Number(m.caja_egresos||0);
+      return '<tr class="rm-hist" onclick="document.getElementById(\'rm-periodo\').value=\''+m.periodo+'\';rmCargar()">'+
+        '<td>'+m.periodo+'</td><td class="n">'+rmFmt(m.ventas)+'</td><td class="n">'+rmFmt(m.contrib_marginal)+'</td>'+
+        '<td class="n">'+(v?(m.contrib_marginal/v*100).toFixed(1):'0.0')+'%</td>'+
+        '<td class="n">'+rmFmt(g)+'</td>'+
+        '<td class="n '+(res>=0?'fox-res-pos':'fox-res-neg')+'">'+rmFmt(res)+'</td>'+
+        '<td class="n">'+(v?(res/v*100).toFixed(1):'0.0')+'%</td>'+
+        '<td class="n">'+rmFmt(m.caja_ingresos)+'</td><td class="n">'+rmFmt(m.caja_egresos)+'</td>'+
+        '<td class="n '+(dif>=0?'fox-res-pos':'fox-res-neg')+'">'+rmFmt(dif)+'</td></tr>';
+    }).join('');
+  });
+}
+
 function contTabDesde(tab){
   _pendingContTab=tab;
   go('contabilidad');
@@ -7985,12 +8242,13 @@ function actualizarNavActivo(p){
 }
 // ─── FIN MENÚ DESPLEGABLE ───
 function contTab(tab){
-  ['gastos','asientos','mayor','resultado'].forEach(t=>{
+  ['gastos','asientos','mayor','resultado','mensual'].forEach(t=>{
     const el=document.getElementById('cont-'+t);
     if(el)el.style.display=t===tab?'block':'none';
     const btn=document.getElementById('cont-tab-'+t);
     if(btn){btn.style.background=t===tab?'var(--P)':'';btn.style.color=t===tab?'#fff':'';}
   });
+  if(tab==='mensual')rmInit();
   if(tab==='gastos')renderGastos();
   if(tab==='mayor'){
     const hoy=new Date().toISOString().split('T')[0];
