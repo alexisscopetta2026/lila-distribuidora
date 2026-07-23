@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -75,20 +75,34 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 /* APP */
 #app{display:none;flex-direction:column;height:100vh;overflow:hidden}
 .topbar{background:var(--P);color:#fff;padding:10px 18px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:50}
-.app-layout{display:flex;flex:1;height:calc(100vh - 42px);overflow:hidden;gap:0}
-.sidebar{width:200px;min-width:200px;background:var(--PD);flex-shrink:0;overflow-y:auto;min-height:100%}
-.sidebar.collapsed{width:0;overflow:hidden}
-.sidebar-group{border-bottom:1px solid rgba(255,255,255,.1)}
-.sidebar-group-btn{width:100%;padding:12px 16px;background:none;border:none;color:rgba(255,255,255,.8);font-size:13px;cursor:pointer;text-align:left;font-family:inherit;display:flex;justify-content:space-between;align-items:center;transition:background .15s}
-.sidebar-group-btn:hover,.sidebar-group.open .sidebar-group-btn{background:rgba(255,255,255,.1);color:#fff}
-.sidebar-group.active .sidebar-group-btn{background:rgba(255,255,255,.15);color:#fff;font-weight:600}
-.sidebar-items{display:none;background:rgba(0,0,0,.15)}
+.app-layout{display:flex;flex:1;height:calc(100vh - 42px);overflow:hidden;gap:0;width:100%}
+.sidebar{position:fixed;top:0;left:0;height:100vh;width:240px;background:var(--PD);flex-shrink:0;overflow-y:auto;z-index:1000;transform:translateX(-100%);transition:transform .22s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,.18)}
+.sidebar.open{transform:translateX(0)}
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:999}
+.sidebar-overlay.open{display:block}
+.sidebar-header{padding:16px 18px 12px;border-bottom:1px solid rgba(255,255,255,.12);display:flex;align-items:center;gap:10px;flex-shrink:0}
+.sidebar-header-empresa{font-size:14px;font-weight:700;color:#fff;line-height:1.2;flex:1}
+.sidebar-header-sub{font-size:11px;color:rgba(255,255,255,.55);margin-top:2px}
+.sidebar-close{background:none;border:none;color:rgba(255,255,255,.6);font-size:22px;cursor:pointer;padding:2px 6px;line-height:1;border-radius:4px;flex-shrink:0}
+.sidebar-close:hover{color:#fff;background:rgba(255,255,255,.1)}
+.sidebar-section-label{padding:12px 18px 4px;font-size:10px;font-weight:700;color:rgba(255,255,255,.4);letter-spacing:.1em;text-transform:uppercase}
+.sidebar-group{border-bottom:1px solid rgba(255,255,255,.07)}
+.sidebar-group-btn{width:100%;padding:11px 18px;background:none;border:none;color:rgba(255,255,255,.82);font-size:13px;font-weight:500;cursor:pointer;text-align:left;font-family:inherit;display:flex;justify-content:space-between;align-items:center;transition:background .12s}
+.sidebar-group-btn:hover{background:rgba(255,255,255,.08);color:#fff}
+.sidebar-group.open .sidebar-group-btn{background:rgba(255,255,255,.1);color:#fff}
+.sidebar-group.active .sidebar-group-btn{background:rgba(255,255,255,.12);color:#fff;font-weight:600}
+.sidebar-group-chevron{font-size:11px;color:rgba(255,255,255,.4);transition:transform .18s}
+.sidebar-group.open .sidebar-group-chevron{transform:rotate(90deg);color:rgba(255,255,255,.8)}
+.sidebar-items{display:none;background:rgba(0,0,0,.12)}
 .sidebar-group.open .sidebar-items{display:block}
-.sidebar-item{display:block;width:100%;padding:9px 16px 9px 28px;background:none;border:none;color:rgba(255,255,255,.7);font-size:12px;cursor:pointer;text-align:left;font-family:inherit;transition:background .1s}
-.sidebar-item:hover{background:rgba(255,255,255,.1);color:#fff}
-.sidebar-item.on{background:rgba(255,255,255,.15);color:#fff;font-weight:600;border-left:3px solid #fff}
-.sidebar-dash{width:100%;padding:12px 16px;background:none;border:none;color:rgba(255,255,255,.8);font-size:13px;cursor:pointer;text-align:left;font-family:inherit;display:flex;align-items:center;gap:8px;transition:background .15s}
-.sidebar-dash:hover,.sidebar-dash.on{background:rgba(255,255,255,.1);color:#fff}
+.sidebar-item{display:block;width:100%;padding:9px 18px 9px 32px;background:none;border:none;color:rgba(255,255,255,.65);font-size:12px;cursor:pointer;text-align:left;font-family:inherit;transition:background .1s;border-left:3px solid transparent}
+.sidebar-item:hover{background:rgba(255,255,255,.08);color:#fff}
+.sidebar-item.on{background:rgba(255,255,255,.14);color:#fff;font-weight:600;border-left-color:#fff}
+.sidebar-dash{width:100%;padding:11px 18px;background:none;border:none;color:rgba(255,255,255,.82);font-size:13px;font-weight:500;cursor:pointer;text-align:left;font-family:inherit;display:flex;align-items:center;gap:8px;transition:background .12s}
+.sidebar-dash:hover{background:rgba(255,255,255,.08);color:#fff}
+.sidebar-dash.on{background:rgba(255,255,255,.14);color:#fff;font-weight:600}
+.hamburger-btn{background:none;border:none;color:#fff;cursor:pointer;padding:5px 7px;border-radius:5px;font-size:19px;line-height:1;display:flex;align-items:center;transition:background .12s;flex-shrink:0}
+.hamburger-btn:hover{background:rgba(255,255,255,.15)}
 .topbar{background:var(--P);color:#fff;padding:10px 18px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:50}
 .topbar .logo{font-size:15px;font-weight:600}
 .topbar .right{margin-left:auto;display:flex;gap:14px;align-items:center;font-size:12px;opacity:.9}
@@ -242,6 +256,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <!-- APP -->
 <div id="app">
 <div class="topbar">
+  <button class="hamburger-btn" onclick="toggleSidebarPanel()" title="Menú" tabindex="-1">☰</button>
   <span>🌸</span>
   <span class="logo">Distribuidora Lila</span>
   <div class="right">
@@ -250,94 +265,112 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button onclick="logout()" tabindex="-1">Salir</button>
   </div>
 </div>
+<!-- Overlay para cerrar sidebar al hacer clic afuera -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebarPanel()"></div>
 <div class="nav" id="main-nav" style="display:none"></div>
 
-<div class="app-layout">
 <div class="sidebar" id="sidebar">
 
-  <button class="sidebar-dash on" onclick="go('dash')" data-p="dash">📊 Dashboard</button>
-  <button class="sidebar-dash" onclick="go('vendedor-home')" data-p="vendedor-home" style="display:none">🏠 Inicio</button>
+  <!-- Header con nombre empresa y botón cerrar -->
+  <div class="sidebar-header">
+    <div style="flex:1">
+      <div class="sidebar-header-empresa">🌸 Distribuidora Lila</div>
+      <div class="sidebar-header-sub" id="sidebar-usuario-label">—</div>
+    </div>
+    <button class="sidebar-close" onclick="closeSidebarPanel()" title="Cerrar">×</button>
+  </div>
+
+  <!-- Dashboard directo -->
+  <div style="padding:6px 0 2px">
+    <button class="sidebar-dash on" onclick="go('dash');closeSidebarPanel()" data-p="dash">📊 Dashboard</button>
+    <button class="sidebar-dash" onclick="go('vendedor-home');closeSidebarPanel()" data-p="vendedor-home" style="display:none">🏠 Inicio</button>
+  </div>
+
+  <!-- Label sección módulos -->
+  <div class="sidebar-section-label">Módulos</div>
 
   <div class="sidebar-group" id="sg-maestros">
-    <button class="sidebar-group-btn" onclick="toggleSidebar('maestros')">🗂 Maestros <span id="sc-maestros">▶</span></button>
+    <button class="sidebar-group-btn" onclick="toggleSidebar('maestros')">Maestros <span class="sidebar-group-chevron" id="sc-maestros">▸</span></button>
     <div class="sidebar-items">
-      <button class="sidebar-item" onclick="go('clientes');renderClientes()" data-p="clientes">👥 Clientes</button>
-      <button class="sidebar-item" onclick="go('maestro-proveedores')" data-p="maestro-proveedores">🏭 Proveedores</button>
-      <button class="sidebar-item" onclick="go('listas-precios')" data-p="listas-precios">💲 Listas de precios</button>
-      <button class="sidebar-item" onclick="go('zonas')" data-p="zonas">🗺 Zonas</button>
-      <button class="sidebar-item" onclick="go('productos');renderProductos()" data-p="productos">📦 Productos</button>
-      <button class="sidebar-item" onclick="go('stock')" data-p="stock">📊 Stock</button>
+      <button class="sidebar-item" onclick="go('clientes');renderClientes();closeSidebarPanel()" data-p="clientes">Clientes</button>
+      <button class="sidebar-item" onclick="go('maestro-proveedores');closeSidebarPanel()" data-p="maestro-proveedores">Proveedores</button>
+      <button class="sidebar-item" onclick="go('listas-precios');closeSidebarPanel()" data-p="listas-precios">Listas de precios</button>
+      <button class="sidebar-item" onclick="go('zonas');closeSidebarPanel()" data-p="zonas">Zonas</button>
+      <button class="sidebar-item" onclick="go('productos');renderProductos();closeSidebarPanel()" data-p="productos">Productos</button>
+      <button class="sidebar-item" onclick="go('stock');closeSidebarPanel()" data-p="stock">Stock</button>
     </div>
   </div>
 
   <div class="sidebar-group" id="sg-ventas">
-    <button class="sidebar-group-btn" onclick="toggleSidebar('ventas')">🛒 Ventas <span id="sc-ventas">▶</span></button>
+    <button class="sidebar-group-btn" onclick="toggleSidebar('ventas')">Ventas <span class="sidebar-group-chevron" id="sc-ventas">▸</span></button>
     <div class="sidebar-items">
-      <button class="sidebar-item" onclick="go('pedidos')" data-p="pedidos">🛒 Pedidos</button>
-      <button class="sidebar-item" onclick="abrirPedidoMovil()" data-p="pedido-movil">📱 Pedido móvil</button>
-      <button class="sidebar-item" onclick="go('carga')" data-p="carga">🚚 Cargas</button>
-      <button class="sidebar-item" onclick="go('remitos')" data-p="remitos">📄 Remitos</button>
-      <button class="sidebar-item" onclick="go('remito-rapido')" data-p="remito-rapido">⚡ Remito rápido</button>
-      <button class="sidebar-item" onclick="go('nc')" data-p="nc">📋 Notas de crédito</button>
-      <button class="sidebar-item" onclick="go('cuentas')" data-p="cuentas">⚖️ Cuentas corrientes</button>
+      <button class="sidebar-item" onclick="go('pedidos');closeSidebarPanel()" data-p="pedidos">Pedidos</button>
+      <button class="sidebar-item" onclick="abrirPedidoMovil();closeSidebarPanel()" data-p="pedido-movil">Pedido móvil</button>
+      <button class="sidebar-item" onclick="go('carga');closeSidebarPanel()" data-p="carga">Cargas</button>
+      <button class="sidebar-item" onclick="go('remitos');closeSidebarPanel()" data-p="remitos">Remitos</button>
+      <button class="sidebar-item" onclick="go('remito-rapido');closeSidebarPanel()" data-p="remito-rapido">Remito rápido</button>
+      <button class="sidebar-item" onclick="go('nc');closeSidebarPanel()" data-p="nc">Notas de crédito</button>
+      <button class="sidebar-item" onclick="go('cuentas');closeSidebarPanel()" data-p="cuentas">Cuentas corrientes</button>
     </div>
   </div>
 
   <div class="sidebar-group" id="sg-compras">
-    <button class="sidebar-group-btn" onclick="toggleSidebar('compras')">🛍 Compras <span id="sc-compras">▶</span></button>
+    <button class="sidebar-group-btn" onclick="toggleSidebar('compras')">Compras <span class="sidebar-group-chevron" id="sc-compras">▸</span></button>
     <div class="sidebar-items">
-      <button class="sidebar-item" onclick="go('compras')" data-p="compras">🧾 Comprobantes</button>
+      <button class="sidebar-item" onclick="go('compras');closeSidebarPanel()" data-p="compras">Comprobantes</button>
     </div>
   </div>
 
   <div class="sidebar-group" id="sg-tesoreria">
-    <button class="sidebar-group-btn" onclick="toggleSidebar('tesoreria')">💰 Tesorería <span id="sc-tesoreria">▶</span></button>
+    <button class="sidebar-group-btn" onclick="toggleSidebar('tesoreria')">Tesorería <span class="sidebar-group-chevron" id="sc-tesoreria">▸</span></button>
     <div class="sidebar-items">
-      <button class="sidebar-item" onclick="go('cobranza')" data-p="cobranza">💰 Cobranza</button>
-      <button class="sidebar-item" onclick="go('tesoreria')" data-p="tesoreria">🏦 Tesorería</button>
-      <button class="sidebar-item" onclick="go('cheques')" data-p="cheques">📋 Cheques en cartera</button>
+      <button class="sidebar-item" onclick="go('cobranza');closeSidebarPanel()" data-p="cobranza">Cobranza</button>
+      <button class="sidebar-item" onclick="go('tesoreria');closeSidebarPanel()" data-p="tesoreria">Tesorería</button>
+      <button class="sidebar-item" onclick="go('cheques');closeSidebarPanel()" data-p="cheques">Cheques en cartera</button>
     </div>
   </div>
 
   <div class="sidebar-group" id="sg-contabilidad">
-    <button class="sidebar-group-btn" onclick="toggleSidebar('contabilidad')">📒 Contabilidad <span id="sc-contabilidad">▶</span></button>
+    <button class="sidebar-group-btn" onclick="toggleSidebar('contabilidad')">Contabilidad <span class="sidebar-group-chevron" id="sc-contabilidad">▸</span></button>
     <div class="sidebar-items">
-      <button class="sidebar-item" onclick="contTabDesde('gastos')" data-p="contabilidad">📝 Gastos</button>
-      <button class="sidebar-item" onclick="contTabDesde('mayor')" data-p="contabilidad">📊 Mayor</button>
-      <button class="sidebar-item" onclick="contTabDesde('resultado')" data-p="contabilidad">💹 Resultado</button>
-      <button class="sidebar-item" onclick="contTabDesde('asientos')" data-p="contabilidad">📖 Asientos</button>
+      <button class="sidebar-item" onclick="contTabDesde('gastos');closeSidebarPanel()" data-p="contabilidad">Gastos</button>
+      <button class="sidebar-item" onclick="contTabDesde('mayor');closeSidebarPanel()" data-p="contabilidad">Mayor</button>
+      <button class="sidebar-item" onclick="contTabDesde('resultado');closeSidebarPanel()" data-p="contabilidad">Resultado</button>
+      <button class="sidebar-item" onclick="contTabDesde('asientos');closeSidebarPanel()" data-p="contabilidad">Asientos</button>
     </div>
   </div>
 
   <div class="sidebar-group" id="sg-informes">
-    <button class="sidebar-group-btn" onclick="toggleSidebar('informes')">📈 Informes <span id="sc-informes">▶</span></button>
+    <button class="sidebar-group-btn" onclick="toggleSidebar('informes')">Estadísticas e Informes <span class="sidebar-group-chevron" id="sc-informes">▸</span></button>
     <div class="sidebar-items">
-      <button class="sidebar-item" onclick="go('informes')" data-p="informes">📈 Informes</button>
-      <button class="sidebar-item" onclick="go('rendicion')" data-p="rendicion">💼 Rendición</button>
-      <button class="sidebar-item" onclick="go('comisiones')" data-p="comisiones">💰 Comisiones</button>
-      <button class="sidebar-item" onclick="go('contrib-zona')" data-p="contrib-zona">📊 Contrib. Marginal</button>
-      <button class="sidebar-item" onclick="go('saldos-zona')" data-p="saldos-zona">🗺️ Saldos por Zona</button>
-      <button class="sidebar-item" onclick="go('gastos-fijos')" data-p="gastos-fijos">📋 Gastos Fijos</button>
-      <button class="sidebar-item" onclick="go('importar-historico')" data-p="importar-historico">📥 Importar histórico</button>
-      <button class="sidebar-item" onclick="exportarTodo()">💾 Exportar</button>
+      <button class="sidebar-item" onclick="go('informes');closeSidebarPanel()" data-p="informes">Informes</button>
+      <button class="sidebar-item" onclick="go('rendicion');closeSidebarPanel()" data-p="rendicion">Rendición</button>
+      <button class="sidebar-item" onclick="go('comisiones');closeSidebarPanel()" data-p="comisiones">Comisiones</button>
+      <button class="sidebar-item" onclick="go('contrib-zona');closeSidebarPanel()" data-p="contrib-zona">Contrib. Marginal</button>
+      <button class="sidebar-item" onclick="go('saldos-zona');closeSidebarPanel()" data-p="saldos-zona">Saldos por Zona</button>
+      <button class="sidebar-item" onclick="go('gastos-fijos');closeSidebarPanel()" data-p="gastos-fijos">Gastos Fijos</button>
+      <button class="sidebar-item" onclick="go('importar-historico');closeSidebarPanel()" data-p="importar-historico">Importar histórico</button>
+      <button class="sidebar-item" onclick="exportarTodo();closeSidebarPanel()">Exportar</button>
     </div>
   </div>
 
   <div class="sidebar-group" id="sg-logistica">
-    <button class="sidebar-group-btn" onclick="toggleSidebar('logistica')">🗺 Logística <span id="sc-logistica">▶</span></button>
+    <button class="sidebar-group-btn" onclick="toggleSidebar('logistica')">Logística <span class="sidebar-group-chevron" id="sc-logistica">▸</span></button>
     <div class="sidebar-items">
-      <button class="sidebar-item" onclick="go('hoja-ruta')" data-p="hoja-ruta">🗺 Hoja de ruta</button>
+      <button class="sidebar-item" onclick="go('hoja-ruta');closeSidebarPanel()" data-p="hoja-ruta">Hoja de ruta</button>
     </div>
   </div>
 
   <div class="sidebar-group" id="sg-config">
-    <button class="sidebar-group-btn" onclick="toggleSidebar('config')">⚙️ Config <span id="sc-config">▶</span></button>
+    <button class="sidebar-group-btn" onclick="toggleSidebar('config')">Configuración <span class="sidebar-group-chevron" id="sc-config">▸</span></button>
     <div class="sidebar-items">
-      <button class="sidebar-item" onclick="alert('Próximamente')">👤 Usuarios</button>
+      <button class="sidebar-item" onclick="alert('Próximamente')">Usuarios</button>
     </div>
   </div>
 
-</div>
+</div><!-- fin sidebar -->
+
+<div class="app-layout">
 <div class="body" id="main-body">
 
 <!-- DASHBOARD -->
@@ -415,7 +448,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         📋 Pedidos
       </div>
       <div style="display:flex;flex-direction:column;gap:10px">
-        <button onclick="abrirPedidoMovil()"
+        <button onclick="abrirPedidoMovil();closeSidebarPanel()"
           style="display:flex;align-items:center;gap:16px;width:100%;padding:20px 22px;background:var(--P);color:#fff;border:none;border-radius:14px;font-size:19px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;box-shadow:0 3px 10px rgba(26,122,82,.25)">
           <span style="font-size:28px;line-height:1">📋</span>
           <span>Nuevo pedido</span>
@@ -460,7 +493,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
   <div class="sech">
     <h2>Pedidos</h2>
     <div style="display:flex;gap:6px">
-      <button class="btn P" onclick="abrirPedidoMovil()">📱 Nuevo pedido</button>
+      <button class="btn P" onclick="abrirPedidoMovil();closeSidebarPanel()">📱 Nuevo pedido</button>
       <button class="btn" onclick="abrirPedido()" id="btn-nuevo-pedido-desk">+ Escritorio</button>
     </div>
   </div>
@@ -3859,13 +3892,18 @@ function entrarApp(found){
   document.getElementById('app').style.display='flex';
   document.getElementById('app').style.flexDirection='column';
   document.getElementById('top-usuario').textContent=found.nombre+' ('+found.rol+')';
+  const sidebarUserLabel=document.getElementById('sidebar-usuario-label');
+  if(sidebarUserLabel)sidebarUserLabel.textContent=found.nombre+' · '+found.rol;
   document.getElementById('top-fecha').textContent=new Date().toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'});
   ['np-fecha','cob-fecha','nc-fecha'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=new Date().toISOString().split('T')[0];});
   
   // Aplicar permisos de navegación
   const sidebar=document.getElementById('sidebar');
+  const hamburger=document.querySelector('.hamburger-btn');
   const esMovil=found.rol==='vendedor'||found.rol==='repartidor';
   if(esMovil){
+    // Para vendedor/repartidor: ocultar hamburger y sidebar (usan vista propia)
+    if(hamburger)hamburger.style.display='none';
     if(sidebar)sidebar.style.display='none';
     document.querySelector('[data-p="vendedor-home"]').style.display='flex';
     // Si es admin en modo vendedor, mostrar botón para volver al admin
@@ -3874,7 +3912,10 @@ function entrarApp(found){
       if(btnAdmin) btnAdmin.style.display='flex';
     }
   } else {
+    // Admin: mostrar hamburger, sidebar arranca cerrado (overlay)
+    if(hamburger)hamburger.style.display='';
     if(sidebar)sidebar.style.display='';
+    closeSidebarPanel(); // asegurarse que empiece cerrado
   }
 
   // Si es móvil (vendedor o repartidor), ir directo a home
@@ -3886,8 +3927,8 @@ function entrarApp(found){
       // Limpiar estado del sidebar
       document.querySelectorAll('.sidebar-group').forEach(g=>{
         g.classList.remove('open','active');
-        const chev=g.querySelector('.sidebar-group-btn span');
-        if(chev)chev.textContent='▶';
+        const chev=g.querySelector('.sidebar-group-chevron');
+        if(chev)chev.textContent='▸';
         const items=g.querySelector('.sidebar-items');
         if(items)items.style.display='';
       });
@@ -6668,6 +6709,9 @@ function volverAdmin(){
   if(usuarioActual) usuarioActual.rol = 'admin';
   const sidebar = document.getElementById('sidebar');
   if(sidebar) sidebar.style.display = '';
+  const hamburger=document.querySelector('.hamburger-btn');
+  if(hamburger)hamburger.style.display='';
+  closeSidebarPanel();
   document.querySelector('[data-p="vendedor-home"]').style.display = 'none';
   const btnAdmin = document.getElementById('btn-volver-admin');
   if(btnAdmin) btnAdmin.style.display = 'none';
@@ -9870,7 +9914,7 @@ function verMisPedidosHoy(){
           </div>
         </div>`).join('')
       :'<div style="text-align:center;color:var(--txt2);padding:40px 20px;font-size:15px">Sin pedidos cargados hoy</div>'}
-      <button onclick="abrirPedidoMovil()" style="width:100%;margin-top:6px;padding:16px;background:var(--P);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
+      <button onclick="abrirPedidoMovil();closeSidebarPanel()" style="width:100%;margin-top:6px;padding:16px;background:var(--P);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
         + Nuevo pedido
       </button>
     </div>`;
@@ -10835,6 +10879,30 @@ function go(p){
   if(g){const sg=document.getElementById('sg-'+g);if(sg)sg.classList.add('active');}
 }
 
+function toggleSidebarPanel(){
+  const sb=document.getElementById('sidebar');
+  const ov=document.getElementById('sidebar-overlay');
+  if(!sb)return;
+  const isOpen=sb.classList.contains('open');
+  if(isOpen){
+    sb.classList.remove('open');
+    if(ov)ov.classList.remove('open');
+  } else {
+    sb.classList.add('open');
+    if(ov)ov.classList.add('open');
+    // Foco al primer botón visible
+    setTimeout(()=>{
+      const first=sb.querySelector('.sidebar-dash:not([style*="display:none"]),.sidebar-group-btn');
+      if(first)first.focus();
+    },240);
+  }
+}
+function closeSidebarPanel(){
+  const sb=document.getElementById('sidebar');
+  const ov=document.getElementById('sidebar-overlay');
+  if(sb)sb.classList.remove('open');
+  if(ov)ov.classList.remove('open');
+}
 function toggleSidebar(grupo){
   const sg=document.getElementById('sg-'+grupo);
   if(!sg)return;
@@ -10842,13 +10910,13 @@ function toggleSidebar(grupo){
   // Cerrar todos
   document.querySelectorAll('.sidebar-group').forEach(g=>{
     g.classList.remove('open');
-    const chev=g.querySelector('.sidebar-group-btn span');
-    if(chev)chev.textContent='▶';
+    const chev=g.querySelector('.sidebar-group-chevron');
+    if(chev)chev.textContent='▸';
   });
   if(!open){
     sg.classList.add('open');
     const chev=document.getElementById('sc-'+grupo);
-    if(chev)chev.textContent='▼';
+    if(chev)chev.textContent='▾';
     // Foco al primer item
     const first=sg.querySelector('.sidebar-item');
     if(first)setTimeout(()=>first.focus(),50);
@@ -10918,6 +10986,7 @@ document.addEventListener('keydown',e=>{
       if(grupo)toggleSidebar(grupo);
       const btn=active.closest('.sidebar-group')?.querySelector('.sidebar-group-btn');
       if(btn)btn.focus();
+      else closeSidebarPanel();
     }
   }
 });
