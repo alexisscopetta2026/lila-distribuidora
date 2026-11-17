@@ -20,11 +20,60 @@ function poblarSubcats(catSelId,subcatSelId){
   sel.disabled=!subs.length;
 }
 
-async function cargarClientes(){
-  // Cargar todos los clientes — el filtro por vendedor se hace en JS para incluir sin-vendedor
-  const {data}=await sb.from('clientes').select('*').order('nombre').limit(2000);
-  // Vendedor ve sus clientes + los que no tienen vendedor asignado (para no perder ninguno)
-  _clientes=usuarioActual.vendedor?(data||[]).filter(c=>{const v=c.vendedor||'';return v===''||v.toLowerCase().includes(usuarioActual.vendedor.toLowerCase());}):data||[];
+async function cargarClientes() {
+  let all = [];
+  let from = 0;
+  const pageSize = 1000;
+  let hasMore = true;
+
+  while (hasMore) {
+    //Envolver la consulta con q() 
+    const result = await q(
+      sb
+        .from('clientes')
+        .select('*')
+        .order('nombre')
+        .range(from, from + pageSize - 1),
+      'clientes (página ' + (Math.floor(from / pageSize) + 1) + ')'
+    );
+
+    // Si result es null, hubo error → salir y dejar _clientes vacío
+    if (result === null) {
+      _clientes = [];
+      return;
+    }
+
+    if (result.length === 0) {
+      hasMore = false;
+      break;
+    }
+
+    all = all.concat(result);
+    from += pageSize;
+    if (result.length < pageSize) hasMore = false;
+  }
+
+  // Filtro por vendedor SOLO para vendedores puros (Franco). Los
+  // repartidores y los usuarios con dualRolMovil (David, y Alexis/
+  // Mauricio cuando estén en rol vendedor desde el celu) tienen que
+  // ver TODOS los clientes: cobran lo que aparece en la calle, no
+  // solo lo asignado a su vendedor. Los admins también ven todos.
+  const esAdmin = usuarioActual?.esAdmin
+    || usuarioActual?.rol === 'admin'
+    || usuarioActual?.rol_original === 'admin';
+  const veTodos = esAdmin
+    || usuarioActual?.rol === 'repartidor'
+    || usuarioActual?.dualRolMovil;
+
+  // Guardar SIEMPRE el universo completo. _clientesTodos nunca se filtra,
+  // así que sirve de fuente para recalcular cuando el usuario cambia de
+  // rol (David dualRol vendedor ↔ repartidor) sin volver a pedir a Supabase.
+  _clientesTodos = all;
+
+  // _clientes queda filtrado según el rol actual del usuario. La lógica
+  // vive en _aplicarFiltroClientesPorRol (app.js) para reutilizarla desde
+  // toggleRolMovil().
+  _aplicarFiltroClientesPorRol();
 }
 
 async function cargarListasPrecios(){
@@ -40,7 +89,39 @@ async function cargarListasPrecios(){
   try{_clienteListaMap=JSON.parse(localStorage.getItem('lila_cliente_lista')||'{}');}catch{_clienteListaMap={};}
 }
 
-async function cargarProductos(){const {data}=await sb.from('productos').select('*').order('nombre');_productos=data||[];}
+async function cargarProductos() {
+  let all = [];
+  let from = 0;
+  const pageSize = 1000;
+  let hasMore = true;
+
+  while (hasMore) {
+    const result = await q(
+      sb
+        .from('productos')
+        .select('*')
+        .order('nombre')
+        .range(from, from + pageSize - 1),
+      'productos (página ' + (Math.floor(from / pageSize) + 1) + ')'
+    );
+
+    if (result === null) {
+      _productos = [];
+      return;
+    }
+
+    if (result.length === 0) {
+      hasMore = false;
+      break;
+    }
+
+    all = all.concat(result);
+    from += pageSize;
+    if (result.length < pageSize) hasMore = false;
+  }
+
+  _productos = all;
+}
 
 function poblarZonas(){
   // Poblar proveedores desde la tabla real de proveedores
@@ -55,9 +136,10 @@ function poblarZonas(){
 // ─── CLIENTES ───
 function renderClientes(){
   const q=(document.getElementById('cli-q').value||'').toLowerCase();
-  // Poblar dropdowns de autofiltro dinámicamente en el primer render
-  poblarSelectValores('cli-f-zona',_clientes.map(c=>c.zona||''),nombreZona);
+  _poblarSelectZonasClientes(); 
   poblarSelectValores('cli-f-ven',_clientes.map(c=>(c.vendedor||'').trim()));
+  
+  // Filtros de texto
   const fNombre=document.getElementById('cli-f-nombre')?.value||'';
   const fLoc=document.getElementById('cli-f-loc')?.value||'';
   const fTel=document.getElementById('cli-f-tel')?.value||'';
@@ -65,89 +147,354 @@ function renderClientes(){
   const fVen=document.getElementById('cli-f-ven')?.value||'';
   const fDto=document.getElementById('cli-f-dto')?.value||'';
   const fSaldo=document.getElementById('cli-f-saldo')?.value||'';
-  let data=_clientes.filter(c=>
-    (!q||(c.nombre||'').toLowerCase().includes(q)||(c.telefono||'').includes(q)||(c.localidad||'').toLowerCase().includes(q)||(c.codigo||'').toString().includes(q)||(c.cuit||'').includes(q))&&
-    matchFiltroCol(c.nombre,fNombre)&&
-    matchFiltroCol(c.localidad,fLoc)&&
-    matchFiltroCol(c.telefono,fTel)&&
-    (!fZona||c.zona===fZona)&&
-    (!fVen||(c.vendedor||'').trim()===fVen)&&
-    matchFiltroCol(c.descuento,fDto)&&
-    matchFiltroCol(c.saldo,fSaldo)
-  );
+  
+  // NUEVO: Filtro de estado (activo/inactivo/todos)
+  const fActivo = document.getElementById('cli-f-activo')?.value || 'activos';
+  
+  let data=_clientes.filter(c=> {
+    // Filtro de búsqueda general con 2 modos:
+    //  · Número puro corto (≤6 dígitos) → código/id exactos. Sin matchear
+    //    teléfono/CUIT para evitar que "10" traiga el 102 o el 1100.
+    //  · Número puro largo (>6 dígitos) → también CUIT y teléfono (contiene,
+    //    sin guiones).
+    //  · Con letras o mixto → nombre, localidad, teléfono, CUIT.
+    const esNumeroPuro = /^\d+$/.test(q);
+    let okQ;
+    if(!q) okQ = true;
+    else if(esNumeroPuro && q.length <= 6){
+      okQ = String(c.codigo||'').trim()===q || String(c.id||'')===q;
+    } else if(esNumeroPuro){
+      const cuitNorm = String(c.cuit||'').replace(/\D/g,'');
+      const telNorm  = String(c.telefono||'').replace(/\D/g,'');
+      okQ = String(c.codigo||'').trim()===q
+         || String(c.id||'')===q
+         || cuitNorm.includes(q)
+         || telNorm.includes(q);
+    } else {
+      okQ = (c.nombre||'').toLowerCase().includes(q)
+         || (c.localidad||'').toLowerCase().includes(q)
+         || (c.telefono||'').toLowerCase().includes(q)
+         || (c.cuit||'').toLowerCase().includes(q);
+    }
+    
+    // Filtros de columna
+    const okCols = matchFiltroCol(c.nombre,fNombre) &&
+      matchFiltroCol(c.localidad,fLoc) &&
+      matchFiltroCol(c.telefono,fTel) &&
+      (!fZona||c.zona===fZona) &&
+      (!fVen||(c.vendedor||'').trim()===fVen) &&
+      matchFiltroCol(c.descuento,fDto) &&
+      matchFiltroCol(c.saldo,fSaldo);
+    
+    // Filtro de estado (activo/inactivo/todos)
+    let okEstado = true;
+    if (fActivo === 'activos') okEstado = c.activo !== false;
+    else if (fActivo === 'inactivos') okEstado = c.activo === false;
+    
+    return okQ && okCols && okEstado;
+  });
+  
   const tot=data.length,sl=data.slice((_cliPg-1)*PP,_cliPg*PP);
   const tbody=document.getElementById('cli-tbody');
-  tbody.innerHTML=sl.length?sl.map(c=>`<tr>
-   <td style="font-weight:600"><span style="font-size:10px;color:var(--txt2);margin-right:4px">${c.codigo||''}</span>${c.nombre}</td>
-    <td>${c.localidad||'—'}</td>
-    <td>${c.telefono||'—'}</td>
-    <td><span class="b bA">${(_zonas.find(z=>z.codigo===c.zona)?.descripcion||c.zona)||'-'}</span></td>
-    <td>${(c.vendedor||'').trim()||'—'}</td>
-    <td>${c.descuento||0}%</td>
-    <td style="${(c.saldo||0)>0?'color:var(--D);font-weight:600':''}">${fmt(c.saldo)}</td>
-    <td style="display:flex;gap:3px">
-      <button class="btn sm" onclick="editarCliente(${c.id})">✏️</button>
-      <button class="btn P sm" onclick="pedRapido(${c.id})">🛒</button>
-      <button class="btn sm" onclick="histCliente(${c.id})">📋</button>
-    </td>
-  </tr>`).join(''):'<tr><td colspan="8"><div class="empty">Sin clientes</div></td></tr>';
+  
+  tbody.innerHTML=sl.length?sl.map(c=>{
+    const activo = c.activo !== false;
+    const estadoBadge = activo 
+      ? '<span class="b bP">✅ Activo</span>' 
+      : '<span class="b bD">⛔ Inactivo</span>';
+    
+    return `
+    <tr style="${!activo ? 'opacity:0.7;' : ''}">
+      <td style="color:var(--txt2);font-size:12px;text-align:center;font-variant-numeric:tabular-nums">${c.codigo || c.id}</td>
+      <td style="font-weight:600">${c.nombre}</td>
+      <td>${c.localidad||'—'}</td>
+      <td>${c.telefono||'—'}</td>
+      <td><span class="b bA">${(_zonas.find(z=>z.codigo===c.zona)?.descripcion||c.zona)||'-'}</span></td>
+      <td>${(c.vendedor||'').trim()||'—'}</td>
+      <td>${c.descuento||0}%</td>
+      <td style="${(c.saldo||0)>0?'color:var(--D);font-weight:600':''}">${fmt(c.saldo)}</td>
+      <td>${estadoBadge}</td>
+      <td style="display:flex;gap:3px;flex-wrap:wrap;">
+        <button class="btn ${activo ? 'W' : 'P'} sm" onclick="toggleActivoCliente(${c.id}, ${activo})" title="${activo ? 'Desactivar' : 'Activar'}">
+          ${activo ? '🔴' : '🟢'}
+        </button>
+        <button class="btn sm" onclick="editarCliente(${c.id})">✏️</button>
+        <button class="btn P sm" onclick="pedRapido(${c.id})">🛒</button>
+        <button class="btn sm" onclick="histCliente(${c.id})">📋</button>
+      </td>
+    </tr>
+  `}).join(''):'<tr><td colspan="10"><div class="empty">Sin clientes</div></td></tr>';
+  
   pag('cli-pg',tot,_cliPg,p=>{_cliPg=p;renderClientes();});
+}
+
+// Puebla el filtro de zonas del panel Clientes usando el catálogo real
+// (_zonas) en vez de inferir de los clientes. Se fuerza el repoblado
+// (ignora la guarda de poblarSelectValores) porque el usuario puede
+// agregar/borrar zonas desde Maestros → Zonas y queremos que el filtro
+// se actualice sin recargar la página.
+function _poblarSelectZonasClientes(){
+  const sel = document.getElementById('cli-f-zona');
+  if(!sel) return;
+  const actual = sel.value;
+  const zonas = (_zonas||[]).filter(z=>z.codigo).sort((a,b)=>
+    (a.descripcion||a.codigo||'').localeCompare(b.descripcion||b.codigo||'')
+  );
+  sel.innerHTML = '<option value="">Todas las zonas</option>' +
+    zonas.map(z=>`<option value="${esc(z.codigo)}">${esc(z.descripcion||('Zona '+z.codigo))}</option>`).join('');
+  // Restaurar la selección si la zona todavía existe
+  if(actual && zonas.some(z=>z.codigo===actual)) sel.value = actual;
 }
 
 function abrirCliente(){
   document.getElementById('cli-edit-id').value='';
   document.getElementById('m-cli-title').textContent='Nuevo cliente';
   ['cli-nom','cli-cuit','cli-razon','cli-dir','cli-loc','cli-tel','cli-zona','cli-ven'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  document.getElementById('cli-dto').value='0';document.getElementById('cli-saldo').value='0';
-  document.getElementById('cli-cpg').value='0';document.getElementById('cli-lista').value='1';
+  document.getElementById('cli-zona-codigo').value=''; // LIMPIAR ZONA OCULTA
+  document.getElementById('cli-dto').value='0';
+  document.getElementById('cli-saldo').value='0';
+  document.getElementById('cli-cpg').value='0';
+  document.getElementById('cli-lista').value='1';
+  document.getElementById('cli-zona-drop').style.display='none'; // OCULTAR DROP
   document.getElementById('m-cliente').classList.add('on');
 }
 
 function editarCliente(id){
-  const c=_clientes.find(x=>x.id===id);if(!c)return;
-  document.getElementById('cli-edit-id').value=id;
-  document.getElementById('m-cli-title').textContent='Editar cliente';
-  document.getElementById('cli-nom').value=c.nombre||'';
-  document.getElementById('cli-cuit').value=c.cuit||'';
-  const razon=document.getElementById('cli-razon');if(razon)razon.value=c.razon_social||'';
-  const cat=document.getElementById('cli-cat');if(cat)cat.value=c.categoria||'Cons. Final';
-  document.getElementById('cli-dir').value=c.direccion||'';
-  document.getElementById('cli-loc').value=c.localidad||'';
-  document.getElementById('cli-tel').value=c.telefono||'';
-  document.getElementById('cli-zona').value=c.zona||'';
-  document.getElementById('cli-ven').value=c.vendedor||'';
-  document.getElementById('cli-dto').value=c.descuento||0;
-  document.getElementById('cli-saldo').value=c.saldo||0;
-  document.getElementById('cli-cpg').value=c.condicion_pago||0;
-  document.getElementById('cli-lista').value=c.lista||1;
+  const c = _clientes.find(x => x.id === id);
+  if(!c) return;
+  
+  document.getElementById('cli-edit-id').value = id;
+  document.getElementById('m-cli-title').textContent = 'Editar cliente';
+  document.getElementById('cli-nom').value = c.nombre || '';
+  document.getElementById('cli-cuit').value = c.cuit || '';
+  
+  // Razón social (si existe)
+  const razon = document.getElementById('cli-razon');
+  if(razon) razon.value = c['razon social'] || '';
+  
+  // Categoría
+  const cat = document.getElementById('cli-cat');
+  if(cat) cat.value = c.categoria || 'Cons. Final';
+  
+  document.getElementById('cli-dir').value = c.direccion || '';
+  document.getElementById('cli-loc').value = c.localidad || '';
+  document.getElementById('cli-tel').value = c.telefono || '';
+  
+  // ZONA: mostrar descripción si nombre está vacío o es igual al código
+  const zonaEncontrada = _zonas.find(z => z.codigo === c.zona);
+  let zonaDisplay = c.zona || '';
+  if (zonaEncontrada) {
+    // Si el nombre está vacío o es igual al código, usar descripción
+    if (!zonaEncontrada.nombre || zonaEncontrada.nombre === zonaEncontrada.codigo) {
+      zonaDisplay = zonaEncontrada.descripcion || zonaEncontrada.codigo;
+    } else {
+      zonaDisplay = zonaEncontrada.nombre;
+    }
+  }
+  document.getElementById('cli-zona').value = zonaDisplay;
+  document.getElementById('cli-zona-codigo').value = c.zona || '';
+  
+  document.getElementById('cli-ven').value = c.vendedor || '';
+  document.getElementById('cli-dto').value = c.descuento || 0;
+  document.getElementById('cli-saldo').value = c.saldo || 0;
+  document.getElementById('cli-cpg').value = c.condicion_pago || 0;
+  document.getElementById('cli-lista').value = c.lista || 1;
+  
+  // Ocultar dropdown de zonas
+  document.getElementById('cli-zona-drop').style.display = 'none';
+  
   document.getElementById('m-cliente').classList.add('on');
 }
 
-async function guardarCliente(){
-  const nom=(document.getElementById('cli-nom').value||'').trim().toUpperCase();
-  if(!nom){alert('Ingresá el nombre');return;}
-  const editId=document.getElementById('cli-edit-id').value;
-  const razonEl=document.getElementById('cli-razon');
-  const catEl=document.getElementById('cli-cat');
-  const obj={nombre:nom,cuit:document.getElementById('cli-cuit').value.trim(),
-    razon_social:(razonEl?.value||'').trim()||nom,
-    categoria:catEl?.value||'Cons. Final',
-    direccion:document.getElementById('cli-dir').value.trim(),
-    localidad:document.getElementById('cli-loc').value.trim().toUpperCase(),
-    telefono:document.getElementById('cli-tel').value.trim(),
-    zona:document.getElementById('cli-zona').value.trim(),
-    vendedor:document.getElementById('cli-ven').value.trim(),
-    descuento:parseFloat(document.getElementById('cli-dto').value)||0,
-    saldo:parseFloat(document.getElementById('cli-saldo').value)||0,
-    condicion_pago:parseInt(document.getElementById('cli-cpg').value)||0,
-    lista:parseInt(document.getElementById('cli-lista').value)||1};
-  if(editId){await sb.from('clientes').update(obj).eq('id',editId);}
-  else{await sb.from('clientes').insert(obj);}
-  cerrar('m-cliente');await cargarClientes();renderClientes();renderCC();poblarZonas();
-  setTimeout(()=>{const q=document.getElementById('cli-q');if(q&&document.getElementById('p-clientes')?.classList.contains('on'))q.focus();},50);
+function buscarZonasParaCliente() {
+  const input = document.getElementById('cli-zona');
+  const drop = document.getElementById('cli-zona-drop');
+  const q = (input.value || '').toLowerCase().trim();
+  
+  if (!_zonas || !_zonas.length) {
+    drop.innerHTML = `<div style="padding:10px 12px;color:var(--txt2);font-size:13px;">Cargando zonas...</div>`;
+    drop.style.display = 'block';
+    return;
+  }
+  
+  // Si el input está vacío, mostrar todas las zonas
+  const zonasFiltradas = _zonas.filter(z => 
+    (z.nombre || '').toLowerCase().includes(q) ||
+    (z.codigo || '').toLowerCase().includes(q) ||
+    (z.descripcion || '').toLowerCase().includes(q)
+  );
+  
+  if (!zonasFiltradas.length) {
+    drop.innerHTML = `<div style="padding:10px 12px;color:var(--txt2);font-size:13px;">Sin resultados</div>`;
+    drop.style.display = 'block';
+    return;
+  }
+  
+  drop.innerHTML = zonasFiltradas.map(z => `
+    <div onclick="seleccionarZonaParaCliente('${z.codigo}', '${z.nombre.replace(/'/g, "\\'")}')"
+      style="padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--brd);font-size:13px;"
+      onmouseover="this.style.background='var(--bg2)'" 
+      onmouseout="this.style.background=''">
+      <div style="font-weight:600;">${esc(z.nombre)}</div>
+      <div style="font-size:11px;color:var(--txt2);">
+        Código: ${z.codigo || '—'} 
+        ${esc(z.descripcion ? '· ' + z.descripcion : '')}
+        ${esc(z.vendedor ? '· Vendedor: ' + z.vendedor : '')}
+      </div>
+    </div>
+  `).join('');
+  
+  drop.style.display = 'block';
 }
 
-function pedRapido(id){go('pedidos');abrirPedido();setTimeout(()=>selCli(id),100);}
+function seleccionarZonaParaCliente(codigo, nombre) {
+  // Buscar la zona completa en _zonas para tener acceso a descripcion
+  const zona = _zonas.find(z => z.codigo === codigo);
+  
+  // Determinar el texto a usar para localidad
+  let textoLocalidad = nombre;
+  if (!textoLocalidad || textoLocalidad === codigo) {
+    // Si el nombre está vacío o es igual al código, usar descripción
+    textoLocalidad = zona?.descripcion || codigo;
+  }
+  
+  document.getElementById('cli-zona').value = codigo;
+  document.getElementById('cli-zona-codigo').value = codigo;
+  document.getElementById('cli-zona-drop').style.display = 'none';
+  
+  // Autocompletar localidad con el texto determinado
+  document.getElementById('cli-loc').value = textoLocalidad;
+  
+  console.log('✅ Zona seleccionada:', codigo, '-', textoLocalidad);
+}
+// Cerrar el dropdown al hacer clic fuera
+document.addEventListener('click', function(e) {
+  const drop = document.getElementById('cli-zona-drop');
+  const input = document.getElementById('cli-zona');
+  if (drop && input && !e.target.closest('#cli-zona') && !e.target.closest('#cli-zona-drop')) {
+    drop.style.display = 'none';
+  }
+});
+
+async function guardarCliente(){
+  const nom = (document.getElementById('cli-nom').value||'').trim().toUpperCase();
+  if(!nom){ alert('Ingresá el nombre'); return; }
+  const editId = document.getElementById('cli-edit-id').value;
+
+  // Validación de teléfono (solo si el usuario escribió algo)
+  const telRaw = document.getElementById('cli-tel').value.trim();
+  const telNorm = _normalizarTelefono(telRaw);
+  if(telNorm === null){
+    alert(
+      '⚠️ El teléfono no parece válido.\n\n' +
+      'Escribilo con entre 8 y 15 dígitos. Ejemplos:\n' +
+      '  · 3414567890\n' +
+      '  · 341 456 7890\n' +
+      '  · 0341-456-7890\n' +
+      '  · +54 9 341 456 7890\n\n' +
+      'Podés usar espacios, guiones, puntos o paréntesis como separadores.'
+    );
+    document.getElementById('cli-tel').focus();
+    return;
+  }
+  
+  // OBTENER EL CÓDIGO DE ZONA
+  let zonaCodigo = document.getElementById('cli-zona-codigo').value;
+  if (!zonaCodigo) {
+    const zonaNombre = document.getElementById('cli-zona').value.trim();
+    const zonaEncontrada = _zonas.find(z => z.nombre === zonaNombre || z.codigo === zonaNombre);
+    if (zonaEncontrada) zonaCodigo = zonaEncontrada.codigo;
+  }
+  
+  //
+  const obj = {
+    nombre: nom,
+    cuit: document.getElementById('cli-cuit').value.trim(),
+    'razon social': (document.getElementById('cli-razon')?.value||'').trim() || nom,
+    categoria: document.getElementById('cli-cat')?.value || 'Cons. Final',
+    direccion: document.getElementById('cli-dir').value.trim(),
+    localidad: document.getElementById('cli-loc').value.trim().toUpperCase(),
+    telefono: telNorm,
+    zona: zonaCodigo,
+    vendedor: document.getElementById('cli-ven').value.trim(),
+    descuento: parseFloat(document.getElementById('cli-dto').value) || 0,
+    saldo: parseFloat(document.getElementById('cli-saldo').value) || 0,
+    condicion_pago: parseInt(document.getElementById('cli-cpg').value) || 0,
+    lista: parseInt(document.getElementById('cli-lista').value) || 1
+  };
+  
+  console.log('📤 Enviando a clientes:', obj);
+  
+  try {
+    if(editId){
+      await sb.from('clientes').update(obj).eq('id', editId);
+      toast('✅ Cliente actualizado correctamente');
+    } else {
+      await sb.from('clientes').insert(obj);
+      toast('✅ Cliente creado correctamente');
+    }
+    cerrar('m-cliente');
+    await cargarClientes();
+    renderClientes();
+    renderCC();
+    poblarZonas();
+    setTimeout(()=>{
+      const q = document.getElementById('cli-q');
+      if(q && document.getElementById('p-clientes')?.classList.contains('on')) q.focus();
+    }, 50);
+  } catch (error) {
+    console.error('❌ Error al guardar cliente:', error);
+    toast('❌ Error al guardar: ' + (error.message || error), 'err');
+  }
+}
+
+// Normaliza un teléfono: deja solo dígitos, permite un + al inicio
+// (código de país), valida longitud 8-15 dígitos.
+// Devuelve:
+//   · string con el teléfono normalizado (ej. "3414567890" o "+5493414567890")
+//   · "" si estaba vacío (teléfono opcional, no es error)
+//   · null si no es interpretable (llamador debe rechazar y avisar)
+function _normalizarTelefono(t){
+  const raw = String(t||'').trim();
+  if(!raw) return '';
+  const tienePlus = raw.startsWith('+');
+  const soloDigitos = raw.replace(/\D/g,'');
+  if(soloDigitos.length < 8 || soloDigitos.length > 15) return null;
+  return (tienePlus?'+':'') + soloDigitos;
+}
+
+function limpiarFiltrosClientes() {
+  document.getElementById('cli-q').value = '';
+  document.getElementById('cli-f-nombre').value = '';
+  document.getElementById('cli-f-loc').value = '';
+  document.getElementById('cli-f-tel').value = '';
+  document.getElementById('cli-f-zona').value = '';
+  document.getElementById('cli-f-ven').value = '';
+  document.getElementById('cli-f-dto').value = '';
+  document.getElementById('cli-f-saldo').value = '';
+  document.getElementById('cli-f-activo').value = 'activos';
+  _cliPg = 1;
+  renderClientes();
+}
+
+function pedRapido(id){
+  // Guardar el origen para volver después
+  sessionStorage.setItem('origenPedido', 'clientes');
+  
+  // Ir a pedidos y abrir el modal
+  go('pedidos');
+  abrirPedido();
+  
+  // Seleccionar el cliente automáticamente
+  setTimeout(() => {
+    selCli(id);
+    // Poner foco en el campo de producto
+    setTimeout(() => {
+      const proQ = document.getElementById('np-pro-q');
+      if (proQ) proQ.focus();
+    }, 200);
+  }, 150);
+}
 
 // ─── PRODUCTOS ───
 // Autofiltro por columna de la grilla de Productos (compartido entre la vista y el export)
@@ -167,24 +514,43 @@ function _productoPasaAutofiltro(p){
     matchFiltroCol(p.margen_objetivo||0,fMobj)&&matchFiltroCol(p.stock||0,fStock);
 }
 
+function limpiarFiltrosProductos() {
+  document.getElementById('pro-q').value = '';
+  document.getElementById('pro-cat').value = '';
+  document.getElementById('pro-prov').value = '';
+  document.getElementById('pro-activo').value = 'activos';
+  document.getElementById('pro-f-stock').value = '';
+  renderProductos();
+}
+
 function renderProductos(){
   const q=(document.getElementById('pro-q').value||'').toLowerCase();
   const cat=document.getElementById('pro-cat')?.value||'';
   const subcat=document.getElementById('pro-subcat')?.value||'';
   const prov=document.getElementById('pro-prov')?.value||'';
   const activoFiltro=document.getElementById('pro-activo')?.value||'activos';
+  
   let data=_productos.filter(p=>{
     const okQ=!q||(p.nombre||'').toLowerCase().includes(q)||(p.codigo||'').toString().includes(q)||(p.proveedor_nom||'').toLowerCase().includes(q);
-    const okC=!cat||(p.rubro||'')===cat;
-    const okSC=!subcat||(p.linea||'')===subcat;
+    const okC=!cat||(p.rubro||'').toLowerCase().trim()===cat.toLowerCase().trim();
+    const okSC=!subcat||(p.linea||'').toLowerCase().trim()===subcat.toLowerCase().trim();
     const okP=!prov||(p.proveedor_nom||'')===prov;
     const esActivo=p.activo!==false;
     const okA=activoFiltro==='todos'||(activoFiltro==='activos'&&esActivo)||(activoFiltro==='inactivos'&&!esActivo);
     return okQ&&okC&&okSC&&okP&&okA&&_productoPasaAutofiltro(p);
   });
-  const tot=data.length,sl=data.slice((_proPg-1)*PP,_proPg*PP);
+  
+  const tot=data.length;
+  const sl=data.slice((_proPg-1)*PP,_proPg*PP);
   const tbody=document.getElementById('pro-tbody');
-  tbody.innerHTML=sl.length?sl.map(p=>{
+  
+  if(!tot){
+    tbody.innerHTML=`<tr><td colspan="11"><div class="empty">No hay productos que coincidan con los filtros seleccionados.<br><span style="font-size:11px;color:var(--txt2)">Probá cambiando la categoría o el proveedor.</span></div></td></tr>`;
+    pag('pro-pg',0,_proPg,p=>{});
+    return;
+  }
+  
+  tbody.innerHTML=sl.map(p=>{
     const costo=p.costo||0;const precio=p.precio||0;
     const mReal=costo>0?Math.round((precio-costo)/costo*1000)/10:0;
     const mObj=p.margen_objetivo||0;
@@ -192,18 +558,20 @@ function renderProductos(){
     const badge=mReal<0?'<span class="b bD">📉 Pérdida</span>':dif>=-5&&dif<0?`<span class="b bW" title="${dif}%">⚠️ -${Math.abs(dif)}%</span>`:dif<-5?`<span class="b bD" title="${dif}%">🔴 -${Math.abs(dif)}%</span>`:'<span class="b bP">✅ OK</span>';
     const esActivo=p.activo!==false;
     return `<tr${esActivo?'':' style="opacity:0.55"'}>
-    <td style="color:var(--txt2);font-size:11px">${p.codigo||''}</td>
-    <td style="font-weight:600">${p.nombre}${esActivo?'':' <span class="b" style="background:var(--D30);color:var(--D);font-size:10px">INACTIVO</span>'}</td>
-    <td style="font-size:11px;color:var(--txt2)">${p.proveedor_nom||''}</td>
-    <td style="font-size:12px;color:var(--txt2)">${p.unidad||'—'}</td>
-    <td style="font-size:12px">${fmt(costo)}</td>
-    <td style="color:var(--P);font-weight:600">${fmt(precio)}</td>
-    <td style="font-size:12px;font-weight:600;color:${mReal<0?'var(--D)':mReal<mObj?'var(--W)':'var(--P)'}">${mReal}%</td>
-    <td style="font-size:12px;color:var(--txt2)">${mObj>0?mObj+'%':'—'}</td>
-    <td>${badge}</td>
-    <td><span class="b ${(p.stock||0)<=0?'bD':(p.stock||0)<=5?'bW':'bP'}">${p.stock||0}</span></td>
-    <td><button class="btn sm" onclick="editarProducto(${p.id})">✏️</button></td>
-  </tr>`;}).join(''):'<tr><td colspan="11"><div class="empty">Sin productos</div></td></tr>';
+      <td style="color:var(--txt2);font-size:11px">${p.codigo||''}</td>
+      <td style="font-weight:600">${esc(p.nombre)}${esActivo?'':' <span class="b" style="background:var(--D30);color:var(--D);font-size:10px">INACTIVO</span>'}</td>
+      <td style="font-size:11px;color:var(--txt2)">${esc(p.proveedor_nom||'')}</td>
+      <td style="font-size:12px;color:var(--txt2)">${p.unidad ? badgeUnidad(p.unidad) : '—'}</td>
+      <td style="font-size:12px">${fmt(costo)}</td>
+      <td style="color:var(--P);font-weight:600">${fmt(precio)}</td>
+      <td style="font-size:12px;font-weight:600;color:${mReal<0?'var(--D)':mReal<mObj?'var(--W)':'var(--P)'}">${mReal}%</td>
+      <td style="font-size:12px;color:var(--txt2)">${mObj>0?mObj+'%':'—'}</td>
+      <td>${badge}</td>
+      <td><span class="b ${(p.stock||0)<=0?'bD':(p.stock||0)<=5?'bW':'bP'}">${p.stock||0}</span></td>
+      <td><button class="btn sm" onclick="editarProducto(${p.id})">✏️</button></td>
+    </tr>`;
+  }).join('');
+  
   pag('pro-pg',tot,_proPg,p=>{_proPg=p;renderProductos();});
 }
 
@@ -254,10 +622,10 @@ function imprimirProductos(){
     const costo=p.costo||0,precio=p.precio||0;
     const margen=costo>0?((precio-costo)/costo*100).toFixed(1)+'%':'—';
     const estado=p.activo===false?'INACTIVO':'Activo';
-    return `<tr><td>${p.codigo||''}</td><td>${p.nombre}</td><td>${p.proveedor_nom||'—'}</td><td>${p.unidad||'—'}</td><td style="text-align:right">${fmt(costo)}</td><td style="text-align:right;font-weight:bold">${fmt(precio)}</td><td style="text-align:right">${margen}</td><td style="text-align:center">${p.stock||0}</td><td>${estado}</td></tr>`;
+    return `<tr><td>${p.codigo||''}</td><td>${esc(p.nombre)}</td><td>${esc(p.proveedor_nom||'—')}</td><td>${p.unidad||'—'}</td><td style="text-align:right">${fmt(costo)}</td><td style="text-align:right;font-weight:bold">${fmt(precio)}</td><td style="text-align:right">${margen}</td><td style="text-align:center">${p.stock||0}</td><td>${estado}</td></tr>`;
   }).join('');
   const w=window.open('','_blank');
-  w.document.write(`<!DOCTYPE html><html><head><title>Listado de Productos</title><style>body{font-family:Arial,sans-serif;padding:20px;font-size:12px}h2{font-size:15px;margin-bottom:6px}.filtros{font-size:11px;color:#555;background:#f5f5f5;border:1px solid #ddd;border-radius:4px;padding:5px 10px;margin-bottom:12px;display:inline-block}table{width:100%;border-collapse:collapse}th,td{padding:5px 8px;border:1px solid #ddd;vertical-align:top}th{background:#f0f0f0;font-size:11px;text-transform:uppercase}tr:nth-child(even){background:#fafafa}@media print{button{display:none}}</style></head><body><h2>🌸 Distribuidora Lila — Listado de Productos (${new Date().toLocaleDateString('es-AR')})</h2><div class="filtros">🔍 Filtros: ${filtrosDesc} &nbsp;·&nbsp; ${data.length} productos</div><br><table><thead><tr><th>Código</th><th>Nombre / Descripción</th><th>Proveedor</th><th>Unidad</th><th style="text-align:right">Costo</th><th style="text-align:right">Precio Vta.</th><th style="text-align:right">Margen</th><th style="text-align:center">Stock</th><th>Estado</th></tr></thead><tbody>${filas}</tbody></table><br><button onclick="window.print()" style="padding:8px 20px;font-size:13px;cursor:pointer">🖨️ Imprimir</button></body></html>`);
+  w.document.write(`<!DOCTYPE html><html><head><title>Listado de Productos</title><style>body{font-family:Arial,sans-serif;padding:20px;font-size:12px}h2{font-size:15px;margin-bottom:6px}.filtros{font-size:11px;color:#555;background:#f5f5f5;border:1px solid #ddd;border-radius:4px;padding:5px 10px;margin-bottom:12px;display:inline-block}table{width:100%;border-collapse:collapse}th,td{padding:5px 8px;border:1px solid #ddd;vertical-align:top}th{background:#f0f0f0;font-size:11px;text-transform:uppercase}tr:nth-child(even){background:#fafafa}@media print{button{display:none}}</style></head><body><h2> Distribuidora Lila — Listado de Productos (${new Date().toLocaleDateString('es-AR')})</h2><div class="filtros">🔍 Filtros: ${filtrosDesc} &nbsp;·&nbsp; ${data.length} productos</div><br><table><thead><tr><th>Código</th><th>Nombre / Descripción</th><th>Proveedor</th><th>Unidad</th><th style="text-align:right">Costo</th><th style="text-align:right">Precio Vta.</th><th style="text-align:right">Margen</th><th style="text-align:center">Stock</th><th>Estado</th></tr></thead><tbody>${filas}</tbody></table><br><button onclick="window.print()" style="padding:8px 20px;font-size:13px;cursor:pointer">🖨️ Imprimir</button></body></html>`);
   w.document.close();
 }
 
@@ -307,45 +675,128 @@ function _poblarProvHabModal(valorActual){
 function abrirProducto(){
   document.getElementById('pro-edit-id').value='';
   document.getElementById('m-pro-title').textContent='Nuevo producto';
-  ['pro-cod','pro-nom','pro-unidad','pro-unidad-venta'].forEach(id=>document.getElementById(id).value='');
+  
+  // SOLO CAMPOS QUE EXISTEN
+  document.getElementById('pro-cod').value='';
+  document.getElementById('pro-nom').value='';
+  document.getElementById('pro-unidad').value='';
+  // document.getElementById('pro-unidad-venta').value=''; ← NO EXISTE
   document.getElementById('pro-cat-modal').value='';
   document.getElementById('pro-subcat-modal').innerHTML='<option value="">— Sin subcategoría —</option>';
   document.getElementById('pro-subcat-modal').disabled=true;
-  document.getElementById('pro-activo-chk').checked=true;
-  ['pro-costo','pro-precio','pro-stock','pro-dto','pro-punto-pedido'].forEach(id=>document.getElementById(id).value='0');
-  document.getElementById('pro-multiplo').value='1';
+  // document.getElementById('pro-activo-chk').checked=true; ← NO EXISTE
+  document.getElementById('pro-costo').value='0';
+  document.getElementById('pro-precio').value='0';
+  document.getElementById('pro-stock').value='0';
+  document.getElementById('pro-dto').value='0';
+  // document.getElementById('pro-punto-pedido').value='0'; ← NO EXISTE
+  // document.getElementById('pro-multiplo').value='1'; ← NO EXISTE
   document.getElementById('pro-iva').value='21';
   document.getElementById('pro-margen').value='30';
   document.getElementById('pro-precio-sug').textContent='—';
+  
+  // DESHABILITAR EL INPUT PARA QUE NO SE ACTIVE EL BUSCADOR
+  const nomInput = document.getElementById('pro-nom');
+  nomInput.disabled = false;
+  nomInput.placeholder = 'Nombre del producto';
+  nomInput.removeAttribute('oninput');
+  nomInput.removeAttribute('onfocus');
+  
+  // OCULTAR EL DROPDOWN
   document.getElementById('pro-nom-drop').style.display='none';
+  
   _poblarProvHabModal('');
   document.getElementById('m-producto').classList.add('on');
 }
 
 function editarProducto(id){
-  const p=_productos.find(x=>x.id===id);if(!p)return;
-  document.getElementById('pro-edit-id').value=id;
-  document.getElementById('m-pro-title').textContent='Editar producto';
-  document.getElementById('pro-cod').value=p.codigo||'';
-  document.getElementById('pro-nom').value=p.nombre||'';
-  document.getElementById('pro-costo').value=p.costo||0;
-  document.getElementById('pro-precio').value=p.precio||0;
-  document.getElementById('pro-iva').value=p.iva||21;
-  document.getElementById('pro-unidad').value=p.unidad||'';
-  document.getElementById('pro-unidad-venta').value=p.unidad_venta||'';
-  document.getElementById('pro-multiplo').value=p.multiplo_venta||1;
-  document.getElementById('pro-punto-pedido').value=p.punto_pedido||0;
-  document.getElementById('pro-stock').value=p.stock||0;
-  document.getElementById('pro-dto').value=p.descuento||0;
-  document.getElementById('pro-cat-modal').value=p.rubro||'';
+  const p = _productos.find(x => x.id === id); if(!p) return;
+  document.getElementById('pro-edit-id').value = id;
+  document.getElementById('m-pro-title').textContent = 'Editar producto';
+  document.getElementById('pro-cod').value = p.codigo||'';
+  document.getElementById('pro-nom').value = p.nombre||'';
+  document.getElementById('pro-costo').value = p.costo||0;
+  document.getElementById('pro-precio').value = p.precio||0;
+  document.getElementById('pro-iva').value = p.iva||21;
+  document.getElementById('pro-unidad').value = p.unidad||'';
+  // document.getElementById('pro-unidad-venta').value = p.unidad_venta||''; ← NO EXISTE
+  // document.getElementById('pro-multiplo').value = p.multiplo_venta||1; ← NO EXISTE
+  // document.getElementById('pro-punto-pedido').value = p.punto_pedido||0; ← NO EXISTE
+  document.getElementById('pro-stock').value = p.stock||0;
+  document.getElementById('pro-dto').value = p.descuento||0;
+  document.getElementById('pro-cat-modal').value = p.rubro||'';
   poblarSubcats('pro-cat-modal','pro-subcat-modal');
-  document.getElementById('pro-subcat-modal').value=p.linea||'';
-  document.getElementById('pro-margen').value=p.margen_objetivo||30;
-  document.getElementById('pro-activo-chk').checked=p.activo!==false;
+  document.getElementById('pro-subcat-modal').value = p.linea||'';
+  document.getElementById('pro-margen').value = p.margen_objetivo||30;
+  // document.getElementById('pro-activo-chk').checked = p.activo !== false; ← NO EXISTE
   _poblarProvHabModal(p.proveedor_nom||'');
   recalcPrecioSugerido();
+  
+  // HABILITAR EL BUSCADOR PARA EDICIÓN
+  const nomInput = document.getElementById('pro-nom');
+  nomInput.disabled = false;
+  nomInput.placeholder = 'Buscar para editar...';
+  nomInput.setAttribute('oninput', 'dropProNombreModal()');
+  nomInput.setAttribute('onfocus', 'dropProNombreModal()');
+  
   document.getElementById('pro-nom-drop').style.display='none';
   document.getElementById('m-producto').classList.add('on');
+}
+
+
+// ─── CARGAR HISTORIAL DE STOCK ───
+async function cargarHistorialStock() {
+  const contenedor = document.getElementById('stock-historial-contenido');
+  if (!contenedor) return;
+  
+  // Cargar conteos desde la base de datos
+  // Asumimos que hay una tabla "conteos_stock" o similar
+  const { data, error } = await sb.from('conteos_stock')
+    .select('*')
+    .order('fecha', { ascending: false })
+    .limit(50);
+  
+  if (error || !data || data.length === 0) {
+    contenedor.innerHTML = '<div class="empty"><i>📦</i><br>No hay conteos registrados aún. Hacé clic en "+ Nuevo conteo" para comenzar.</div>';
+    return;
+  }
+  
+  // Mostrar los conteos en una tabla
+  contenedor.innerHTML = `
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Usuario</th>
+            <th>Productos ajustados</th>
+            <th>Diferencia total</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.map(c => `
+            <tr>
+              <td>${c.fecha || '—'}</td>
+              <td>${c.usuario || '—'}</td>
+              <td>${c.productos_ajustados || 0}</td>
+              <td style="color:${(c.diferencia_total || 0) < 0 ? 'var(--D)' : 'var(--P)'}">${fmt(c.diferencia_total || 0)}</td>
+              <td><button class="btn sm" onclick="verDetalleConteo(${c.id})">👁 Ver</button></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// ─── LIMPIAR FILTROS DE STOCK ───
+function limpiarFiltrosStock() {
+  document.getElementById('stock-q').value = '';
+  document.getElementById('stock-cat').value = '';
+  document.getElementById('stock-prov').value = '';
+  document.getElementById('stock-rubro').value = '';
+  filtrarConteo();
 }
 
 // Popup de búsqueda dentro del propio formulario (como "Consulta de
@@ -360,33 +811,48 @@ function dropProNombreModal(){
   if(q.length<2){drop.style.display='none';return;}
   const m=_productos.filter(p=>String(p.id)!==String(editId)&&(p.nombre||'').toLowerCase().includes(q)).slice(0,8);
   drop.innerHTML=m.length?m.map(p=>`<div onmousedown="editarProducto(${p.id})">
-      <strong>${p.nombre}</strong> <span style="color:var(--txt2);font-size:11px">Cód: ${p.codigo||p.id} · Stock: ${p.stock||0}</span>
+      <strong>${esc(p.nombre)}</strong> <span style="color:var(--txt2);font-size:11px">Cód: ${p.codigo||p.id} · Stock: ${p.stock||0}</span>
     </div>`).join(''):'<div style="color:var(--txt2)">Sin coincidencias</div>';
   drop.style.display='block';
 }
 
 async function guardarProducto(){
-  const nom=(document.getElementById('pro-nom').value||'').trim().toUpperCase();
-  if(!nom){alert('Ingresá el nombre');return;}
-  const editId=document.getElementById('pro-edit-id').value;
-  const obj={codigo:document.getElementById('pro-cod').value.trim(),nombre:nom,
-    costo:parseFloat(document.getElementById('pro-costo').value)||0,
-    precio:parseFloat(document.getElementById('pro-precio').value)||0,
-    iva:parseFloat(document.getElementById('pro-iva').value)||21,
-    unidad:document.getElementById('pro-unidad').value.trim(),
-    unidad_venta:document.getElementById('pro-unidad-venta').value.trim(),
-    multiplo_venta:parseFloat(document.getElementById('pro-multiplo').value)||1,
-    punto_pedido:parseFloat(document.getElementById('pro-punto-pedido').value)||0,
-    proveedor_nom:document.getElementById('pro-provhab').value||'',
-    stock:parseFloat(document.getElementById('pro-stock').value)||0,
-    descuento:parseFloat(document.getElementById('pro-dto').value)||0,
-    rubro:document.getElementById('pro-cat-modal').value,
-    linea:document.getElementById('pro-subcat-modal').value,
-    margen_objetivo:parseFloat(document.getElementById('pro-margen').value)||0,
-    activo:document.getElementById('pro-activo-chk').checked};
-  if(editId){await sb.from('productos').update(obj).eq('id',editId);}
-  else{await sb.from('productos').insert(obj);}
-  cerrar('m-producto');await cargarProductos();renderProductos();
+  const nom = (document.getElementById('pro-nom').value||'').trim().toUpperCase();
+  if(!nom){ alert('Ingresá el nombre'); return; }
+  const editId = document.getElementById('pro-edit-id').value;
+  
+  // SOLO LOS CAMPOS QUE EXISTEN EN LA TABLA
+  const obj = {
+    codigo: document.getElementById('pro-cod').value.trim(),
+    nombre: nom,
+    costo: parseFloat(document.getElementById('pro-costo').value) || 0,
+    precio: parseFloat(document.getElementById('pro-precio').value) || 0,
+    iva: parseFloat(document.getElementById('pro-iva').value) || 21,
+    unidad: document.getElementById('pro-unidad').value.trim(),
+    linea: document.getElementById('pro-subcat-modal').value,
+    stock: parseFloat(document.getElementById('pro-stock').value) || 0,
+    descuento: parseFloat(document.getElementById('pro-dto').value) || 0,
+    rubro: document.getElementById('pro-cat-modal').value,
+    proveedor_nom: document.getElementById('pro-provhab').value || '',
+    margen_objetivo: parseFloat(document.getElementById('pro-margen').value) || 0,
+  };
+  
+  console.log('📤 Enviando a productos:', obj);
+  
+  try {
+    if(editId){ 
+      await sb.from('productos').update(obj).eq('id', editId); 
+    } else { 
+      await sb.from('productos').insert(obj); 
+    }
+    cerrar('m-producto');
+    await cargarProductos();
+    renderProductos();
+    toast('✅ Producto guardado correctamente');
+  } catch (error) {
+    console.error('❌ Error al guardar producto:', error);
+    alert('Error al guardar: ' + (error.message || error));
+  }
 }
 
 let _listasPrecios=[], _listaPreciosItems=[], _clienteListaMap={};
@@ -433,7 +899,7 @@ async function initListasPrecios(){
 }
 
 function _lpPoblarSelects(){
-  const opts=_listasPrecios.map(l=>`<option value="${l.id}">${l.nombre}</option>`).join('');
+  const opts=_listasPrecios.map(l=>`<option value="${l.id}">${esc(l.nombre)}</option>`).join('');
   ['lp-sel-lista','lp-cli-lista-fil','lp-sim-lista','cmgc-lista-sim'].forEach(id=>{
     const el=document.getElementById(id);
     if(!el)return;
@@ -448,6 +914,7 @@ function _lpPoblarSelects(){
 }
 
 function lpTab(tab){
+  setBreadcrumbSub('lp', tab);
   ['listas','precios','clientes','sim'].forEach(t=>{
     const sec=document.getElementById('lp-sec-'+t);
     const btn=document.getElementById('lp-tab-'+t);
@@ -469,7 +936,7 @@ function lpRenderListas(){
   el.innerHTML=_listasPrecios.map(l=>`
     <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:var(--bg2);border:1px solid var(--brd);border-radius:10px;margin-bottom:8px">
       <div>
-        <div style="font-weight:700;font-size:15px">${l.nombre}</div>
+        <div style="font-weight:700;font-size:15px">${esc(l.nombre)}</div>
         <div style="font-size:12px;color:var(--txt2);margin-top:2px">Margen base: <strong>${l.margen_pct||0}%</strong> · ${Object.values(_clienteListaMap).filter(v=>v==l.id).length} cliente(s)</div>
       </div>
       <div style="display:flex;gap:6px">
@@ -499,7 +966,7 @@ async function lpEditarLista(id){
 }
 
 async function lpEliminarLista(id){
-  if(!confirm('¿Eliminar esta lista? Se perderán todos los precios asociados.'))return;
+  if(!await _confirmar('¿Eliminar esta lista? Se perderán todos los precios asociados.', {titulo:'Eliminar lista',textoOk:'Eliminar'}))return;
   await sb.from('lista_precios_items').delete().eq('lista_id',id);
   await sb.from('listas_precios').delete().eq('id',id);
   Object.keys(_clienteListaMap).forEach(cid=>{if(_clienteListaMap[cid]==id)delete _clienteListaMap[cid];});
@@ -542,7 +1009,7 @@ function lpFiltrarPrecios(){
       const override=item?.precio_override;
       const final=override!=null?override:precioLista;
       return `<tr style="border-bottom:0.5px solid var(--brd)">
-        <td style="padding:7px 10px;font-weight:500">${p.nombre}</td>
+        <td style="padding:7px 10px;font-weight:500">${esc(p.nombre)}</td>
         <td style="padding:7px 10px;text-align:right;color:var(--txt2)">${fmt(costo)}</td>
         <td style="padding:7px 10px;text-align:right;color:var(--txt2)">${fmt(precioBase)}</td>
         <td style="padding:7px 10px;text-align:right">${fmt(precioLista)}</td>
@@ -594,12 +1061,12 @@ function lpRenderClientes(){
     <tbody>${clis.slice(0,100).map(c=>{
       const listaId=_clienteListaMap[c.id]||'';
       return `<tr style="border-bottom:0.5px solid var(--brd)">
-        <td style="padding:7px 10px;font-weight:500">${c.nombre}</td>
+        <td style="padding:7px 10px;font-weight:500">${esc(c.nombre)}</td>
         <td style="padding:7px 10px">
           <select style="width:100%;padding:4px 6px;border:1px solid var(--brd);border-radius:6px;font-size:12px"
             onchange="lpAsignarClienteLista(${c.id},this.value)">
             <option value="">— Sin lista —</option>
-            ${_listasPrecios.map(l=>`<option value="${l.id}"${l.id==listaId?' selected':''}>${l.nombre}</option>`).join('')}
+            ${_listasPrecios.map(l=>`<option value="${l.id}"${l.id==listaId?' selected':''}>${esc(l.nombre)}</option>`).join('')}
           </select>
         </td>
       </tr>`;
@@ -621,7 +1088,7 @@ function lpSimDropCli(){
   drop.innerHTML=m.map(c=>`<div onmousedown="lpSimSelCli(${c.id})"
     style="padding:10px 12px;cursor:pointer;border-bottom:0.5px solid var(--brd)"
     onmouseover="this.style.background='var(--PL)'" onmouseout="this.style.background=''">
-    <div style="font-weight:600">${c.nombre}</div>
+    <div style="font-weight:600">${esc(c.nombre)}</div>
     ${_clienteListaMap[c.id]?`<div style="font-size:11px;color:var(--PD)">${_listasPrecios.find(l=>l.id==_clienteListaMap[c.id])?.nombre||''}</div>`:''}
   </div>`).join('');
   drop.style.display=m.length?'block':'none';
@@ -644,7 +1111,7 @@ function lpSimDropPro(){
   drop.innerHTML=m.map(p=>`<div onmousedown="lpSimSelPro(${p.id})"
     style="padding:10px 12px;cursor:pointer;border-bottom:0.5px solid var(--brd)"
     onmouseover="this.style.background='var(--PL)'" onmouseout="this.style.background=''">
-    <div style="font-weight:600">${p.nombre}</div>
+    <div style="font-weight:600">${esc(p.nombre)}</div>
     <div style="font-size:11px;color:var(--txt2)">${fmt(p.precio||0)} base · costo ${fmt(p.costo||0)}</div>
   </div>`).join('');
   drop.style.display=m.length?'block':'none';
@@ -696,7 +1163,7 @@ function lpSimRender(){
       const totLista=i.cant*i.precioLista;
       const dif=totLista-totBase;
       return `<tr style="border-bottom:0.5px solid var(--brd)">
-        <td style="padding:6px 10px;font-weight:500">${i.nom}</td>
+        <td style="padding:6px 10px;font-weight:500">${esc(i.nom)}</td>
         <td style="padding:6px 10px;text-align:right">${i.cant}</td>
         <td style="padding:6px 10px;text-align:right;color:var(--txt2)">${fmt(i.precioBase)}</td>
         <td style="padding:6px 10px;text-align:right;color:var(--PD);font-weight:600">${fmt(i.precioLista)}</td>
@@ -748,8 +1215,29 @@ function renderProveedores(){
   const fCont=document.getElementById('prov-f-cont')?.value||'';
   const fPlazo=document.getElementById('prov-f-plazo')?.value||'';
   const fSaldo=document.getElementById('prov-f-saldo')?.value||'';
+  // Misma lógica que en Clientes (ver comentario arriba):
+  //  · número puro ≤6 dígitos → código/id exactos.
+  //  · número puro >6 dígitos  → también CUIT y teléfono (contiene).
+  //  · con letras               → nombre, contacto, CUIT.
+  const esNumeroPuro = /^\d+$/.test(q);
   let data = _proveedores
-    .filter(p => !q || (p.nombre||'').toLowerCase().includes(q)||(p.cuit||'').includes(q)||(p.codigo||'').toString().includes(q)||(p.contacto||'').toLowerCase().includes(q))
+    .filter(p => {
+      if(!q) return true;
+      if(esNumeroPuro && q.length <= 6){
+        return String(p.codigo||'').trim()===q || String(p.id||'')===q;
+      }
+      if(esNumeroPuro){
+        const cuitNorm = String(p.cuit||'').replace(/\D/g,'');
+        const telNorm  = String(p.telefono||'').replace(/\D/g,'');
+        return String(p.codigo||'').trim()===q
+            || String(p.id||'')===q
+            || cuitNorm.includes(q)
+            || telNorm.includes(q);
+      }
+      return (p.nombre||'').toLowerCase().includes(q)
+          || (p.contacto||'').toLowerCase().includes(q)
+          || (p.cuit||'').toLowerCase().includes(q);
+    })
     .filter(p => matchFiltroCol(p.nombre,fNom)&&matchFiltroCol(p.cuit,fCuit)&&matchFiltroCol(p.contacto,fCont)&&matchFiltroCol(p.plazo_pago_dias,fPlazo))
     .map(p=>({...p,_saldo:_saldoProveedor(p.id)}))
     .filter(p=>matchFiltroCol(p._saldo,fSaldo));
@@ -773,31 +1261,31 @@ function renderProveedores(){
   const tbody = document.getElementById('prov-tbody');
   if(!tbody) return;
   tbody.innerHTML = data.length ? data.map(p => `<tr>
-    <td style="font-weight:600">${p.nombre}</td>
+    <td style="color:var(--txt2);font-size:12px;text-align:center;font-variant-numeric:tabular-nums">${esc(p.codigo||p.id||'')}</td>
+    <td style="font-weight:600">${esc(p.nombre)}</td>
     <td style="color:var(--txt2)">${p.cuit||'—'}</td>
-    <td>${p.contacto||'—'}</td>
-    <td>${p.telefono||'—'}</td>
-    <td>${p.email||'—'}</td>
+    <td>${esc(p.contacto||'—')}</td>
+    <td>${esc(p.telefono||'—')}</td>
+    <td>${esc(p.email||'—')}</td>
     <td>${p.condicion_pago||'—'}</td>
     <td>${p.plazo_pago_dias!=null?`<span class="b bP">${p.plazo_pago_dias}d</span>`:'—'}</td>
     <td style="text-align:right;font-weight:600;color:${p._saldo>0?'var(--D)':'var(--txt2)'};cursor:pointer" onclick="histProveedor(${p.id})" title="Ver cuenta corriente">${fmt(p._saldo)}</td>
     <td><button class="btn sm" onclick="editarProveedor(${p.id})">✏️</button>
         <button class="btn D sm" onclick="eliminarProveedor(${p.id})">🗑</button></td>
-  </tr>`).join('') : '<tr><td colspan="9"><div class="empty">Sin proveedores</div></td></tr>';
+  </tr>`).join('') : '<tr><td colspan="10"><div class="empty">Sin proveedores</div></td></tr>';
 }
 
 function abrirProveedor(){
   document.getElementById('prov-edit-id').value = '';
   document.getElementById('m-prov-title').textContent = 'Nuevo proveedor';
-  ['prov-nom','prov-cuit','prov-contacto','prov-tel','prov-email','prov-condicion','prov-plazo','prov-obs'].forEach(id => {
+  ['prov-nom','prov-cuit','prov-tel','prov-email','prov-condicion','prov-plazo','prov-obs'].forEach(id => {
     const el = document.getElementById(id); if(el) el.value = '';
   });
-  document.getElementById('prov-cond-fiscal').value='factura_todo';
-  document.getElementById('prov-pct-factura').value='';
-  document.getElementById('prov-pct-wrap').style.display='none';
+  // Eliminar referencias a prov-contacto si no existe
+  // document.getElementById('prov-contacto').value = '';
+  document.getElementById('prov-cuenta').value = '';
   document.getElementById('m-proveedor').classList.add('on');
 }
-
 function togglePctFactura(){
   const v=document.getElementById('prov-cond-fiscal').value;
   document.getElementById('prov-pct-wrap').style.display=v==='factura_parcial'?'':'none';
@@ -809,16 +1297,13 @@ function editarProveedor(id){
   document.getElementById('m-prov-title').textContent = 'Editar proveedor';
   document.getElementById('prov-nom').value = p.nombre||'';
   document.getElementById('prov-cuit').value = p.cuit||'';
-  document.getElementById('prov-contacto').value = p.contacto||'';
+  // document.getElementById('prov-contacto').value = p.contacto||''; ← NO EXISTE
   document.getElementById('prov-tel').value = p.telefono||'';
   document.getElementById('prov-email').value = p.email||'';
   document.getElementById('prov-condicion').value = p.condicion_pago||'';
-  document.getElementById('prov-plazo').value = p.plazo_pago_dias!=null?p.plazo_pago_dias:'';
+  document.getElementById('prov-plazo').value = p.plazo_pago_dias != null ? p.plazo_pago_dias : (p.plazo_dias || '');
   document.getElementById('prov-obs').value = p.observaciones||'';
   document.getElementById('prov-cuenta').value = p.cuenta_defecto||'';
-  document.getElementById('prov-cond-fiscal').value = p.condicion_fiscal||'factura_todo';
-  document.getElementById('prov-pct-factura').value = p.pct_factura||'';
-  document.getElementById('prov-pct-wrap').style.display = (p.condicion_fiscal==='factura_parcial')?'':'none';
   document.getElementById('m-proveedor').classList.add('on');
 }
 
@@ -826,30 +1311,57 @@ async function guardarProveedor(){
   const nom = (document.getElementById('prov-nom').value||'').trim();
   if(!nom){ alert('Ingresá el nombre'); return; }
   const editId = document.getElementById('prov-edit-id').value;
+  
+  // OBJETO CON LOS CAMPOS QUE EXISTEN EN LA TABLA
   const obj = {
     nombre: nom,
     cuit: document.getElementById('prov-cuit').value.trim(),
-    contacto: document.getElementById('prov-contacto').value.trim(),
+    // contacto: document.getElementById('prov-contacto').value.trim(), ← NO EXISTE
     telefono: document.getElementById('prov-tel').value.trim(),
     email: document.getElementById('prov-email').value.trim(),
     condicion_pago: document.getElementById('prov-condicion').value.trim(),
-    plazo_pago_dias: document.getElementById('prov-plazo').value!==''?parseInt(document.getElementById('prov-plazo').value):null,
+    // plazo_pago_dias: ... ← USAR `plazo_dias` O `plazo_pago_dias`
+    plazo_dias: document.getElementById('prov-plazo').value !== '' ? parseInt(document.getElementById('prov-plazo').value) : null,
+    plazo_pago_dias: document.getElementById('prov-plazo').value !== '' ? parseInt(document.getElementById('prov-plazo').value) : null,
     cuenta_defecto: document.getElementById('prov-cuenta').value,
     observaciones: document.getElementById('prov-obs').value.trim(),
-    condicion_fiscal: document.getElementById('prov-cond-fiscal').value,
-    pct_factura: document.getElementById('prov-pct-factura').value!==''?parseFloat(document.getElementById('prov-pct-factura').value):null,
+    // condicion_fiscal: document.getElementById('prov-cond-fiscal').value, ← NO EXISTE
+    // pct_factura: ..., ← NO EXISTE
+    dto_pp: 0, // Descuento pronto pago (opcional)
+    acepta_cheque: 'si', // Opcional
   };
-  if(editId){ await sb.from('proveedores').update(obj).eq('id', editId); }
-  else { await sb.from('proveedores').insert(obj); }
-  cerrar('m-proveedor');
+  
+  console.log('📤 Enviando a proveedores:', obj);
+  
+  try {
+    if(editId){ 
+      await sb.from('proveedores').update(obj).eq('id', editId); 
+    } else { 
+      await sb.from('proveedores').insert(obj); 
+    }
+    cerrar('m-proveedor');
+    await cargarProveedores();
+    renderProveedores();
+    toast('✅ Proveedor guardado correctamente');
+  } catch (error) {
+    console.error('❌ Error al guardar proveedor:', error);
+    alert('Error al guardar: ' + (error.message || error));
+  }
+}
+
+async function eliminarProveedor(id){
+  if(!await _confirmar('¿Eliminar este proveedor?', {titulo:'Eliminar proveedor', textoOk:'Eliminar'})) return;
+  await sb.from('proveedores').delete().eq('id', id);
   await cargarProveedores();
   renderProveedores();
 }
 
-async function eliminarProveedor(id){
-  if(!confirm('¿Eliminar este proveedor?')) return;
-  await sb.from('proveedores').delete().eq('id', id);
-  await cargarProveedores();
+function limpiarFiltrosProveedores() {
+  document.getElementById('prov-f-nom').value = '';
+  document.getElementById('prov-f-cuit').value = '';
+  document.getElementById('prov-f-cont').value = '';
+  document.getElementById('prov-f-plazo').value = '';
+  document.getElementById('prov-f-saldo').value = '';
   renderProveedores();
 }
 
@@ -868,14 +1380,30 @@ function renderZonas(){
   const tbody = document.getElementById('zona-tbody');
   if(!tbody) return;
   tbody.innerHTML = data.length ? data.map(z => {
-    const clientes = _clientes.filter(c => c.zona === z.codigo).length;
+    // Zona = localidad (decisión de negocio). El conteo matchea por:
+    //   · codigo:  clientes viejos que todavía tienen la zona como código
+    //              numérico (ej. c.zona = '1'). Compatibilidad.
+    //   · localidad: clientes migrados a zona = localidad, donde la
+    //              localidad del cliente coincide con la descripción de la
+    //              zona (ej. c.localidad = 'CASILDA' y z.descripcion = 'Casilda').
+    // Se usa un Set de ids para no contar dos veces si un cliente matchea
+    // por ambos criterios a la vez.
+    const desc = String(z.descripcion||'').trim().toUpperCase();
+    const cod = String(z.codigo||'').trim();
+    const ids = new Set();
+    _clientes.forEach(c => {
+      const porCodigo = cod && String(c.zona||'').trim() === cod;
+      const porLocalidad = desc && String(c.localidad||'').trim().toUpperCase() === desc;
+      if(porCodigo || porLocalidad) ids.add(c.id);
+    });
+    const clientes = ids.size;
     return `<tr>
-      <td style="font-weight:700;color:var(--P)">${z.codigo}</td>
-      <td>${z.descripcion||'—'}</td>
-      <td>${z.vendedor||'—'}</td>
+      <td style="font-weight:700;color:var(--P)">${esc(z.codigo||'')}</td>
+      <td>${esc(z.descripcion||'—')}</td>
+      <td>${esc(z.vendedor||'—')}</td>
       <td><span class="b bA">${clientes} clientes</span></td>
       <td><button class="btn sm" onclick="editarZona(${z.id})">✏️</button>
-          <button class="btn D sm" onclick="eliminarZona(${z.id})">🗑</button></td>
+        <button class="btn D sm" onclick="eliminarZona(${z.id})">🗑</button></td>
     </tr>`;
   }).join('') : '<tr><td colspan="5"><div class="empty">Sin zonas</div></td></tr>';
 }
@@ -898,23 +1426,34 @@ function editarZona(id){
 }
 
 async function guardarZona(){
+  const nombre = (document.getElementById('zona-nombre').value||'').trim();
   const cod = (document.getElementById('zona-cod').value||'').trim();
-  if(!cod){ alert('Ingresá el código de zona'); return; }
+  const vendedor = document.getElementById('zona-ven').value.trim();
+  const descripcion = document.getElementById('zona-desc').value.trim();
+  
+  if(!nombre){ alert('Ingresá el nombre de la zona'); return; }
+  
   const editId = document.getElementById('zona-edit-id').value;
   const obj = {
-    codigo: cod,
-    vendedor: document.getElementById('zona-ven').value.trim(),
-    descripcion: document.getElementById('zona-desc').value.trim(),
+    nombre: nombre,
+    codigo: cod || nombre, 
+    vendedor: vendedor,
+    descripcion: descripcion,
   };
-  if(editId){ await sb.from('zonas').update(obj).eq('id', editId); }
-  else { await sb.from('zonas').insert(obj); }
+  
+  if(editId){ 
+    await sb.from('zonas').update(obj).eq('id', editId); 
+  } else { 
+    await sb.from('zonas').insert(obj); 
+  }
+  
   cerrar('m-zona');
   await cargarZonas();
   renderZonas();
 }
 
 async function eliminarZona(id){
-  if(!confirm('¿Eliminar esta zona?')) return;
+  if(!await _confirmar('¿Eliminar esta zona?',{titulo:'Eliminar zona', textoOk:'Eliminar'})) return;
   await sb.from('zonas').delete().eq('id', id);
   await cargarZonas();
   renderZonas();
@@ -946,4 +1485,442 @@ async function sincronizarZonasDesdeLocalidades() {
   renderZonas();
   if (errs) toast(`⚠️ ${ok2} creadas, ${errs} errores — revisá consola`, 'err');
   else toast(`✅ ${ok2} zona(s) creada(s): ${nuevas.slice(0,3).join(', ')}${nuevas.length>3?'…':''}`);
+}
+
+// ─── ACTIVAR / DESACTIVAR CLIENTE ─────────────────────────────────────
+
+async function toggleActivoCliente(id, activo) {
+  const cliente = _clientes.find(c => c.id === id);
+  if (!cliente) {
+    toast('❌ Cliente no encontrado', 'err');
+    return;
+  }
+  
+  const nuevoEstado = !activo;
+  const accionTexto = nuevoEstado ? 'activar' : 'desactivar';
+  const accionMostrar = nuevoEstado ? 'ACTIVAR' : 'DESACTIVAR';
+  
+  // Verificar si tiene movimientos antes de desactivar
+  if (!nuevoEstado) { // Solo cuando se desactiva
+    const remitos = _remitos.filter(r => r.cliente_id === id);
+    const cobros = _cobros.filter(c => c.cliente_id === id);
+    const pedidos = _pedidos.filter(p => p.cliente_id === id);
+    const tieneMovimientos = remitos.length + cobros.length + pedidos.length;
+    
+    let mensaje = `⚠️ ¿DESACTIVAR el cliente "${cliente.nombre}"?`;
+    if (tieneMovimientos > 0) {
+      mensaje += `\n\n📊 Tiene:\n• ${remitos.length} remito(s)\n• ${cobros.length} cobro(s)\n• ${pedidos.length} pedido(s)\n\nEl cliente quedará OCULTO pero su historial se conservará.`;
+    } else {
+      mensaje += `\n\nEl cliente no tiene movimientos asociados.`;
+    }
+    if (!confirm(mensaje)) return;
+  } else {
+    if (!confirm(`✅ ¿ACTIVAR el cliente "${cliente.nombre}"?`)) return;
+  }
+  
+  try {
+    const { error } = await sb
+      .from('clientes')
+      .update({ activo: nuevoEstado })
+      .eq('id', id);
+    
+    if (error) throw error;
+    
+    // Actualizar en memoria
+    const clienteLocal = _clientes.find(c => c.id === id);
+    if (clienteLocal) clienteLocal.activo = nuevoEstado;
+    
+    // Recargar y renderizar
+    await cargarClientes();
+    renderClientes();
+    
+    toast(`✅ Cliente ${accionTexto}ado correctamente`);
+  } catch (error) {
+    toast('❌ Error al ' + accionTexto + ': ' + error.message, 'err', 5000);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// IMPORTAR SALDOS DE CLIENTES
+// ═══════════════════════════════════════════════════════════════
+// Lee un Excel (formato FoxPro: Código | Cliente | Dirección |
+// Localidad | Saldo), matchea por código contra _clientes y actualiza
+// clientes.saldo. Tiene preview previo + undo (24h) desde localStorage.
+// const IMP_SALDOS_SNAPSHOT_KEY = 'lila_saldos_snapshot_undo';
+let _impSalDatos = null;    // {filas:[...], matcheadas:[], nomatch:[], totalExcel:0, totalDb:0}
+
+function abrirImportarSaldos(){
+  _impSalDatos = null;
+  document.getElementById('imp-sal-paso1').style.display='block';
+  document.getElementById('imp-sal-paso2').style.display='none';
+  document.getElementById('imp-sal-paso3').style.display='none';
+  document.getElementById('imp-sal-footer1').style.display='flex';
+  document.getElementById('imp-sal-footer2').style.display='none';
+  document.getElementById('imp-sal-footer3').style.display='none';
+  document.getElementById('imp-sal-msg').textContent='';
+  document.getElementById('imp-sal-file').value='';
+  document.getElementById('m-import-saldos').classList.add('on');
+}
+
+function _volverPaso1Saldos(){
+  document.getElementById('imp-sal-paso2').style.display='none';
+  document.getElementById('imp-sal-paso1').style.display='block';
+  document.getElementById('imp-sal-footer2').style.display='none';
+  document.getElementById('imp-sal-footer1').style.display='flex';
+}
+
+// Acepta números, "1.234,56", "1234.56", "1.234" (miles en AR sin decimales),
+// "$ 1.234,56". Devuelve null si no se puede interpretar.
+function _parseSaldo(v){
+  if(v===null||v===undefined) return null;
+  if(typeof v === 'number') return isFinite(v)?v:null;
+  let s = String(v).trim();
+  if(!s) return null;
+  s = s.replace(/[$\s]/g,'');
+  if(s.includes(',')){
+    // Formato argentino: 1.234,56 → quitar puntos, coma a punto
+    s = s.replace(/\./g,'').replace(',','.');
+  } else if(/^\d{1,3}(\.\d{3})+$/.test(s)){
+    // Formato miles sin decimales: 1.234.567 → 1234567
+    s = s.replace(/\./g,'');
+  }
+  const n = parseFloat(s);
+  return isNaN(n)?null:n;
+}
+
+function _procesarArchivoSaldos(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  const msg = document.getElementById('imp-sal-msg');
+  msg.style.color='var(--txt2)';
+  msg.textContent='⏳ Leyendo archivo...';
+
+  if(typeof XLSX === 'undefined'){
+    msg.style.color='var(--D)';
+    msg.textContent='❌ La librería XLSX no está cargada. Recargá la página.';
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try{
+      const wb = XLSX.read(e.target.result, {type:'binary'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+
+      // Detectar fila de inicio: primer renglón donde col[0] sea código
+      // numérico y col[4] (o la última) sea un saldo interpretable.
+      let inicio = -1;
+      for(let i=0;i<Math.min(rows.length,20);i++){
+        const r = rows[i]; if(!r||r.length<2) continue;
+        const cod = String(r[0]||'').trim();
+        const saldo = _parseSaldo(r[4]);
+        if(/^\d+$/.test(cod) && saldo !== null){ inicio=i; break; }
+      }
+      if(inicio < 0){
+        msg.style.color='var(--D)';
+        msg.textContent='❌ No encontré filas con datos válidos. Verificá que el Excel tenga Código en la col. A y Saldo en la col. E.';
+        return;
+      }
+
+      const filas=[];
+      for(let i=inicio;i<rows.length;i++){
+        const r = rows[i]; if(!r) continue;
+        const cod = String(r[0]||'').trim();
+        const nombre = String(r[1]||'').trim();
+        const saldo = _parseSaldo(r[4]);
+        if(!/^\d+$/.test(cod) || saldo===null) continue;
+        filas.push({codigo:cod, nombre, saldo});
+      }
+
+      if(!filas.length){
+        msg.style.color='var(--D)';
+        msg.textContent='❌ Cero filas válidas. Revisá el archivo.';
+        return;
+      }
+
+      // Match por código contra _clientes
+      const mapaCli = {};
+      _clientes.forEach(c=>{
+        const cod = String(c.codigo||'').trim();
+        if(cod) mapaCli[cod]=c;
+      });
+
+      const matcheadas=[], nomatch=[];
+      filas.forEach(f=>{
+        const c = mapaCli[f.codigo];
+        if(c){
+          matcheadas.push({
+            id:c.id, codigo:f.codigo, nombre:c.nombre,
+            saldoNuevo:f.saldo, saldoActual:Number(c.saldo||0)
+          });
+        } else {
+          nomatch.push(f);
+        }
+      });
+
+      const totalExcel = matcheadas.reduce((a,m)=>a+m.saldoNuevo,0);
+      const totalDb    = matcheadas.reduce((a,m)=>a+m.saldoActual,0);
+      const cambiados  = matcheadas.filter(m=>Math.abs(m.saldoNuevo-m.saldoActual)>=0.01);
+
+      _impSalDatos = {filas, matcheadas, nomatch, totalExcel, totalDb, cambiados};
+
+      _renderPreviewSaldos();
+      document.getElementById('imp-sal-paso1').style.display='none';
+      document.getElementById('imp-sal-paso2').style.display='block';
+      document.getElementById('imp-sal-footer1').style.display='none';
+      document.getElementById('imp-sal-footer2').style.display='flex';
+    } catch(err){
+      console.error(err);
+      msg.style.color='var(--D)';
+      msg.textContent='❌ Error al leer el archivo: '+(err.message||err);
+    }
+  };
+  reader.readAsBinaryString(file);
+}
+
+function _renderPreviewSaldos(){
+  const d = _impSalDatos; if(!d) return;
+  const fmtN = n => '$'+(Math.round(n||0)).toLocaleString('es-AR');
+  const dif = d.totalExcel - d.totalDb;
+  const colDif = Math.abs(dif)<1 ? 'var(--txt2)' : (dif>0?'var(--D)':'var(--P)');
+
+  document.getElementById('imp-sal-resumen').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:12px">
+      <div style="background:var(--bg2);border-radius:8px;padding:10px 12px">
+        <div style="font-size:11px;color:var(--txt2)">Filas del Excel</div>
+        <div style="font-size:18px;font-weight:700">${d.filas.length}</div>
+      </div>
+      <div style="background:var(--bg2);border-radius:8px;padding:10px 12px">
+        <div style="font-size:11px;color:var(--txt2)">Matcheadas</div>
+        <div style="font-size:18px;font-weight:700;color:var(--P)">${d.matcheadas.length}</div>
+      </div>
+      <div style="background:var(--bg2);border-radius:8px;padding:10px 12px">
+        <div style="font-size:11px;color:var(--txt2)">A actualizar</div>
+        <div style="font-size:18px;font-weight:700;color:var(--A)">${d.cambiados.length}</div>
+      </div>
+      <div style="background:var(--bg2);border-radius:8px;padding:10px 12px">
+        <div style="font-size:11px;color:var(--txt2)">Sin match</div>
+        <div style="font-size:18px;font-weight:700;color:${d.nomatch.length?'var(--W)':'var(--txt2)'}">${d.nomatch.length}</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+      <div style="background:var(--PL);border-radius:8px;padding:10px 12px">
+        <div style="font-size:11px;color:var(--txt2)">Total Excel (match)</div>
+        <div style="font-size:16px;font-weight:700">${fmtN(d.totalExcel)}</div>
+      </div>
+      <div style="background:var(--bg2);border-radius:8px;padding:10px 12px">
+        <div style="font-size:11px;color:var(--txt2)">Total actual en DB</div>
+        <div style="font-size:16px;font-weight:700">${fmtN(d.totalDb)}</div>
+      </div>
+      <div style="background:var(--bg2);border-radius:8px;padding:10px 12px">
+        <div style="font-size:11px;color:var(--txt2)">Diferencia</div>
+        <div style="font-size:16px;font-weight:700;color:${colDif}">${dif>0?'+':''}${fmtN(dif)}</div>
+      </div>
+    </div>`;
+
+  // Top 30 diferencias por magnitud
+  const orden = d.matcheadas
+    .map(m => ({...m, dif: m.saldoNuevo - m.saldoActual}))
+    .filter(m => Math.abs(m.dif) >= 0.01)
+    .sort((a,b) => Math.abs(b.dif) - Math.abs(a.dif))
+    .slice(0, 30);
+
+  if(!orden.length){
+    document.getElementById('imp-sal-diferencias').innerHTML =
+      '<div style="padding:14px;text-align:center;color:var(--txt2);font-size:13px">Ningún saldo cambia</div>';
+  } else {
+    document.getElementById('imp-sal-diferencias').innerHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead style="position:sticky;top:0;background:var(--bg2)">
+          <tr>
+            <th style="padding:6px 8px;text-align:center;border-bottom:1px solid var(--brd);width:50px">Cód.</th>
+            <th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--brd)">Cliente</th>
+            <th style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--brd)">Actual</th>
+            <th style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--brd)">Nuevo</th>
+            <th style="padding:6px 8px;text-align:right;border-bottom:1px solid var(--brd)">Dif.</th>
+          </tr>
+        </thead>
+        <tbody>${orden.map(m=>`
+          <tr>
+            <td style="padding:5px 8px;text-align:center;color:var(--txt2);border-bottom:1px solid var(--brd)">${m.codigo}</td>
+            <td style="padding:5px 8px;border-bottom:1px solid var(--brd)">${esc(m.nombre)}</td>
+            <td style="padding:5px 8px;text-align:right;border-bottom:1px solid var(--brd)">${fmtN(m.saldoActual)}</td>
+            <td style="padding:5px 8px;text-align:right;border-bottom:1px solid var(--brd);font-weight:600">${fmtN(m.saldoNuevo)}</td>
+            <td style="padding:5px 8px;text-align:right;border-bottom:1px solid var(--brd);font-weight:700;color:${m.dif>0?'var(--D)':'var(--P)'}">${m.dif>0?'+':''}${fmtN(m.dif)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+  }
+
+  // Sin match
+  const contN = document.getElementById('imp-sal-nomatch');
+  if(d.nomatch.length){
+    contN.innerHTML = `
+      <div style="font-size:12px;font-weight:700;color:var(--W);margin-bottom:6px">⚠️ Sin match en la base (${d.nomatch.length})</div>
+      <div style="max-height:140px;overflow-y:auto;border:1px solid var(--brd);border-radius:8px;background:var(--bg2)">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <tbody>${d.nomatch.slice(0,100).map(f=>`
+            <tr><td style="padding:4px 8px;text-align:center;color:var(--txt2);width:60px">${f.codigo}</td>
+            <td style="padding:4px 8px">${esc(f.nombre)}</td></tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      ${d.nomatch.length>100?`<div style="font-size:11px;color:var(--txt2);padding:4px 0">… y ${d.nomatch.length-100} más</div>`:''}`;
+  } else {
+    contN.innerHTML = '';
+  }
+}
+
+async function _aplicarSaldos(){
+  const d = _impSalDatos; if(!d) return;
+  const forzar = document.getElementById('imp-sal-forzar')?.checked || false;
+  const aAplicar = forzar ? d.matcheadas : d.cambiados;
+  if(!aAplicar.length){
+    alert('No hay saldos para actualizar.');
+    return;
+  }
+
+  // Cambiar a paso 3
+  document.getElementById('imp-sal-paso2').style.display='none';
+  document.getElementById('imp-sal-paso3').style.display='block';
+  document.getElementById('imp-sal-footer2').style.display='none';
+  document.getElementById('imp-sal-footer3').style.display='flex';
+
+  const prog = document.getElementById('imp-sal-progreso');
+  const res = document.getElementById('imp-sal-resultado');
+  res.innerHTML = '';
+  prog.innerHTML = '<div style="font-size:13px;color:var(--txt2)">Guardando snapshot de seguridad…</div>';
+
+  // 1. Guardar snapshot en Supabase ANTES de aplicar (por si se corta la
+  //    conexión a mitad de camino, ya queda registrado el estado previo).
+  const archivoNombre = document.getElementById('imp-sal-file')?.files?.[0]?.name || 'archivo.xlsx';
+  const {error:errLog} = await sb.from('import_saldos_log').insert({
+    usuario: usuarioActual?.nombre || '',
+    archivo: archivoNombre,
+    cantidad: aAplicar.length,
+    total_excel: d.totalExcel,
+    total_db: d.totalDb,
+    cambios: aAplicar.map(m => ({
+      id: m.id,
+      saldo_antes: m.saldoActual,
+      saldo_nuevo: m.saldoNuevo
+    }))
+  });
+  if(errLog){
+    prog.innerHTML = '';
+    res.innerHTML = `<div style="background:var(--DL);border-radius:10px;padding:16px;text-align:center">
+      <div style="font-size:36px;margin-bottom:6px">❌</div>
+      <div style="font-size:15px;font-weight:700;color:var(--D)">No se pudo guardar el snapshot</div>
+      <div style="font-size:12px;color:var(--txt2);margin-top:6px">${esc(errLog.message||'Error desconocido')}</div>
+      <div style="font-size:12px;color:var(--txt2);margin-top:8px">No se aplicó ningún cambio.</div>
+    </div>`;
+    return;
+  }
+
+  // 2. Aplicar los cambios en batches de 20
+  const BATCH = 20;
+  let aplicados = 0, errores = 0;
+  for(let i=0; i<aAplicar.length; i+=BATCH){
+    const lote = aAplicar.slice(i, i+BATCH);
+    const resultados = await Promise.all(lote.map(m =>
+      sb.from('clientes').update({ saldo: m.saldoNuevo }).eq('id', m.id)
+    ));
+    resultados.forEach(r => { if(r.error) errores++; });
+    aplicados += lote.length;
+    const pct = Math.round(aplicados / aAplicar.length * 100);
+    prog.innerHTML = `
+      <div style="font-size:13px;color:var(--txt2);margin-bottom:6px">
+        Actualizando… ${aplicados} / ${aAplicar.length} (${pct}%)
+      </div>
+      <div style="background:var(--bg2);border-radius:6px;height:8px;overflow:hidden">
+        <div style="background:var(--P);height:100%;width:${pct}%;transition:width .2s"></div>
+      </div>`;
+  }
+
+  // 3. Recargar clientes y reconstruir vista
+  await cargarClientes();
+  renderClientes();
+
+  prog.innerHTML = '';
+  const ok = aplicados - errores;
+  res.innerHTML = `
+    <div style="background:${errores?'var(--WL)':'var(--PL)'};border-radius:10px;padding:16px;text-align:center">
+      <div style="font-size:36px;margin-bottom:6px">${errores?'⚠️':'✅'}</div>
+      <div style="font-size:16px;font-weight:700;color:${errores?'var(--W)':'var(--P)'}">
+        ${ok} cliente(s) actualizado(s)
+      </div>
+      ${errores?`<div style="font-size:12px;color:var(--D);margin-top:6px">${errores} con error — revisar consola</div>`:''}
+      <div style="font-size:12px;color:var(--txt2);margin-top:8px">
+        Podés deshacer este cambio desde el aviso en la pantalla de Clientes (válido 24h).
+      </div>
+    </div>`;
+  await _renderUndoBanner();
+}
+
+// Devuelve el último snapshot de importación no deshecho, hecho en las
+// últimas 24h. null si no hay nada pendiente de undo.
+async function _leerSnapshotUndo(){
+  try{
+    const hace24h = new Date(Date.now() - 24*60*60*1000).toISOString();
+    const {data, error} = await sb.from('import_saldos_log')
+      .select('*')
+      .eq('deshecho', false)
+      .gte('fecha', hace24h)
+      .order('fecha', {ascending:false})
+      .limit(1)
+      .maybeSingle();
+    if(error){ console.error('[snapshot]', error.message); return null; }
+    return data || null;
+  }catch(e){
+    console.error('[snapshot]', e);
+    return null;
+  }
+}
+
+async function _renderUndoBanner(){
+  const cont = document.getElementById('cli-undo-banner');
+  if(!cont) return;
+  const s = await _leerSnapshotUndo();
+  if(!s){ cont.style.display='none'; cont.innerHTML=''; return; }
+  const fechaFmt = new Date(s.fecha).toLocaleString('es-AR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  cont.style.display='block';
+  cont.innerHTML = `
+    <div style="background:var(--WL);border:1px solid var(--W);border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px">
+      <span>📥 Última importación de saldos: <b>${s.cantidad}</b> cliente(s) el ${fechaFmt} por ${esc(s.usuario||'—')}</span>
+      <button class="btn sm W" onclick="_deshacerImportSaldos()">↩ Deshacer</button>
+    </div>`;
+}
+
+async function _deshacerImportSaldos(){
+  const s = await _leerSnapshotUndo();
+  if(!s){ alert('El undo ya expiró o no hay importaciones recientes.'); return; }
+  const cambios = Array.isArray(s.cambios) ? s.cambios : [];
+  if(!cambios.length){ alert('El snapshot no tiene cambios para restaurar.'); return; }
+  if(!confirm(`¿Deshacer la importación de ${cambios.length} cliente(s)?\nSe restauran los saldos previos.`)) return;
+
+  const BATCH = 20;
+  for(let i=0; i<cambios.length; i+=BATCH){
+    const lote = cambios.slice(i, i+BATCH);
+    await Promise.all(lote.map(m =>
+      sb.from('clientes').update({ saldo: m.saldo_antes }).eq('id', m.id)
+    ));
+  }
+
+  // Marcar el log como deshecho
+  const {error:errUpd} = await sb.from('import_saldos_log').update({
+    deshecho: true,
+    deshecho_fecha: new Date().toISOString(),
+    deshecho_por: usuarioActual?.nombre || ''
+  }).eq('id', s.id);
+  if(errUpd){
+    console.error('[undo] no se pudo marcar el log:', errUpd.message);
+    toast('Saldos restaurados, pero no se pudo marcar el log. Avisá a Alexis.', 'err', 6000);
+  } else {
+    toast('✅ Saldos restaurados');
+  }
+
+  await cargarClientes();
+  renderClientes();
+  await _renderUndoBanner();
 }
