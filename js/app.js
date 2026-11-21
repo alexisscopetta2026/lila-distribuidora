@@ -37,6 +37,8 @@ const USUARIOS = [
   {user:'david',     nombre:'David',     rol:'vendedor',    vendedor:'David',     dualRolMovil:true},
   {user:'emiliano',  nombre:'Emiliano',  rol:'repartidor',  vendedor:'Emiliano'},
   {user:'gaston',    nombre:'Gastón',    rol:'repartidor',  vendedor:'Gastón'},
+    // USUARIO DE PRUEBA REPARTIDOR
+  {user:'repartidor', nombre:'Repartidor Test', rol:'repartidor', vendedor:'Repartidor Test'},
 ];
 
 const emailDe = u => u.user + '@' + EMAIL_DOMINIO;
@@ -53,14 +55,14 @@ const MENUS_REPARTIDOR=['vendedor-home','cobranza','hoja-ruta','nc'];
 let usuarioActual = null;
 
 // ─── ESTADO LOCAL ───
-let _clientes=[], _productos=[], _pedidos=[], _pedidosTodos=[], _remitos=[], _cobros=[], _cargas=[], _gastosReparto=[];
+let _clientes=[], _clientesTodos=[], _productos=[], _pedidos=[], _pedidosTodos=[], _remitos=[], _cobros=[], _cargas=[], _gastosReparto=[];
 
 let _cliPg=1, _proPg=1, _remPg=1, _cobPg=1, _ccPg=1;
 
 const PP=200;
 
 // ─── VERSIONADO / AUTO-ACTUALIZACIÓN ───
-const APP_VERSION = '20260730-19';
+const APP_VERSION = '20261008-03';
 
 // IMPORTANTE: al hacer deploy, actualizar APP_VERSION aquí, CACHE_VERSION en
 // sw.js, Y el ?v= de cada <script src="js/..."> en index.html (sin eso el
@@ -69,6 +71,9 @@ const APP_VERSION = '20260730-19';
 document.addEventListener('DOMContentLoaded', function(){
   const vEl=document.getElementById('top-version');
   if(vEl) vEl.textContent='v'+APP_VERSION;
+  // Versión visible en el home móvil (esquina superior izquierda).
+  const vhEl=document.getElementById('vh-version');
+  if(vhEl) vhEl.textContent='v'+APP_VERSION;
 });
 function actualizarApp(){
   if('serviceWorker' in navigator){
@@ -174,81 +179,209 @@ async function doLogin(){
   entrarApp(found);
 }
 
-function entrarApp(found){
-  usuarioActual=found;
-  document.getElementById('login-screen').style.display='none';
-  document.getElementById('app').style.display='flex';
-  document.getElementById('app').style.flexDirection='column';
-  document.getElementById('top-usuario').textContent=found.nombre+' ('+found.rol+')';
-  document.getElementById('top-fecha').textContent=new Date().toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'});
-  ['np-fecha','cob-fecha','nc-fecha'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=hoyLocal();});
-  
-  // Aplicar permisos de navegación
-  const sidebar=document.getElementById('sidebar');
-  const btnMenu=document.getElementById('btn-menu');
-  cerrarMenu();
-  const esMovil=found.rol==='vendedor'||found.rol==='repartidor';
-  if(esMovil){
-    if(sidebar)sidebar.style.display='none';
-    if(btnMenu)btnMenu.style.display='none';
-    document.querySelector('[data-p="vendedor-home"]').style.display='flex';
-    // Si es admin en modo vendedor, mostrar botón para volver al admin
-    if(found.rol_original==='admin' || found.user==='mauricio' || found.esAdmin){
-      const btnAdmin = document.getElementById('btn-volver-admin');
-      if(btnAdmin) btnAdmin.style.display='flex';
-    }
-    // Dual rol (vendedor/repartidor) en el mismo celular: mostrar el toggle
-    if(found.dualRolMovil){
-      const btnRol=document.getElementById('btn-cambiar-rol-movil');
-      if(btnRol){btnRol.style.display='flex';actualizarBtnRolMovil();}
-    }
-  } else {
-    if(sidebar)sidebar.style.display='';
-    if(btnMenu)btnMenu.style.display='';
+function entrarApp(found) {
+  // 1. Detectar dispositivo (mismo criterio que ya usás)
+  const esMovil = window.innerWidth <= 768 || 
+                  /Android|iPhone|iPad|iPod|BlackBerry|Opera Mini/i.test(navigator.userAgent) ||
+                  ('ontouchstart' in window && window.innerWidth <= 1024);
+
+  // 2. Determinar si es admin
+  const esAdmin = found.esAdmin || found.rol === 'admin' || found.rol_original === 'admin';
+
+  // 3. Validar acceso según rol y dispositivo
+  //    - Admin sin dualRol: solo escritorio
+  if (esAdmin && !found.dualRolMovil && esMovil) {
+    const err = document.getElementById('login-err');
+    if (err) err.textContent = '⚠️ El administrador solo puede acceder desde una computadora.';
+    // Asegurar que la pantalla de login esté visible
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+    // Limpiar campos (opcional)
+    document.getElementById('login-pass').value = '';
+    return;
   }
 
-  // Si es móvil (vendedor o repartidor), ir directo a home
-  if(esMovil){
-    cargarTodo().then(()=>{initVersionCheck();go('vendedor-home');});
+  //    - Vendedor/Repartidor (no admin): solo móvil
+  if (!esAdmin && !esMovil) {
+    const err = document.getElementById('login-err');
+    if (err) err.textContent = '⚠️ Esta cuenta solo puede acceder desde un dispositivo móvil.';
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('login-pass').value = '';
+    return;
+  }
+
+  // 4. Si pasa la validación, asignar usuarioActual
+  usuarioActual = found;
+
+  // 5. Determinar vista y rol según dispositivo y permisos
+  const esAdminReal = found.esAdmin || found.rol === 'admin' || found.rol_original === 'admin';
+
+  if (esAdminReal && !esMovil) {
+    // Admin en escritorio → vista completa
+    usuarioActual.vista = 'escritorio';
+    usuarioActual.rol = 'admin';
+  } else if (esAdminReal && esMovil) {
+    // Admin en móvil (solo si tiene dualRol) → vista móvil, rol vendedor
+    usuarioActual.vista = 'movil';
+    usuarioActual.rol = 'vendedor';
   } else {
-    cargarTodo().then(()=>{
-      initVersionCheck();
+    // Vendedor o repartidor en móvil → vista móvil, rol original
+    usuarioActual.vista = 'movil';
+    // Mantener su rol (vendedor o repartidor)
+  }
+
+  // Guardar rol original y esAdmin
+  usuarioActual.rol_original = found.rol_original || found.rol;
+  usuarioActual.esAdmin = esAdminReal;
+
+  // 6. Ocultar login, mostrar app con pantalla de carga, cargar datos...
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('app').style.flexDirection = 'column';
+  // Pantalla de carga: tapa el contenido (que todavía tiene el último panel
+  // que quedó con .on del cierre de sesión anterior) hasta que cargarTodo()
+  // termine y go('dash') deje la app en el panel correcto.
+  const _loading = document.getElementById('app-cargando');
+  if (_loading) _loading.style.display = 'flex';
+  document.getElementById('top-usuario').textContent = found.nombre + ' (' + usuarioActual.rol + ')';
+  document.getElementById('top-fecha').textContent = new Date().toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' });
+  ['np-fecha', 'cob-fecha', 'nc-fecha'].forEach(id => { const el = document.getElementById(id); if (el) el.value = hoyLocal(); });
+
+  // 7. Aplicar vista (movil o escritorio)
+  if (usuarioActual.vista === 'movil') {
+    mostrarVistaMovil();
+       
+    // Si tiene dualRolMovil, mostrar toggle (vendedor/repartidor)
+    if (found.dualRolMovil) {
+      const btnRol = document.getElementById('btn-cambiar-rol-movil');
+      if (btnRol) { btnRol.style.display = 'flex'; actualizarBtnRolMovil(); }
+    }
+  } else {
+    mostrarVistaEscritorio();
+  }
+
+  // 8. Cargar datos y navegar
+  cargarTodo().then(() => {
+    initVersionCheck();
+    if (usuarioActual.vista === 'movil') {
+      go('vendedor-home');
+      renderVendedorHome();
+    } else {
       // Limpiar estado del sidebar
-      document.querySelectorAll('.sidebar-group').forEach(g=>{
-        g.classList.remove('open','active');
-        const chev=g.querySelector('.sidebar-group-btn span');
-        if(chev)chev.textContent='▶';
-        const items=g.querySelector('.sidebar-items');
-        if(items)items.style.display='';
+      document.querySelectorAll('.sidebar-group').forEach(g => {
+        g.classList.remove('open', 'active');
+        const chev = g.querySelector('.sidebar-group-btn span');
+        if (chev) chev.textContent = '▶';
+        const items = g.querySelector('.sidebar-items');
+        if (items) items.style.display = '';
       });
-      document.querySelectorAll('.sidebar-item,.sidebar-dash').forEach(b=>b.classList.remove('on'));
-      const dashBtn=document.querySelector('.sidebar-dash[data-p="dash"]');
-      if(dashBtn){dashBtn.classList.add('on');}
+      document.querySelectorAll('.sidebar-item,.sidebar-dash').forEach(b => b.classList.remove('on'));
+      const dashBtn = document.querySelector('.sidebar-dash[data-p="dash"]');
+      if (dashBtn) { dashBtn.classList.add('on'); }
       go('dash');
       initSidebarKeyNav();
       focoHamburguesa();
-    });
-  }
+    }
+    // Ahora sí: ocultar la pantalla de carga.
+    const _loading = document.getElementById('app-cargando');
+    if (_loading) _loading.style.display = 'none';
+  }).catch(e => {
+    // Si por algún motivo cargarTodo() falla, no dejar al usuario atrapado
+    // en la pantalla de carga para siempre.
+    console.error('[entrarApp] cargarTodo falló:', e);
+    const _loading = document.getElementById('app-cargando');
+    if (_loading) _loading.style.display = 'none';
+    toast('⚠️ Error al cargar datos. Recargá la página.', 'err', 6000);
+  });
 }
 
 async function logout(){
-  usuarioActual=null;
+  // LIMPIAR CAMPOS DE LOGIN
+  const userInput = document.getElementById('login-user');
+  const passInput = document.getElementById('login-pass');
+  const errEl = document.getElementById('login-err');
+  
+  if (userInput) userInput.value = '';
+  if (passInput) passInput.value = '';
+  if (errEl) errEl.textContent = '';
+  
+  // Cerrar sesión en Supabase
+  usuarioActual = null;
   try{ await sb.auth.signOut(); }catch(e){}
-  localStorage.removeItem('lila-sesion'); // limpia restos del sistema viejo
-  document.getElementById('login-screen').style.display='flex';
-  document.getElementById('app').style.display='none';
+  localStorage.removeItem('lila-sesion');
+
+  // Limpiar estado de UI móvil que depende del usuario logueado.
+  // Sin esto, los botones de rol y de admin quedaban con el display
+  // del usuario anterior hasta que el nuevo login los pisara —
+  // y si el nuevo usuario no era dualRol, nunca se pisaban.
+  const _btnRolLogout = document.getElementById('btn-cambiar-rol-movil');
+  if (_btnRolLogout) _btnRolLogout.style.display = 'none';
+  const _btnAdminLogout = document.getElementById('btn-volver-admin');
+  if (_btnAdminLogout) _btnAdminLogout.style.display = 'none';
+  
+  // Asegurar que la pantalla de carga quede oculta (por si quedó pegada de
+  // un login anterior que falló a mitad de camino).
+  const _loadingLogout = document.getElementById('app-cargando');
+  if (_loadingLogout) _loadingLogout.style.display = 'none';
+
+  // Mostrar pantalla de login
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+  
+  // Poner foco en el campo de usuario
+  setTimeout(() => {
+    if (userInput) userInput.focus();
+  }, 100);
 }
 
 // ─── AUTO-SESIÓN ───
 // Si Supabase tiene una sesión guardada válida, entra directo sin pedir contraseña.
+//
+// Caso "después de una actualización pide login": la actualización recarga
+// la página justo cuando el celular vuelve del fondo (o incluso EN el fondo).
+// Si el token venció (1 h), getSession() tiene que renovarlo por internet, y
+// en ese momento el celular muchas veces todavía no tiene red → la renovación
+// falla, getSession() devuelve session=null y antes se mostraba el login.
+// Pero la sesión SIGUE guardada (Supabase solo la borra si el servidor la
+// rechaza, no por falta de red). Entonces: si hay sesión guardada, esperar a
+// que la app esté visible y con red, y reintentar antes de rendirse.
+function _haySesionGuardada(){
+  try{ return !!localStorage.getItem('lila-auth'); }catch(e){ return false; }
+}
+function _esperarVisibleYOnline(){
+  return new Promise(res=>{
+    const ok=()=>!document.hidden && navigator.onLine!==false;
+    if(ok()) return res();
+    const chk=()=>{ if(ok()){ document.removeEventListener('visibilitychange',chk); window.removeEventListener('online',chk); res(); } };
+    document.addEventListener('visibilitychange',chk);
+    window.addEventListener('online',chk);
+  });
+}
 document.addEventListener('DOMContentLoaded', async function(){
   try{
-    const {data:{session}} = await sb.auth.getSession();
-    if(!session) return;
-    const found = usuarioPorEmail(session.user?.email);
-    if(!found){ await sb.auth.signOut(); return; }
-    entrarApp(found);
-  }catch(e){ /* sin sesión o sin conexión: queda la pantalla de login */ }
+    const esperas=[0,1000,2000,3000,4000]; // ~10 s en total, ya visible y con red
+    for(const ms of esperas){
+      if(ms){ await new Promise(r=>setTimeout(r,ms)); }
+      await _esperarVisibleYOnline();
+      if(usuarioActual) return; // entró a mano mientras reintentábamos
+      let session=null;
+      try{ ({data:{session}} = await sb.auth.getSession()); }catch(e){}
+      if(session){
+        const found = usuarioPorEmail(session.user?.email);
+        if(!found){ await sb.auth.signOut(); return; }
+        entrarApp(found);
+        return;
+      }
+      // Sin sesión y nada guardado (o el servidor la rechazó y Supabase la
+      // borró): no tiene sentido reintentar → login normal.
+      if(!_haySesionGuardada()) return;
+    }
+  }catch(e){ /* sin sesión: queda la pantalla de login */ }
+  finally{
+    // Ya se resolvió: si no entró, el login tiene que verse (ver anti-parpadeo en index.html)
+    document.documentElement.classList.remove('auto-login');
+  }
 });
 
 // ─── CARGA INICIAL ───
@@ -271,6 +404,44 @@ async function cargarTodo(){
   if(!document.querySelector('.panel.on'))go('dash');
 }
 
+// ─── MOSTRAR/OCULTAR CONTRASEÑA EN LOGIN ───
+function togglePasswordVisibility() {
+  const input = document.getElementById('login-pass');
+  const svg = document.getElementById('eye-icon');
+  if (!input || !svg) return;
+
+  // Guardamos si el input ya tenía foco antes de togglear. Si NO lo tenía,
+  // no hacemos focus() al final — así el teclado del celu no se abre solo.
+  const teniaFoco = document.activeElement === input;
+  const cursorPos = input.selectionStart;
+
+  if (input.type === 'password') {
+    input.type = 'text';
+    svg.innerHTML = `
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+      <line x1="1" y1="1" x2="23" y2="23"/>
+    `;
+    svg.setAttribute('stroke', '#666');
+  } else {
+    input.type = 'password';
+    svg.innerHTML = `
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+      <circle cx="12" cy="12" r="3"/>
+    `;
+    svg.setAttribute('stroke', '#666');
+  }
+
+  if (teniaFoco) {
+    // Estaba escribiendo → devolvemos el foco al input con el cursor donde estaba.
+    input.focus();
+    input.setSelectionRange(cursorPos, cursorPos);
+  } else {
+    // No estaba escribiendo → forzamos blur por si el cambio de tipo le dio foco.
+    // (En iOS el cambio password↔text a veces reenfoca el input.)
+    setTimeout(() => input.blur(), 0);
+  }
+}
+
 // ─── HELPERS ───
 // Fecha de "hoy" en formato YYYY-MM-DD usando la hora LOCAL del dispositivo.
 // new Date().toISOString() da la fecha en UTC — en Argentina (UTC-3), entre
@@ -289,6 +460,14 @@ function hoyLocalOffset(dias){
 function fmt(n){return '$'+((Math.round(n||0))||0).toLocaleString('es-AR');}
 
 function fmtN(n,d=2){return (n||0).toFixed(d);}
+
+// Escapa texto antes de insertarlo en innerHTML (evita que un dato cargado
+// por un usuario -nombre de cliente, observación, etc.- se interprete como
+// HTML/JS). Usar en todo ${...} que venga de un campo de texto de la base.
+function esc(v){
+  if(v===null||v===undefined)return '';
+  return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 
 function cerrar(id){
   const el=document.getElementById(id);
@@ -343,7 +522,7 @@ const _F8_FORMS={
   'm-gasto':{guardar:()=>guardarGasto(),imprimir:null,editId:null},
   'm-comp-ajuste':{guardar:()=>guardarAjusteComp(),imprimir:null,editId:null},
   'm-carga':{guardar:()=>guardarCarga(),imprimir:null,editId:null},
-  'p-remito-rapido':{guardar:()=>emitirRemitoRapido(),imprimir:()=>imprimirRemito(),editId:null},
+  'p-remito-rapido':{guardar:()=>emitirRemitoRapido(),imprimir:()=>imprimirRemito(true),editId:null},
   'tp-pagos':{guardar:()=>guardarPago(),imprimir:null,editId:null},
   'tp-concil':{guardar:()=>guardarMovBanc(),imprimir:null,editId:null},
   'stock-conteo-section':{guardar:()=>guardarConteo(),imprimir:null,editId:null},
@@ -426,8 +605,11 @@ function poblarSelectValores(id,valores,formatearTexto){
 
 // Nombre real de la zona (ej. "Arequito") en vez del código (ej. "Z2"), con fallback si no tiene descripción cargada
 function nombreZona(codigo){
-  const z=(_zonas||[]).find(x=>x.codigo===codigo);
-  return z?.descripcion||('Zona '+codigo);
+  // Buscar en el catálogo (para los casos donde todavía es código)
+  const z = (_zonas||[]).find(x => x.codigo === codigo);
+  if(z && z.descripcion) return z.descripcion;
+  // Si no matchea, asumir que ya es un nombre de localidad y devolverlo tal cual
+  return codigo || '—';
 }
 
 function poblarSelectZona(id){
@@ -437,9 +619,62 @@ function poblarSelectZona(id){
 function toast(msg,tipo='ok',ms=2800){
   const t=document.createElement('div');
   t.textContent=msg;
-  t.style.cssText=`position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:500;color:#fff;pointer-events:none;transition:opacity .4s;background:${tipo==='err'?'var(--D)':'var(--P)'}`;
+  const bg = tipo==='err' ? 'var(--D)' : tipo==='warn' ? 'var(--W)' : 'var(--P)';
+  t.style.cssText=`position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:500;color:#fff;pointer-events:none;transition:opacity .4s;background:${bg}`;
   document.body.appendChild(t);
   setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),400);},ms);
+}
+
+// Modal de confirmación custom, con la estética de la app. Reemplaza al
+// window.confirm() nativo, que muestra el dominio ("usuario.github.io dice:")
+// en el título y no se puede cambiar. Devuelve una Promise<boolean>.
+//   · opciones.titulo         → título del modal (default: 'Confirmar')
+//   · opciones.textoOk        → texto del botón de aceptar (default: 'Aceptar')
+//   · opciones.textoCancelar  → texto del botón de cancelar (default: 'Cancelar')
+//   · opciones.peligro        → true (default) pinta el botón OK en rojo
+//                               (para acciones destructivas como eliminar)
+function _confirmar(mensaje, opciones){
+  const opts = opciones || {};
+  return new Promise(resolve => {
+    document.getElementById('_conf-popup')?.remove();
+    const ov = document.createElement('div');
+    ov.id = '_conf-popup';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+    const titulo = opts.titulo || 'Confirmar';
+    const textoOk = opts.textoOk || 'Aceptar';
+    const textoCancelar = opts.textoCancelar || 'Cancelar';
+    const esPeligro = opts.peligro !== false;
+    const colorOk = esPeligro ? 'var(--D)' : 'var(--P)';
+    ov.innerHTML = `
+      <div style="background:var(--bg);border-radius:12px;padding:22px;max-width:440px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.35)">
+        <div style="font-size:15px;font-weight:700;color:var(--txt);margin-bottom:8px">${esc(titulo)}</div>
+        <div style="font-size:14px;color:var(--txt2);line-height:1.55;white-space:pre-line;margin-bottom:20px">${esc(mensaje)}</div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button id="_conf-no" class="btn" style="padding:9px 18px">${esc(textoCancelar)}</button>
+          <button id="_conf-si" class="btn" style="padding:9px 18px;background:${colorOk};color:#fff;border-color:${colorOk};font-weight:600">${esc(textoOk)}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+
+    let resuelto = false;
+    const cerrar = (val) => {
+      if(resuelto) return;
+      resuelto = true;
+      document.removeEventListener('keydown', keyHandler, true);
+      ov.remove();
+      resolve(val);
+    };
+    const keyHandler = (e) => {
+      if(e.key === 'Escape'){ e.stopPropagation(); e.preventDefault(); cerrar(false); }
+      else if(e.key === 'Enter'){ e.stopPropagation(); e.preventDefault(); cerrar(true); }
+    };
+    ov.querySelector('#_conf-si').onclick = () => cerrar(true);
+    ov.querySelector('#_conf-no').onclick = () => cerrar(false);
+    ov.onclick = (e) => { if(e.target === ov) cerrar(false); };
+    // capture=true para que atrape Enter/Escape antes que los handlers globales
+    document.addEventListener('keydown', keyHandler, true);
+    setTimeout(()=>ov.querySelector('#_conf-si')?.focus(), 40);
+  });
 }
 
 function pag(elId,total,cur,fn){
@@ -475,28 +710,43 @@ function ajustarDrop(inputEl,dropEl){
   }
 }
 
-function volverAdmin(){
-  // Cambiar rol temporalmente a admin
-  if(usuarioActual) usuarioActual.rol = 'admin';
-  const sidebar = document.getElementById('sidebar');
-  if(sidebar) sidebar.style.display = '';
-  const btnMenu = document.getElementById('btn-menu');
-  if(btnMenu) btnMenu.style.display = '';
-  document.querySelector('[data-p="vendedor-home"]').style.display = 'none';
-  const btnAdmin = document.getElementById('btn-volver-admin');
-  if(btnAdmin) btnAdmin.style.display = 'none';
+function volverAdmin() {
+  // Solo funciona si es admin y está en móvil
+  if (!usuarioActual?.esAdmin || usuarioActual.vista !== 'movil') {
+    toast('No tenés permisos de administrador en este dispositivo', 'info');
+    return;
+  }
+  
+  // Cambiar a vista escritorio
+  usuarioActual.vista = 'escritorio';
+  usuarioActual.rol = 'admin';
+  mostrarVistaEscritorio();
   go('dash');
-  initSidebarKeyNav();
-  focoHamburguesa();
+  toast('💻 Cambiado a modo administrador');
+}
+
+// Vuelve al inicio según el contexto del usuario:
+//   · Admin en escritorio       → dashboard
+//   · Vendedor/repartidor móvil → vendedor-home
+function irAlHome(){
+  if(!usuarioActual) return;
+  const esMovilNav = usuarioActual?.vista === 'movil'
+    || usuarioActual?.rol === 'vendedor'
+    || usuarioActual?.rol === 'repartidor';
+  go(esMovilNav ? 'vendedor-home' : 'dash');
 }
 
 // Alternar Vendedor/Repartidor en el mismo celular (mauricio, alexis, david:
 // dualRolMovil=true en USUARIOS). Reutiliza tal cual toda la UI que ya
 // distingue por usuarioActual.rol, sin tocar ningún otro chequeo del código.
-function toggleRolMovil(){
+async function toggleRolMovil(){
   if(!usuarioActual)return;
   usuarioActual.rol = usuarioActual.rol==='repartidor'?'vendedor':'repartidor';
+  usuarioActual.vista = 'movil';
   actualizarBtnRolMovil();
+  // Recalcular _clientes según el nuevo rol SIN volver a pedir a Supabase
+  // (usamos el universo ya cacheado en _clientesTodos).
+  _aplicarFiltroClientesPorRol();
   renderVendedorHome();
   if(usuarioActual.rol==='repartidor')cargarHojaRutaRepartidor();
   toast(`📲 Ahora estás como ${usuarioActual.rol==='repartidor'?'Repartidor':'Vendedor'}`);
@@ -506,7 +756,7 @@ function actualizarBtnRolMovil(){
   const btn=document.getElementById('btn-cambiar-rol-movil');
   if(!btn)return;
   const esRep=usuarioActual?.rol==='repartidor';
-  btn.textContent=esRep?'🔄 Cambiar a Vendedor':'🔄 Cambiar a Repartidor';
+  btn.textContent=esRep?'Repartidor':'Vendedor';
 }
 
 function toggleNavGroup(grupo){
@@ -691,7 +941,9 @@ function navProveedores(e){navTablaGen(e,'prov-tbody','tr',r=>{const b=r.querySe
 
 function navGastos(e){navTablaGen(e,'gas-tbody','tr',null);}
 
-function navPedidos(e){navTablaGen(e,'ped-lista','.ccard',r=>{const b=r.querySelector('button.btn');if(b)b.click();});}
+function navPedidos(e){
+  navTablaGen(e,'ped-lista','tbody tr',r=>{ r.click(); });
+}
 
 // ─── CERRAR DROPS ───
 document.addEventListener('click',e=>{
@@ -706,7 +958,290 @@ document.addEventListener('click',e=>{
   if(!e.target.closest('#hr-cli-q')&&!e.target.closest('#hr-cli-drop'))hide('hr-cli-drop');
 });
 
-function go(p){
+// ─── ACTUALIZACIÓN EN VIVO ───────────────────────────────────────────────
+// Mecanismo genérico y reutilizable: cualquier pantalla puede "suscribirse"
+// con registrarRefresco('nombre-panel', asyncFn) para que aparezca el botón
+// 🔄 arriba y se auto-actualice sola cada _REFRESCO_SEGUNDOS mientras el
+// usuario esté parado en esa pantalla — sin recargar la página (location.reload)
+// y por lo tanto sin perder la sesión ni tener que volver a loguearse.
+// asyncFn debe: 1) volver a pedir los datos a Supabase, 2) llamar al render
+// correspondiente. No toca inputs de formularios en edición.
+const _REFRESCO_HANDLERS = {};
+const _REFRESCO_SEGUNDOS = 25;
+let _refrescoAutoTimer = null;
+let _refrescoEnCurso = false;
+
+function registrarRefresco(panel, fn){ _REFRESCO_HANDLERS[panel] = fn; }
+
+async function ejecutarRefresco(manual){
+  const panelActivo = document.querySelector('.panel.on');
+  if(!panelActivo) return;
+  const p = panelActivo.id.replace('p-','');
+  const fn = _REFRESCO_HANDLERS[p];
+  if(!fn || _refrescoEnCurso) return;
+  _refrescoEnCurso = true;
+  const btn = document.getElementById('btn-refresco');
+  if(btn) btn.classList.add('girando');
+  try{
+    await fn();
+    const marca = document.getElementById('refresco-marca');
+    if(marca) marca.textContent = 'Act. ' + new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  }catch(e){
+    console.error('[refresco]', e.message);
+    if(manual) toast('No se pudo actualizar','err');
+  } finally {
+    _refrescoEnCurso = false;
+    if(btn) btn.classList.remove('girando');
+  }
+}
+
+function iniciarAutoRefresco(){
+  detenerAutoRefresco();
+  _refrescoAutoTimer = setInterval(()=>ejecutarRefresco(false), _REFRESCO_SEGUNDOS*1000);
+}
+function detenerAutoRefresco(){
+  if(_refrescoAutoTimer){clearInterval(_refrescoAutoTimer);_refrescoAutoTimer=null;}
+}
+
+// Pausar el auto-refresco si el usuario cambia de pestaña/app (ahorra datos
+// en el celu) y disparar un refresco al toque cuando vuelve.
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden){detenerAutoRefresco();}
+  else{
+    const panelActivo=document.querySelector('.panel.on');
+    if(panelActivo && _REFRESCO_HANDLERS[panelActivo.id.replace('p-','')]){
+      ejecutarRefresco(false);
+      iniciarAutoRefresco();
+    }
+  }
+});
+
+function actualizarVisibilidadBotonRefresco(p){
+  const wrap = document.getElementById('refresco-wrap');
+  const marca = document.getElementById('refresco-marca');
+  if(!wrap) return;
+  let hayHandler = !!_REFRESCO_HANDLERS[p];
+  // Caso especial: el panel "carga" tiene 2 vistas (lista / nueva). El botón
+  // de refresco solo tiene sentido en la vista nueva (donde se arman cargas
+  // y aparecen pedidos nuevos). En la lista no aplica.
+  if(p === 'carga'){
+    const vistaNueva = document.getElementById('carga-vista-nueva');
+    hayHandler = hayHandler && vistaNueva && vistaNueva.style.display !== 'none';
+  }
+  if(hayHandler){
+    wrap.style.display='flex';
+    if(marca)marca.textContent='';
+    iniciarAutoRefresco();
+  } else {
+    wrap.style.display='none';
+    detenerAutoRefresco();
+  }
+}
+
+// ─── BREADCRUMB (migas de pan) ───────────────────────────────────────────
+// Muestra la ruta de navegación arriba en el topbar (solo vista PC), tipo
+// "Maestros › Clientes" o "Informes › Centro de informes › Mayores".
+// Los emojis van envueltos en <span class="bc-emoji"> para que el CSS
+// los vuelva blancos (filter:brightness(0) invert(1)) y no hagan ruido.
+const _BC_GRUPOS = {
+  maestros:     {icon:'🗂', label:'Maestros'},
+  ventas:       {icon:'🛒', label:'Ventas'},
+  logistica:    {icon:'🗺', label:'Logística'},
+  compras:      {icon:'🛍', label:'Compras'},
+  tesoreria:    {icon:'💰', label:'Tesorería'},
+  contabilidad: {icon:'📒', label:'Contabilidad'},
+  informes:     {icon:'📈', label:'Informes'},
+  config:       {icon:'⚙️', label:'Configuración'}
+};
+const _BC_PANELES = {
+  'dash':                {icon:'📊', label:'Dashboard'},
+  'vendedor-home':       {icon:'🏠', label:'Inicio'},
+  'clientes':            {icon:'👥', label:'Clientes'},
+  'maestro-proveedores': {icon:'🏭', label:'Proveedores'},
+  'listas-precios':      {icon:'💲', label:'Listas de precios'},
+  'zonas':               {icon:'🗺', label:'Zonas'},
+  'productos':           {icon:'📦', label:'Productos'},
+  'stock':               {icon:'📊', label:'Stock'},
+  'pedidos':             {icon:'🛒', label:'Pedidos'},
+  'pedido-movil':        {icon:'📱', label:'Pedido móvil'},
+  'carga':               {icon:'🚚', label:'Cargas'},
+  'remitos':             {icon:'📄', label:'Remitos'},
+  'remito-rapido':       {icon:'⚡', label:'Remito rápido'},
+  'nc':                  {icon:'📋', label:'Notas de crédito'},
+  'cuentas':             {icon:'⚖️', label:'Cuentas corrientes'},
+  'hoja-ruta':           {icon:'🗺', label:'Hoja de ruta'},
+  'compras':             {icon:'🧾', label:'Comprobantes'},
+  'cobranza':            {icon:'💰', label:'Cobranza'},
+  'rendicion':           {icon:'💼', label:'Rendición'},
+  'tesoreria':           {icon:'🏦', label:'Caja y bancos'},
+  'cheques':             {icon:'📋', label:'Cheques en cartera'},
+  'contabilidad':        {icon:'📒', label:'Contabilidad'},
+  'informes':            {icon:'📈', label:'Centro de informes'},
+  'comisiones':          {icon:'👤', label:'Comisiones por persona'},
+  'contrib-zona':        {icon:'📊', label:'Contrib. Marginal'},
+  'saldos-zona':         {icon:'🗺️', label:'Saldos por Zona'},
+  'gastos-fijos':        {icon:'📋', label:'Gastos Fijos'},
+  'importar-historico':  {icon:'📥', label:'Importar histórico FoxPro'}
+};
+const _BC_PANEL_A_GRUPO = {
+  'clientes':'maestros','cuentas':'maestros','productos':'maestros','stock':'maestros',
+  'maestro-proveedores':'maestros','listas-precios':'maestros','zonas':'maestros',
+  'pedidos':'ventas','pedido-movil':'ventas','carga':'ventas','remitos':'ventas',
+  'remito-rapido':'ventas','nc':'ventas','nc-movil':'ventas',
+  'hoja-ruta':'logistica',
+  'compras':'compras',
+  'cobranza':'tesoreria','rendicion':'tesoreria','tesoreria':'tesoreria',
+  'cheques':'tesoreria','contabilidad':'contabilidad',
+  'informes':'informes','comisiones':'informes','contrib-zona':'informes',
+  'saldos-zona':'informes','gastos-fijos':'informes','importar-historico':'informes'
+};
+// Sub-niveles: cuando se cambia de tab DENTRO de un panel.
+// Clave = "prefix:clave-tab", valor = {icon,label}
+const _BC_SUB = {
+  // Informes
+  'inf:ventas':             {icon:'📅', label:'Ventas'},
+  'inf:descuentos':         {icon:'🏷️', label:'Descuentos en remitos'},
+  'inf:descuentos-cliente': {icon:'📉', label:'Descuentos contables por cliente'},
+  'inf:clientes':           {icon:'👥', label:'Clientes'},
+  'inf:productos':          {icon:'📦', label:'Productos'},
+  'inf:comisiones':         {icon:'💰', label:'Comisiones'},
+  'inf:comisiones2':        {icon:'⚙️', label:'Configuración de comisiones'},
+  'inf:gerencial':          {icon:'📊', label:'Gerencial'},
+  'inf:cmg-cli':            {icon:'👥', label:'CMG Clientes'},
+  'inf:financiamiento':     {icon:'🏭', label:'Financiamiento'},
+  'inf:financiero':         {icon:'📊', label:'Mayores'},
+  'inf:fondos':             {icon:'💵', label:'Fondos'},
+  'inf:plazos':             {icon:'📋', label:'Plazos'},
+  'inf:calce':              {icon:'📊', label:'Calce de plazos'},
+  'inf:historico':          {icon:'📈', label:'Evolución histórica'},
+  // Contabilidad
+  'cont:gastos':     {icon:'📝', label:'Gastos'},
+  'cont:asientos':   {icon:'📖', label:'Asientos'},
+  'cont:mayor':      {icon:'📊', label:'Mayor'},
+  'cont:resultado':  {icon:'💹', label:'Resultado'},
+  'cont:mensual':    {icon:'📅', label:'Mensual'},
+  // Tesorería
+  'teso:cobros': {icon:'📋', label:'Cobros'},
+  'teso:pagos':  {icon:'💸', label:'Pagos a proveedores'},
+  'teso:caja':   {icon:'🏧', label:'Saldo de caja'},
+  'teso:concil': {icon:'🔍', label:'Conciliación'},
+  // Listas de precios
+  'lp:listas':   {icon:'📋', label:'Listas'},
+  'lp:precios':  {icon:'💲', label:'Precios por lista'},
+  'lp:clientes': {icon:'👥', label:'Clientes'},
+  'lp:sim':      {icon:'🧮', label:'Simulador'}
+};
+// Estado del sub-nivel actual: {prefix:'inf', key:'ventas'} o null.
+let _bcSubNivel = null;
+
+// Llamar desde cada tab (infTab, contTab, tesoTab, lpTab) para que el
+// breadcrumb se actualice al sub-nivel elegido.
+function setBreadcrumbSub(prefix, key){
+  if(_bcSubNivel && _bcSubNivel.prefix === prefix && _bcSubNivel.key === key) return;
+  _bcSubNivel = {prefix, key};
+  actualizarBreadcrumb(_bcPanelActual);
+}
+function limpiarBreadcrumbSub(){
+  if(_bcSubNivel) { _bcSubNivel = null; }
+}
+
+// Cache del panel actual para que setBreadcrumbSub sepa qué pintar.
+let _bcPanelActual = '';
+
+function _bcEmoji(icon){
+  return icon ? `<span class="bc-emoji">${icon}</span> ` : '';
+}
+
+function actualizarBreadcrumb(p){
+  const bc = document.getElementById('breadcrumb-bar');
+  if(!bc) return;
+  _bcPanelActual = p;
+  // Solo mostrar en vista escritorio. En móvil el topbar no aplica.
+  if(usuarioActual?.vista === 'movil'){ bc.style.display='none'; return; }
+  bc.style.display = '';
+  // Paneles "raíz" no muestran breadcrumb (son el inicio de todo).
+  if(p === 'dash' || p === 'vendedor-home'){
+    bc.innerHTML = '';
+    return;
+  }
+  const grupoKey = _BC_PANEL_A_GRUPO[p];
+  const grupo = grupoKey ? _BC_GRUPOS[grupoKey] : null;
+  const panel = _BC_PANELES[p] || {icon:'', label:p};
+  const sep = '<span class="bc-sep">›</span>';
+  let html = '';
+  if(grupo){
+    html += `${_bcEmoji(grupo.icon)}<span class="bc-crumb">${grupo.label}</span>${sep}`;
+  }
+  html += `${_bcEmoji(panel.icon)}<span class="bc-crumb">${panel.label}</span>`;
+  // Sub-nivel (3° nivel) si hay uno activo para este panel.
+  if(_bcSubNivel && _bcSubNivel.prefix){
+    const prefixDelPanel = {
+      'informes':'inf', 'contabilidad':'cont', 'tesoreria':'teso', 'listas-precios':'lp'
+    }[p];
+    if(prefixDelPanel && prefixDelPanel === _bcSubNivel.prefix){
+      const sub = _BC_SUB[_bcSubNivel.prefix + ':' + _bcSubNivel.key];
+      if(sub){
+        html += sep + `${_bcEmoji(sub.icon)}<span class="bc-crumb">${sub.label}</span>`;
+      }
+    }
+  }
+  bc.innerHTML = html;
+}
+
+function go(p,opts = {}) {
+  // Limpiar overlays de confirmación huérfanos: si quedó alguno vivo de un
+  // flujo previo (cobro o pedido confirmado), se elimina al navegar a
+  // cualquier otro panel. Evita que "tape" la pantalla destino.
+  document.getElementById('pm-confirmacion-overlay')?.remove();
+
+  // Hoja de ruta en móvil: solo para repartidores. Los vendedores no la ven
+  // (ni por botón ni por URL vieja / go('hoja-ruta') colado desde algún lado).
+  const esRepartidorMovil = usuarioActual?.rol === 'repartidor';
+
+  //  VERIFICAR ACCESO A ESCRITORIO
+  if (usuarioActual?.vista === 'movil') {
+    // Paneles permitidos en móvil
+    const panelesMoviles = ['vendedor-home', 'pedido-movil', 'cobranza-hoy', 'cobranza', 'pedidos', 'cuentas', 'nc-movil'];
+    if (esRepartidorMovil) panelesMoviles.push('hoja-ruta');
+    
+    // Si el panel no está en la lista de permitidos
+    if (!panelesMoviles.includes(p) && p !== 'vendedor-home') {
+      // Si es admin con permiso, ofrecer cambiar a escritorio
+      if (usuarioActual.esAdmin) {
+        _confirmar('📱 ¿Querés cambiar a vista de escritorio para acceder a esta función?',
+          {titulo:'Cambiar a escritorio', textoOk:'Ir a escritorio', textoCancelar:'Quedarme acá', peligro:false}
+        ).then(ok => {
+          if(ok){
+            usuarioActual.vista = 'escritorio';
+            usuarioActual.rol = 'admin';
+            mostrarVistaEscritorio();
+            setTimeout(() => go(p), 300);
+          }
+        });
+        return;
+      } else {
+        // Vendedor/repartidor: no tiene acceso
+        toast('⚠️ Esta función solo está disponible en la versión de escritorio', 'info');
+        return;
+      }
+    }
+  }
+  
+
+  //  Limpiar parámetros de la URL para que no interfieran
+  const params = new URLSearchParams(window.location.search);
+  const origen = params.get('origen');
+  if (p === 'remito-rapido' && origen === 'remitos') {
+    window._origenRemito = 'remitos';
+  } else {
+    window._origenRemito = null;
+  }
+  
+  // Limpiar la URL de parámetros para que no se queden pegados
+  if (window.location.search) {
+    const newUrl = window.location.pathname;
+    window.history.replaceState({}, '', newUrl);
+  }
   document.querySelectorAll('.panel').forEach(x=>x.classList.remove('on'));
   document.querySelectorAll('.nav-group').forEach(g=>g.classList.remove('active'));
   const panel=document.getElementById('p-'+p);
@@ -727,7 +1262,13 @@ function go(p){
       document.getElementById('cob-movil').style.display='block';
       document.getElementById('cob-form-inline').style.display='none';
       limpiarCobMovil();
-      cargarHojaRutaRepartidor();
+      _cobmFiltroCli = null;
+      cargarHojaRutaRepartidor().then(()=>{
+        cobmRenderChipsCli();
+        cobmRenderZonasAcordeon();
+      });
+      // Swipe: deslizar a la derecha en el paso de cobro = volver a elegir cliente
+      initSwipeCobranza();
     } else {
       document.getElementById('cob-movil').style.display='none';
       document.getElementById('cob-form-inline').style.display='block';
@@ -742,19 +1283,50 @@ function go(p){
   if(p==='vendedor-home'){
     const s=document.getElementById('vh-saludo');
     const f=document.getElementById('vh-fecha');
-    if(s&&usuarioActual)s.textContent='Hola, '+usuarioActual.nombre+'!';
+    if(s&&usuarioActual)s.textContent='Hola, '+esc(usuarioActual.nombre)+'!';
     if(f)f.textContent=new Date().toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'});
     renderVendedorHome();
   }
   if(p==='contabilidad'){contTab(_pendingContTab||'gastos');_pendingContTab=null;}
   if(p==='nc')renderNCs();
   if(p==='hoja-ruta')hrInit();
-  if(p==='cuentas'){const _ccf=document.getElementById('cc-f');if(_ccf)_ccf.value='';const _ccq=document.getElementById('cc-q');if(_ccq)_ccq.value='';_ccPg=1;Promise.all([cargarRemitos(),cargarCobros(),cargarClientes()]).then(()=>{renderCC();});setTimeout(()=>{const q=document.getElementById('cc-q');if(q)q.focus();},100);}
+  if(p==='cuentas'){
+  // Filtro de estado según de dónde venga la navegación:
+  //   · Con opts.filtroCC (KPI "Cuentas vencidas" del dashboard) → ese valor.
+  //   · Sin opts (sidebar u otros accesos)                        → '' (Todos).
+  const _ccf = document.getElementById('cc-f');
+  if(_ccf) _ccf.value = (opts.filtroCC !== undefined) ? opts.filtroCC : '';
+  const _ccq = document.getElementById('cc-q');
+  if(_ccq) _ccq.value = '';
+  _ccPg = 1;
+  Promise.all([cargarRemitos(), cargarCobros(), cargarClientes()]).then(()=>{ renderCC(); });
+  setTimeout(()=>{ const q = document.getElementById('cc-q'); if(q) q.focus(); }, 100);
+  }
   if(p==='clientes'){setTimeout(()=>{const q=document.getElementById('cli-q');if(q)q.focus();},100);}
   if(p==='productos'){setTimeout(()=>{const q=document.getElementById('pro-q');if(q)q.focus();},100);}
+  if(p==='carga'){
+    // Default: mostrar solo las cargas de HOY. Si el usuario ya tenía fechas
+    // puestas, se respetan (por si viene de ver una carga de otro día).
+    // Vacío en ambas = "todas las fechas", así que solo aplicamos default
+    // cuando las dos están vacías.
+    const fdEl=document.getElementById('car-fd');
+    const fhEl=document.getElementById('car-fh');
+    if(fdEl&&fhEl&&!fdEl.value&&!fhEl.value){
+      fdEl.value=hoyLocal();
+      fhEl.value=hoyLocal();
+    }
+    renderCargas();
+  }
   if(p==='remitos'){setTimeout(()=>{const q=document.getElementById('rem-q');if(q)q.focus();},100);}
   if(p==='maestro-proveedores'){setTimeout(()=>{const q=document.getElementById('prov-q');if(q)q.focus();},100);}
   if(p==='pedidos'){
+    // Filtro de estado según de dónde venga la navegación:
+    //   · Con opts.filtroPedidos (KPI del dashboard) → ese valor.
+    //   · Sin opts (sidebar u otros accesos)         → '' (Todos).
+    // Después siempre se re-renderiza la lista, para que el filtro que
+    // acabamos de aplicar se vea reflejado en las filas.
+    const sel = document.getElementById('ped-est');
+    if(sel) sel.value = (opts.filtroPedidos !== undefined) ? opts.filtroPedidos : '';
     // Para vendedores sin admin: usar la vista móvil unificada (hoy)
     if((usuarioActual?.rol==='vendedor'||usuarioActual?.rol==='repartidor')&&!usuarioActual?.esAdmin&&usuarioActual?.rol_original!=='admin'){
       verMisPedidosHoy();
@@ -764,6 +1336,7 @@ function go(p){
     const bd=document.getElementById('btn-nuevo-pedido-desk');
     if(bv) bv.style.display='none';
     if(bd) bd.style.display=(usuarioActual?.esAdmin||usuarioActual?.rol==='admin')?'inline-flex':'none';
+    renderPedidos();
     setTimeout(()=>{const q=document.getElementById('ped-q');if(q)q.focus();},100);
   }
   if(p==='listas-precios')initListasPrecios();
@@ -781,14 +1354,33 @@ function go(p){
   document.querySelectorAll('.sidebar-item,.sidebar-dash').forEach(b=>b.classList.remove('on'));
   document.querySelectorAll(`[data-p="${p}"]`).forEach(b=>b.classList.add('on'));
   document.querySelectorAll('.sidebar-group').forEach(g=>g.classList.remove('active'));
-  const grupoMap={
+  const grupoMap = {
     'clientes':'maestros','cuentas':'maestros','productos':'maestros','stock':'maestros','maestro-proveedores':'maestros','listas-precios':'maestros',
-    'pedidos':'ventas','pedido-movil':'ventas','carga':'ventas','remitos':'ventas','remito-rapido':'ventas','nc':'ventas',
+    'pedidos':'ventas','pedido-movil':'ventas','carga':'ventas','remitos':'ventas','remito-rapido':'ventas','nc':'ventas','nc-movil':'ventas',
     'cobranza':'tesoreria','rendicion':'tesoreria','tesoreria':'tesoreria','cheques':'tesoreria','contabilidad':'tesoreria',
     'informes':'informes','comisiones':'informes','contrib-zona':'informes','gastos-fijos':'informes','importar-historico':'informes'
   };
+  actualizarVisibilidadBotonRefresco(p);
+  limpiarBreadcrumbSub();
+  actualizarBreadcrumb(p);
   const g=grupoMap[p];
   if(g){const sg=document.getElementById('sg-'+g);if(sg)sg.classList.add('active');}
+
+  // Navegación con History API: registrar el paso para que el botón "atrás"
+  // del navegador/celular vuelva al panel anterior. La primera navegación de
+  // la sesión usa replaceState (no agrega entrada) para que el panel inicial
+  // no quede duplicado en el history.
+  if(!opts.fromPop){
+    _navPanelActual = p;
+    if(!_navInicializado){
+      history.replaceState({type:'panel', panel:p}, '', location.pathname);
+      _navInicializado = true;
+    } else {
+      history.pushState({type:'panel', panel:p}, '', location.pathname);
+    }
+  } else {
+    _navPanelActual = p;
+  }
 }
 
 // ─── MENÚ HAMBURGUESA (mostrar/ocultar sidebar) ───
@@ -803,18 +1395,47 @@ function focoHamburguesa(){
 // registra una sola vez (no depende de qué camino de login lo abrió).
 let _sidebarKeyNavInit=false;
 function initSidebarKeyNav(){
-  if(_sidebarKeyNavInit)return;
-  _sidebarKeyNavInit=true;
-  document.getElementById('sidebar')?.addEventListener('keydown',function(e){
-    if(e.key!=='ArrowDown'&&e.key!=='ArrowUp')return;
+  if (_sidebarKeyNavInit) return;
+  _sidebarKeyNavInit = true;
+  
+  const sidebar = document.getElementById('sidebar');
+  if (!sidebar) return;
+  
+  // Remover cualquier listener previo (por si acaso)
+  sidebar.removeEventListener('keydown', _sidebarKeydownHandler);
+  
+  // Definir el handler
+  function _sidebarKeydownHandler(e) {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
     e.preventDefault();
-    const btns=[...this.querySelectorAll('.sidebar-dash,.sidebar-group-btn,.sidebar-item')]
-      .filter(b=>b.style.display!=='none');
-    const idx=btns.indexOf(document.activeElement);
-    if(idx===-1)return;
-    const next=e.key==='ArrowDown'?btns[idx+1]:btns[idx-1];
-    if(next)next.focus();
-  });
+    e.stopPropagation(); // Evita que otros listeners lo manejen
+    
+    const selector = '.sidebar-dash, .sidebar-group-btn, .sidebar-item';
+    const all = [...sidebar.querySelectorAll(selector)];
+    
+    const visibles = all.filter(el => {
+      const rect = el.getBoundingClientRect();
+      return el.offsetParent !== null && rect.height > 0;
+    });
+    
+    const currentIdx = visibles.indexOf(document.activeElement);
+    if (currentIdx === -1) return;
+    
+    let newIdx;
+    if (e.key === 'ArrowDown') {
+      newIdx = Math.min(currentIdx + 1, visibles.length - 1);
+    } else {
+      newIdx = Math.max(currentIdx - 1, 0);
+    }
+    
+    console.log(`🔄 Moviendo de ${currentIdx} a ${newIdx} (${visibles.length} visibles)`);
+    console.log('📋 Visibles:', visibles.map(el => el.textContent.trim()));
+    
+    if (visibles[newIdx]) visibles[newIdx].focus();
+  };
+  
+  // Agregar el listener
+  sidebar.addEventListener('keydown', _sidebarKeydownHandler);
 }
 
 function abrirMenu(){
@@ -856,6 +1477,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     verComprobanteCompra(parseInt(tr.dataset.compId));
   });
 });
+
 
 function toggleSidebar(grupo){
   const sg=document.getElementById('sg-'+grupo);
@@ -1018,8 +1640,8 @@ function f3Buscar(){
           style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-radius:6px;cursor:pointer"
           onmouseenter="f3Hover(this)" onclick="f3Seleccionar('cliente',${c.id})">
           <div>
-            <div style="font-size:13px;font-weight:600">${c.nombre}</div>
-            <div style="font-size:11px;color:var(--txt2)">${c.localidad||''} · ${c.telefono||''}</div>
+            <div style="font-size:13px;font-weight:600">${esc(c.nombre)}</div>
+            <div style="font-size:11px;color:var(--txt2)">${esc(c.localidad||'')} · ${esc(c.telefono||'')}</div>
           </div>
           <div style="text-align:right">
             <div style="font-size:13px;font-weight:600;color:var(--D)">${fmt(c.saldo||0)}</div>
@@ -1044,8 +1666,8 @@ function f3Buscar(){
           style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-radius:6px;cursor:pointer"
           onmouseenter="f3Hover(this)" onclick="f3Seleccionar('producto',${p.id})">
           <div>
-            <div style="font-size:13px;font-weight:600">${p.nombre}</div>
-            <div style="font-size:11px;color:var(--txt2)">Cód: ${p.codigo||'-'} · ${p.rubro||''}</div>
+            <div style="font-size:13px;font-weight:600">${esc(p.nombre)}</div>
+            <div style="font-size:11px;color:var(--txt2)">Cód: ${p.codigo||'-'} · ${esc(p.rubro||'')}</div>
           </div>
           <div style="text-align:right">
             <div style="font-size:13px;font-weight:600">${fmt(p.precio||0)}</div>
@@ -1071,7 +1693,7 @@ function f3Buscar(){
           style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-radius:6px;cursor:pointer"
           onmouseenter="f3Hover(this)" onclick="f3Seleccionar('remito',${r.id})">
           <div>
-            <div style="font-size:13px;font-weight:600">R-${String(r.id).padStart(4,'0')} · ${cli?.nombre||'-'}</div>
+            <div style="font-size:13px;font-weight:600">R-${String(r.id).padStart(4,'0')} · ${esc(cli?.nombre||'-')}</div>
             <div style="font-size:11px;color:var(--txt2)">${r.fecha} · ${r.cobrado?'✓ cobrado':'pendiente'}</div>
           </div>
           <div style="font-size:13px;font-weight:600;color:var(--D)">${fmt(r.total||0)}</div>
@@ -1136,8 +1758,16 @@ function f3Seleccionar(tipo, id){
 function _navGetFocusables(from){
   if(from.closest('.drop'))return[];
   const scope=from.closest('.mbg')||from.closest('.panel')||document.body;
-  const sel='input:not([disabled]):not([type="hidden"]):not([tabindex="-1"]),select:not([disabled]):not([tabindex="-1"])';
-  const all=[...scope.querySelectorAll(sel)].filter(el=>el.offsetParent!==null&&!el.closest('.drop'));
+  // Incluye inputs, selects y botones. Los botones del footer de modal
+  // (.mf) quedan EXCLUIDOS para no caer por accidente en Guardar/Cancelar
+  // con la flecha y cerrar el modal sin querer.
+  const sel='input:not([disabled]):not([type="hidden"]):not([tabindex="-1"]),select:not([disabled]):not([tabindex="-1"]),button:not([disabled]):not([tabindex="-1"])';
+  const all=[...scope.querySelectorAll(sel)].filter(el=>{
+    if(el.offsetParent===null) return false;
+    if(el.closest('.drop')) return false;
+    if(el.closest('.mf')) return false;    // botones de footer de modal
+    return true;
+  });
   const wi=all.filter(el=>el.tabIndex>0).sort((a,b)=>a.tabIndex-b.tabIndex);
   const wo=all.filter(el=>!(el.tabIndex>0));
   return[...wi,...wo];
@@ -1154,7 +1784,7 @@ function _popupDetalleProducto(p){
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9990;display:flex;align-items:center;justify-content:center;padding:16px';
   ov.innerHTML=`<div style="background:var(--bg);border-radius:14px;padding:24px;max-width:460px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,.3)">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <span style="font-size:16px;font-weight:700">${p.nombre}</span>
+      <span style="font-size:16px;font-weight:700">${esc(p.nombre)}</span>
       <button onclick="document.getElementById('_gl-det-popup').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--txt2);line-height:1">✕</button>
     </div>
     <table style="width:100%;font-size:13px;border-collapse:collapse">
@@ -1163,8 +1793,8 @@ function _popupDetalleProducto(p){
       <tr><td style="color:var(--txt2);padding:5px 0">Precio</td><td style="font-weight:700;color:var(--P);font-size:15px">${fmt(p.precio||0)}</td></tr>
       ${p.precio_kg?`<tr><td style="color:var(--txt2);padding:5px 0">Precio KG</td><td style="font-weight:700">${fmt(p.precio_kg)}</td></tr>`:''}
       ${p.iva?`<tr><td style="color:var(--txt2);padding:5px 0">IVA</td><td>${p.iva}%</td></tr>`:''}
-      ${p.categoria?`<tr><td style="color:var(--txt2);padding:5px 0">Categoría</td><td>${p.categoria}</td></tr>`:''}
-      ${p.proveedor?`<tr><td style="color:var(--txt2);padding:5px 0">Proveedor</td><td>${p.proveedor}</td></tr>`:''}
+      ${p.categoria?`<tr><td style="color:var(--txt2);padding:5px 0">Categoría</td><td>${esc(p.categoria)}</td></tr>`:''}
+      ${p.proveedor?`<tr><td style="color:var(--txt2);padding:5px 0">Proveedor</td><td>${esc(p.proveedor)}</td></tr>`:''}
     </table>
     <div style="text-align:center;margin-top:16px"><button onclick="document.getElementById('_gl-det-popup').remove()" class="btn" style="padding:8px 28px">Cerrar</button></div>
   </div>`;
@@ -1227,9 +1857,495 @@ document.addEventListener('keydown',function(e){
   if(e.defaultPrevented)return;
   const el=e.target;
   const tag=el.tagName;
-  if(tag!=='INPUT'&&tag!=='SELECT')return;
+  if(tag!=='INPUT'&&tag!=='SELECT'&&tag!=='BUTTON')return;
   if(el.closest('.drop'))return;
+
+  // ←/→ siempre navegan entre campos
   if(e.key==='ArrowRight'&&!e.ctrlKey&&!e.altKey&&!e.shiftKey){e.preventDefault();_navNext(el);return;}
-  if(e.key==='ArrowLeft'&&!e.ctrlKey&&!e.altKey&&!e.shiftKey){e.preventDefault();_navPrev(el);return;}
+  if(e.key==='ArrowLeft'  &&!e.ctrlKey&&!e.altKey&&!e.shiftKey){e.preventDefault();_navPrev(el);return;}
+
+  // ↓/↑ navegan igual que ←/→, EXCEPTO en los controles donde el
+  // navegador ya usa las flechas para otra cosa:
+  //   · input[type=number] → sube/baja el valor con step
+  //   · select             → cambia la opción elegida
+  //   · textarea           → mueve el cursor
+  if((e.key==='ArrowDown'||e.key==='ArrowUp')&&!e.ctrlKey&&!e.altKey&&!e.shiftKey){
+    const esNumber = el.tagName==='INPUT' && el.type==='number';
+    const esSelect = el.tagName==='SELECT';
+    const esTextarea = el.tagName==='TEXTAREA';
+    if(esNumber||esSelect||esTextarea) return; // comportamiento nativo
+    e.preventDefault();
+    if(e.key==='ArrowDown') _navNext(el);
+    else                    _navPrev(el);
+    return;
+  }
+
   if(e.key==='Home'){_verDetalleDesdeInput(el);}
 });
+
+function volverDeRemito() {
+  sessionStorage.removeItem('origenRemito');
+  go('remitos');
+}
+
+//Forzar scroll en dashboard 
+function fixDashScroll() {
+  const dash = document.getElementById('p-dash');
+  if (!dash || !dash.classList.contains('on')) return;
+  
+  const canvases = dash.querySelectorAll('canvas');
+  canvases.forEach(c => {
+    c.style.touchAction = 'pan-y';
+    c.style.pointerEvents = 'auto';
+    
+    // NO prevenir el scroll
+    c.addEventListener('wheel', function(e) {
+      // Solo permitir que el scroll pase al contenedor
+      e.stopPropagation();
+    }, { passive: true });
+  });
+}
+
+// Ejecutar cuando se muestra el dashboard
+const observer = new MutationObserver(() => {
+  const dash = document.getElementById('p-dash');
+  if (dash && dash.classList.contains('on')) {
+    setTimeout(fixDashScroll, 300);
+  }
+});
+observer.observe(document.getElementById('main-body'), { 
+  childList: true, 
+  subtree: true,
+  attributes: true,
+  attributeFilter: ['class']
+});
+
+// También ejecutar al cargar
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(fixDashScroll, 500);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// VISTAS: ESCRITORIO vs MÓVIL
+// ═══════════════════════════════════════════════════════════════
+
+function mostrarVistaMovil() {
+  // Ocultar sidebar y navegación
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  const nav = document.getElementById('main-nav');
+  const btnMenu = document.getElementById('btn-menu');
+  
+  if (sidebar) sidebar.style.display = 'none';
+  if (overlay) overlay.style.display = 'none';
+  if (nav) nav.style.display = 'none';
+  if (btnMenu) btnMenu.style.display = 'none';
+  
+  // Ocultar todos los paneles
+  document.querySelectorAll('.panel').forEach(p => {
+    p.classList.remove('on');
+    p.style.display = 'none';
+  });
+  
+  // Mostrar el home del vendedor
+  const home = document.getElementById('p-vendedor-home');
+  if (home) {
+    home.classList.add('on');
+    home.style.display = 'flex';
+  }
+  
+  // // Si es admin, mostrar botón para volver a escritorio
+  // if (usuarioActual?.esAdmin) {
+  //   const btnAdmin = document.getElementById('btn-volver-admin');
+  //   if (btnAdmin) btnAdmin.style.display = 'flex';
+  // } else {
+  //   const btnAdmin = document.getElementById('btn-volver-admin');
+  //   if (btnAdmin) btnAdmin.style.display = 'none';
+  // }
+  
+  // Mostrar toggle de rol solo si tiene dualRolMovil. Si NO lo tiene,
+  // hay que ocultarlo explícitamente: sin este else, un usuario que
+  // inició con dualRol y después cierra sesión y entra con uno que no
+  // lo tiene, se queda viendo el botón pegado del login anterior.
+  const btnRol = document.getElementById('btn-cambiar-rol-movil');
+  if (btnRol) {
+    if (usuarioActual?.dualRolMovil) {
+      btnRol.style.display = 'flex';
+      actualizarBtnRolMovil();
+    } else {
+      btnRol.style.display = 'none';
+    }
+  }
+
+    // Mostrar elementos solo-móvil
+  document.querySelectorAll('.movil-only').forEach(el => {
+    el.style.display = '';
+  });
+}
+
+// Recalcula _clientes a partir de _clientesTodos según el rol actual.
+//   · Admin / Repartidor → _clientes = universo completo.
+//   · Vendedor (incluye dualRol en rol vendedor) → solo los suyos
+//     + los que no tienen vendedor asignado.
+// No hace fetch: opera sobre lo que ya está en memoria. Así el
+// cambio de rol es instantáneo.
+function _aplicarFiltroClientesPorRol(){
+  if(!_clientesTodos.length){ _clientes = []; return; }
+  const esAdmin = usuarioActual?.esAdmin
+    || usuarioActual?.rol === 'admin'
+    || usuarioActual?.rol_original === 'admin';
+  const esRepartidor = usuarioActual?.rol === 'repartidor';
+
+  if(usuarioActual?.vendedor && !esAdmin && !esRepartidor){
+    const v = usuarioActual.vendedor.toLowerCase();
+    _clientes = _clientesTodos.filter(c => {
+      const cv = (c.vendedor || '').toLowerCase();
+      return cv === '' || cv.includes(v);
+    });
+  } else {
+    _clientes = _clientesTodos;
+  }
+}
+
+function mostrarVistaEscritorio() {
+  // Mostrar sidebar y navegación
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  const nav = document.getElementById('main-nav');
+  const btnMenu = document.getElementById('btn-menu');
+  
+  if (sidebar) sidebar.style.display = '';
+  if (overlay) overlay.style.display = '';
+  if (nav) nav.style.display = 'flex';
+  if (btnMenu) btnMenu.style.display = '';
+  
+  // Ocultar el home del vendedor
+  const home = document.getElementById('p-vendedor-home');
+  if (home) {
+    home.classList.remove('on');
+    home.style.display = 'none';
+  }
+  
+  // Ocultar botones de cambio
+  const btnAdmin = document.getElementById('btn-volver-admin');
+  if (btnAdmin) btnAdmin.style.display = 'none';
+  const btnRol = document.getElementById('btn-cambiar-rol-movil');
+  if (btnRol) btnRol.style.display = 'none';
+}
+
+function toggleVista() {
+  if (!usuarioActual) return;
+  
+  if (usuarioActual.vista === 'escritorio') {
+    usuarioActual.vista = 'movil';
+    usuarioActual.rol = 'vendedor'; // Por defecto
+    mostrarVistaMovil();
+    renderVendedorHome();
+    go('vendedor-home');
+    toast('📱 Cambiado a vista móvil');
+  } else {
+    usuarioActual.vista = 'escritorio';
+    usuarioActual.rol = usuarioActual.rol_original || 'admin';
+    mostrarVistaEscritorio();
+    go('dash');
+    toast('💻 Cambiado a vista escritorio');
+  }
+
+    // Ocultar elementos solo-móvil
+  document.querySelectorAll('.movil-only').forEach(el => {
+    el.style.display = 'none !important';
+  });
+}
+
+// ─── TRAER TODOS LOS REGISTROS CON PAGINACIÓN ───
+async function traerTodos(tabla, select, orderBy) {
+  let all = [];
+  let from = 0;
+  const pageSize = 1000;
+  let hasMore = true;
+
+  while (hasMore) {
+    let query = sb.from(tabla).select(select);
+    if (orderBy) query = query.order(orderBy, { ascending: true });
+    const { data, error } = await query.range(from, from + pageSize - 1);
+    if (error) {
+      console.error(`[traerTodos] Error en ${tabla}:`, error);
+      break;
+    }
+    if (!data || data.length === 0) {
+      hasMore = false;
+      break;
+    }
+    all = all.concat(data);
+    from += pageSize;
+    if (data.length < pageSize) hasMore = false;
+  }
+  return all;
+}
+
+// ─── WRAPPER DE ERRORES PARA CONSULTAS SUPABASE ───
+async function q(promesa, contexto) {
+  try {
+    const { data, error } = await promesa;
+    if (error) {
+      console.error(`[${contexto}] Error:`, error.message, error.details);
+      toast(`⚠️ No se pudieron cargar los datos de ${contexto}`, 'err', 4000);
+      return null; // null = falló (distinto de [] que significa "sin datos")
+    }
+    return data || [];
+  } catch (e) {
+    console.error(`[${contexto}] Excepción:`, e);
+    toast(`⚠️ Error al cargar ${contexto}`, 'err', 4000);
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NAVEGACIÓN CON HISTORY API
+// Hace que el botón "atrás" del navegador/celular funcione como en una
+// app nativa: cierra modales, sidebar y F3 si están abiertos; navega entre
+// paneles; y desde el panel base sale del sitio.
+// ═══════════════════════════════════════════════════════════════
+
+let _navPanelActual = '';       // panel actualmente visible (espejo de _panelActual)
+let _navDesdePopstate = false;  // evita que un popstate dispare un pushState
+let _navInicializado = false;   // primera navegación: replaceState en vez de push
+
+// Empuja un estado al history (solo si no viene de un popstate).
+function _navPush(state) {
+  if (_navDesdePopstate) return;
+  history.pushState(state, '', location.pathname);
+}
+
+let _navConsumosPropios = 0;   // cuántos history.back() propios están pendientes
+
+// Consume un estado: equivale a "el usuario tocó atrás". Se usa cuando una
+// capa se cierra por métodos normales (botón, Escape) para no dejar un estado
+// fantasma en el history.
+function _navConsumir() {
+  _navDesdePopstate = true;
+  _navConsumosPropios++;
+  history.back();
+  setTimeout(() => { _navDesdePopstate = false; }, 0);
+}
+
+// Cierra la capa más alta que esté abierta, en orden de prioridad:
+// F3 → modal → sidebar. Devuelve true si cerró algo.
+function _navCerrarCapaSuperior() {
+  // 1. F3 (buscador global)
+  const f3 = document.getElementById('f3-modal');
+  if (f3 && f3.style.display !== 'none' && f3.style.display !== '') {
+    f3Cerrar();
+    return true;
+  }
+  // 2. Modal (.mbg con class 'on')
+  const modal = document.querySelector('.mbg.on');
+  if (modal) {
+    cerrar(modal.id);
+    return true;
+  }
+  // 3. Sidebar (class 'open')
+  const sidebar = document.getElementById('sidebar');
+  if (sidebar && sidebar.classList.contains('open')) {
+    cerrarMenu();
+    return true;
+  }
+  // 4. Pedido móvil: si estás en Info / Mi pedido / Grilla, el atrás del
+  //    celu cancela el pedido (con confirm si hay items). Si estás en la
+  //    vista de una localidad, retrocede al listado de localidades.
+  const panelPedido = document.getElementById('p-pedido-movil');
+  if (panelPedido && panelPedido.classList.contains('on')) {
+    const pasoResumen = document.getElementById('pm-paso-resumen');
+    const pasoProductos = document.getElementById('pm-paso-productos');
+    const pasoZona = document.getElementById('pm-paso-zona');
+    const pasoInfo = document.getElementById('pm-paso-cliente-info');
+    const enResumen = pasoResumen && getComputedStyle(pasoResumen).display !== 'none';
+    const enProductos = pasoProductos && getComputedStyle(pasoProductos).display !== 'none';
+    const enZona = pasoZona && getComputedStyle(pasoZona).display !== 'none';
+    const enInfo = pasoInfo && getComputedStyle(pasoInfo).display !== 'none';
+
+    if (enResumen || enProductos || enInfo) {
+      // Atrás en Info / Mi pedido / Grilla → cancelar pedido (confirm si hay items)
+      if (typeof _pmCancelarPedido === 'function') _pmCancelarPedido();
+      history.pushState({type:'panel', panel:'pedido-movil'}, '', location.pathname);
+      return true;
+    }
+    if (enZona) {
+      pmVolverAZonas();
+      history.pushState({type:'panel', panel:'pedido-movil'}, '', location.pathname);
+      return true;
+    }
+  }
+
+  // 5. Cobranza móvil: si está en el paso de carga de cobro o en un
+  //    sub-panel (Cuenta corriente / Mis cobranzas), el atrás
+  //    retrocede un paso dentro del panel, sin perder lo cargado.
+  const cobMovil = document.getElementById('cob-movil');
+  const panelCobranza = document.getElementById('p-cobranza');
+  const enCobranza = cobMovil && panelCobranza && panelCobranza.classList.contains('on') && cobMovil.offsetParent !== null;
+  if (enCobranza) {
+    const pasoCobro = document.getElementById('cobm-paso-cobro');
+    const panelCC = document.getElementById('cobm-panel-cc');
+    const panelMC = document.getElementById('cobm-panel-miscobranzas');
+    const enPasoCobro = pasoCobro && getComputedStyle(pasoCobro).display !== 'none';
+    const enCC = panelCC && getComputedStyle(panelCC).display !== 'none';
+    const enMC = panelMC && getComputedStyle(panelMC).display !== 'none';
+    if (enPasoCobro || enCC || enMC) {
+      if (enPasoCobro) cobmVolverAcciones();
+      else if (enCC || enMC) cobmVolverAcciones();
+      history.pushState({type:'panel', panel:'cobranza'}, '', location.pathname);
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Listener global de popstate (botón atrás del navegador/celular).
+window.addEventListener('popstate', (e) => {
+  _navDesdePopstate = true;
+  try {
+    // Si este popstate lo disparamos nosotros al cerrar una capa,
+    // solo consumirlo y salir: no procesar ninguna otra capa. Sin
+    // esto, cerrar un modal desde cobranza móvil disparaba el caso #5
+    // (cobmVolverAcciones) que devolvía al listado de zonas sin que
+    // el usuario hubiera apretado atrás.
+    if (_navConsumosPropios > 0) {
+      _navConsumosPropios--;
+      return;
+    }
+
+    // Popstate real del usuario (atrás del celu/navegador):
+    if (_navCerrarCapaSuperior()) return;
+    const panelDest = e.state?.panel;
+    if (panelDest && panelDest !== _navPanelActual) {
+      go(panelDest, {fromPop: true});
+    }
+  } finally {
+    setTimeout(() => { _navDesdePopstate = false; }, 0);
+  }
+});
+
+// ─── Gestos para cerrar el modal de cuenta corriente (m-ver) ───
+// Dos formas de volver sin buscar la ✕:
+//   1) Deslizar hacia la DERECHA (izquierda → derecha), como el "atrás"
+//      de cualquier app. Funciona en cualquier parte, aunque estés
+//      scrolleado mirando movimientos. Excepción: si el dedo arranca
+//      sobre la tabla y la tabla está corrida a la derecha, el gesto
+//      la vuelve a correr (nativo) y no cierra.
+//   2) Deslizar hacia ABAJO, solo si el contenido está arriba de todo
+//      (si estás scrolleado, el gesto scrollea y no cierra).
+// Aplica tanto al modal abierto desde Cuenta corriente móvil como al
+// abierto desde el botón "📋 Cta. cte." del paso cobro.
+(function initSwipeCerrarModalCC(){
+  // ¿Algún contenedor entre el dedo y el modal está corrido a la derecha?
+  function hayScrollHorizontal(el, tope){
+    for (let n = el; n && n !== tope; n = n.parentElement) {
+      if (n.scrollLeft > 2) return true;
+    }
+    return false;
+  }
+
+  function enganchar(){
+    const modal = document.getElementById('m-ver');
+    if (!modal || modal.dataset.swipeDownOn) return;
+    modal.dataset.swipeDownOn = '1';
+
+    let startY = 0, startX = 0, startT = 0;
+    let abajoValido = false, derechaValido = false;
+
+    modal.addEventListener('touchstart', (e) => {
+      abajoValido = derechaValido = false;
+      if (!modal.classList.contains('on')) return;
+      if (e.touches.length !== 1) return; // pinch/zoom: no
+      const t = e.touches[0];
+      startX = t.clientX;
+      startY = t.clientY;
+      startT = Date.now();
+      // Ignorar si arranca sobre un campo de texto
+      if (e.target && e.target.closest && e.target.closest('input, textarea, select')) return;
+      // Abajo: solo si el contenido está arriba de todo
+      const body = document.getElementById('m-ver-body');
+      abajoValido = !(modal.scrollTop > 2) && !(body && body.scrollTop > 2);
+      // Derecha: siempre, salvo que la tabla bajo el dedo esté corrida
+      derechaValido = !hayScrollHorizontal(e.target, modal);
+    }, { passive: true });
+
+    modal.addEventListener('touchend', (e) => {
+      const puedeAbajo = abajoValido, puedeDerecha = derechaValido;
+      abajoValido = derechaValido = false;
+      if (!puedeAbajo && !puedeDerecha) return;
+      if (!modal.classList.contains('on')) return;
+      const t = e.changedTouches[0];
+      const dy = t.clientY - startY;
+      const dx = t.clientX - startX;
+      if (Date.now() - startT > 800) return; // gestos muy lentos no cuentan
+
+      // Derecha: mínimo 70px y claramente más horizontal que vertical
+      const esDerecha = dx > 70 && dx > Math.abs(dy) * 1.5;
+      // Abajo: mínimo 80px y claramente más vertical que horizontal
+      const esAbajo = dy > 80 && dy > Math.abs(dx) * 1.5;
+
+      if ((esDerecha && puedeDerecha) || (esAbajo && puedeAbajo)) {
+        cerrar('m-ver'); // respeta el History API (el observer consume la entrada)
+      }
+    }, { passive: true });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', enganchar);
+  } else {
+    enganchar();
+  }
+})();
+
+// Observadores de apertura/cierre de capas (modales, sidebar, F3).
+// Cada apertura empuja un estado; cada cierre "normal" lo consume.
+function _navInitObservers() {
+  // Modales (.mbg)
+  document.querySelectorAll('.mbg').forEach(m => {
+    new MutationObserver((mutations) => {
+      mutations.forEach(mut => {
+        if (mut.type !== 'attributes' || mut.attributeName !== 'class') return;
+        const el = mut.target;
+        const eraOn = (mut.oldValue || '').split(/\s+/).includes('on');
+        const esOn = el.classList.contains('on');
+        if (!eraOn && esOn) {
+          _navPush({ type: 'modal', modalId: el.id });
+        } else if (eraOn && !esOn) {
+          if (!_navDesdePopstate) _navConsumir();
+        }
+      });
+    }).observe(m, { attributes: true, attributeFilter: ['class'], attributeOldValue: true });
+  });
+
+  // F3 (cambio de display)
+  const f3 = document.getElementById('f3-modal');
+  if (f3) {
+    new MutationObserver((mutations) => {
+      mutations.forEach(mut => {
+        if (mut.type !== 'attributes' || mut.attributeName !== 'style') return;
+        const eraVisible = /display\s*:\s*flex/.test(mut.oldValue || '');
+        const esVisible = f3.style.display === 'flex';
+        if (!eraVisible && esVisible) {
+          _navPush({ type: 'f3' });
+        } else if (eraVisible && !esVisible) {
+          if (!_navDesdePopstate) _navConsumir();
+        }
+      });
+    }).observe(f3, { attributes: true, attributeFilter: ['style'], attributeOldValue: true });
+  }
+}
+
+document.addEventListener('DOMContentLoaded', _navInitObservers);
+
+// function volverAdmin() {
+//   // Cambiar rol temporalmente a admin
+//   if(usuarioActual) {
+//     usuarioActual.rol = 'admin';
+//     usuarioActual.vista = 'escritorio';
+//   }
+//   mostrarVistaEscritorio();
+//   go('dash');
+//   initSidebarKeyNav();
+//   focoHamburguesa();
+// }

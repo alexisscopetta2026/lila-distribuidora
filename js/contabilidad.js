@@ -12,7 +12,7 @@ function abrirAjusteComp(compId, tipo){
     ?'📋 Nota de crédito — Comprobante de compra'
     :'⚠️ Nota de débito — Comprobante de compra';
   document.getElementById('ca-info').innerHTML=`
-    <div style="margin-bottom:4px"><strong>${comp.proveedor_nom}</strong> · ${comp.nro_comprobante||'Sin Nro'}</div>
+    <div style="margin-bottom:4px"><strong>${esc(comp.proveedor_nom)}</strong> · ${comp.nro_comprobante||'Sin Nro'}</div>
     <div>Fecha: ${comp.fecha} · Importe actual: <strong style="color:var(--D)">${fmt(comp.importe)}</strong></div>
     <div style="margin-top:4px;font-size:12px;color:${esNC?'var(--P)':'var(--W)'}">
       ${esNC?'✅ NC reduce el monto que debés al proveedor':'⚠️ ND incrementa el monto que debés al proveedor'}
@@ -251,12 +251,21 @@ function actualizarNavActivo(p){
 }
 
 // ─── FIN MENÚ DESPLEGABLE ───
+
 function contTab(tab){
+  setBreadcrumbSub('cont', tab);
   ['gastos','asientos','mayor','resultado','mensual'].forEach(t=>{
     const el=document.getElementById('cont-'+t);
-    if(el)el.style.display=t===tab?'block':'none';
+    if(el) el.style.display = t===tab ? 'block' : 'none';
+    
     const btn=document.getElementById('cont-tab-'+t);
-    if(btn){btn.style.background=t===tab?'var(--P)':'';btn.style.color=t===tab?'#fff':'';}
+    if(btn){
+      if (t===tab) {
+        btn.classList.add('cont-tab-active');
+      } else {
+        btn.classList.remove('cont-tab-active');
+      }
+    }
   });
   if(tab==='mensual')rmInit();
   if(tab==='gastos')renderGastos();
@@ -276,47 +285,95 @@ function contTab(tab){
   }
 }
 
-function renderMayor(){
-  const cuentaVal=document.getElementById('may-cuenta')?.value;
-  const desde=document.getElementById('may-desde')?.value;
-  const hasta=document.getElementById('may-hasta')?.value;
-  const res=document.getElementById('may-resultado');
-  if(!cuentaVal||!res){return;}
-  const [cod,nom]=cuentaVal.split('|');
-  // Buscar movimientos de esta cuenta en asientos_detalle (async)
+function renderMayor() {
+  const cuentaVal = document.getElementById('may-cuenta')?.value;
+  const desde = document.getElementById('may-desde')?.value;
+  const hasta = document.getElementById('may-hasta')?.value;
+  const res = document.getElementById('may-resultado');
+
+  if (!cuentaVal || !res) {
+    if (res) res.innerHTML = '<div class="empty">Seleccioná una cuenta.</div>';
+    return;
+  }
+
+  const [cod, nom] = cuentaVal.split('|');
+
+  // Mostrar mensaje de carga
+  res.innerHTML = '<div class="loading">⏳ Cargando movimientos...</div>';
+
+  // Consultar la base de datos
   sb.from('asientos_detalle')
-    .select('*, asientos(fecha,descripcion,tipo)')
-    .eq('cuenta_cod',cod)
-    .then(({data})=>{
-      let movs=(data||[]).filter(d=>{
-        const f=d.asientos?.fecha;
-        return (!desde||f>=desde)&&(!hasta||f<=hasta);
-      }).sort((a,b)=>a.asientos?.fecha.localeCompare(b.asientos?.fecha));
-      let saldo=0;
-      const rows=movs.map(m=>{
-        saldo+=m.debe-m.haber;
+    .select('*, asientos(fecha, descripcion, tipo)')
+    .eq('cuenta_cod', cod)
+    .then(({ data, error }) => {
+      if (error) {
+        res.innerHTML = `<div class="empty">❌ Error al cargar: ${error.message}</div>`;
+        return;
+      }
+
+      if (!data || data.length === 0) {
+        res.innerHTML = `<div class="empty">📭 No hay movimientos para la cuenta ${cod} — ${nom}.</div>`;
+        return;
+      }
+
+      // Filtrar por fechas
+      let movs = data.filter(d => {
+        const f = d.asientos?.fecha;
+        return (!desde || f >= desde) && (!hasta || f <= hasta);
+      }).sort((a, b) => a.asientos?.fecha.localeCompare(b.asientos?.fecha));
+
+      if (movs.length === 0) {
+        res.innerHTML = `<div class="empty">📭 Sin movimientos en el período seleccionado.</div>`;
+        return;
+      }
+
+      // Armar filas
+      let saldo = 0;
+      const rows = movs.map(m => {
+        saldo += m.debe - m.haber;
         return `<tr>
-          <td>${m.asientos?.fecha||''}</td>
-          <td style="font-size:12px;color:var(--txt2)">${m.asientos?.descripcion||''}</td>
-          <td style="color:var(--D);text-align:right">${m.debe>0?fmt(m.debe):'—'}</td>
-          <td style="color:var(--P);text-align:right">${m.haber>0?fmt(m.haber):'—'}</td>
-          <td style="font-weight:600;text-align:right;color:${saldo>=0?'var(--D)':'var(--P)'}">${fmt(saldo)}</td>
+          <td>${m.asientos?.fecha || ''}</td>
+          <td style="font-size:12px;color:var(--txt2)">${m.asientos?.descripcion || ''}</td>
+          <td style="color:var(--D);text-align:right">${m.debe > 0 ? fmt(m.debe) : '—'}</td>
+          <td style="color:var(--P);text-align:right">${m.haber > 0 ? fmt(m.haber) : '—'}</td>
+          <td style="font-weight:600;text-align:right;color:${saldo >= 0 ? 'var(--D)' : 'var(--P)'}">${fmt(saldo)}</td>
         </tr>`;
       }).join('');
-      const totDebe=movs.reduce((a,m)=>a+m.debe,0);
-      const totHaber=movs.reduce((a,m)=>a+m.haber,0);
-      res.innerHTML=`
+
+      // Totales
+      const totDebe = movs.reduce((a, m) => a + m.debe, 0);
+      const totHaber = movs.reduce((a, m) => a + m.haber, 0);
+
+      // Mostrar resultados
+      res.innerHTML = `
         <div style="font-size:14px;font-weight:700;color:var(--PD);margin-bottom:10px">${cod} — ${nom}</div>
         <div class="tbl-wrap"><table class="tbl">
-          <thead><tr><th>Fecha</th><th>Descripción</th><th style="text-align:right;color:var(--D)">Debe</th><th style="text-align:right;color:var(--P)">Haber</th><th style="text-align:right">Saldo</th></tr></thead>
-          <tbody>${rows||'<tr><td colspan="5" style="text-align:center;color:var(--txt2)">Sin movimientos</td></tr>'}</tbody>
-          <tfoot><tr style="background:var(--bg2);font-weight:700">
-            <td colspan="2">TOTALES</td>
-            <td style="text-align:right;color:var(--D)">${fmt(totDebe)}</td>
-            <td style="text-align:right;color:var(--P)">${fmt(totHaber)}</td>
-            <td style="text-align:right">${fmt(saldo)}</td>
-          </tr></tfoot>
-        </table></div>`;
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Descripción</th>
+              <th style="text-align:right;color:var(--D)">Debe</th>
+              <th style="text-align:right;color:var(--P)">Haber</th>
+              <th style="text-align:right">Saldo</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+          <tfoot>
+            <tr style="background:var(--bg2);font-weight:700">
+              <td colspan="2">TOTALES</td>
+              <td style="text-align:right;color:var(--D)">${fmt(totDebe)}</td>
+              <td style="text-align:right;color:var(--P)">${fmt(totHaber)}</td>
+              <td style="text-align:right">${fmt(saldo)}</td>
+            </tr>
+          </tfoot>
+        </table></div>
+      `;
+    })
+    .catch(err => {
+      res.innerHTML = `<div class="empty">❌ Error inesperado: ${err.message}</div>`;
+      console.error('Error en renderMayor:', err);
     });
 }
 
@@ -507,7 +564,7 @@ function renderGastos(){
   tbody.innerHTML=sl.map(g=>`<tr>
     <td>${g.fecha}</td>
     <td><span class="b bA" style="font-size:11px">${g.tipo}</span></td>
-    <td style="color:var(--txt2);font-size:12px">${g.descripcion||'—'}</td>
+    <td style="color:var(--txt2);font-size:12px">${esc(g.descripcion||'—')}</td>
     <td style="font-size:12px">${g.contrapartida}</td>
     <td style="font-size:11px;color:var(--txt2)">${g.comprobante||'—'}</td>
     <td style="font-weight:700;color:var(--D)">${fmt(g.importe)}</td>
@@ -517,7 +574,7 @@ function renderGastos(){
 }
 
 async function elimGasto(id){
-  if(!confirm('¿Eliminar este gasto?'))return;
+  if(!await _confirmar('¿Eliminar este gasto?', {titulo:'Eliminar gasto', textoOk:'Eliminar'}))return;
   await sb.from('gastos').delete().eq('id',id);
   await cargarGastos();renderGastos();
 }
@@ -556,7 +613,7 @@ function renderGastosFijos(){
     return;
   }
   tbody.innerHTML=_gf.map((g,i)=>`<tr>
-    <td><input value="${g.descripcion||''}" placeholder="Ej: Sueldo Juan" oninput="_gf[${i}].descripcion=this.value;guardarGF()" style="width:100%;padding:5px 7px;border:1px solid var(--brd);border-radius:6px;font-size:13px"></td>
+    <td><input value="${esc(g.descripcion||'')}" placeholder="Ej: Sueldo Juan" oninput="_gf[${i}].descripcion=this.value;guardarGF()" style="width:100%;padding:5px 7px;border:1px solid var(--brd);border-radius:6px;font-size:13px"></td>
     <td><select onchange="_gf[${i}].tipo=this.value;guardarGF()" style="padding:5px 7px;border:1px solid var(--brd);border-radius:6px;font-size:12px;width:100%">
       <option value="">— Elegir —</option>
       ${GF_TIPOS.map(t=>`<option value="${t}" ${g.tipo===t?'selected':''}>${t}</option>`).join('')}
@@ -783,7 +840,9 @@ function calcularContribMarginal(){
     }).join('');
   }
 
-  document.getElementById('cm-res-panel').style.display='block';
+  const panel = document.getElementById('cm-res-panel');
+  panel.style.display = 'block';
+  panel.classList.add('show');
 }
 
 // ─── COMISIONES POR PERSONA ───
@@ -794,24 +853,157 @@ function cargarComPersonas(){try{_comPersonas=JSON.parse(localStorage.getItem('l
 function guardarComPersonas(){localStorage.setItem('lila_com_personas',JSON.stringify(_comPersonas));}
 
 function renderComPersonas(){
-  const tbody=document.getElementById('com-personas-tbody');
-  if(!tbody)return;
-  if(!_comPersonas.length){
-    tbody.innerHTML='<tr><td colspan="5" style="color:var(--txt2);text-align:center;padding:16px">Sin personas configuradas. Hacé clic en "+ Agregar persona".</td></tr>';
+  // Ocultar resultados al modificar la lista de personas
+  document.getElementById('com-res-panel').style.display = 'none';
+  
+  const tbody = document.getElementById('com-personas-tbody');
+  if (!tbody) return;
+  
+  // Obtener lista de vendedores/repartidores existentes
+  const vendedores = [...new Set(_clientes.map(c => c.vendedor).filter(Boolean))].sort();
+  const usuarios = USUARIOS.filter(u => u.rol === 'vendedor' || u.rol === 'repartidor').map(u => u.nombre);
+  const todosVendedores = [...new Set([...vendedores, ...usuarios])].sort();
+
+  if (!_comPersonas.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--txt2);text-align:center;padding:16px">Sin personas configuradas. Hacé clic en "+ Agregar persona".</td></tr>';
     return;
   }
-  tbody.innerHTML=_comPersonas.map((p,i)=>`<tr>
-    <td><input value="${p.nombre||''}" oninput="_comPersonas[${i}].nombre=this.value;guardarComPersonas()" style="width:100%;padding:5px 7px;border:1px solid var(--brd);border-radius:6px;font-size:13px"></td>
-    <td><select onchange="_comPersonas[${i}].rol=this.value;guardarComPersonas()" style="padding:5px 7px;border:1px solid var(--brd);border-radius:6px;font-size:13px">
-      <option value="vendedor" ${(p.rol||'vendedor')==='vendedor'?'selected':''}>Vendedor</option>
-      <option value="cobrador" ${p.rol==='cobrador'?'selected':''}>Cobrador</option>
-      <option value="repartidor" ${p.rol==='repartidor'?'selected':''}>Repartidor</option>
-    </select></td>
-    <td style="text-align:center"><input type="number" value="${p.pct_ventas??2}" min="0" max="100" step="0.1" oninput="_comPersonas[${i}].pct_ventas=parseFloat(this.value)||0;guardarComPersonas()" style="width:65px;padding:5px 7px;border:1px solid var(--brd);border-radius:6px;font-size:13px;text-align:right"> %</td>
-    <td style="text-align:center"><input type="number" value="${p.pct_cobranza??1}" min="0" max="100" step="0.1" oninput="_comPersonas[${i}].pct_cobranza=parseFloat(this.value)||0;guardarComPersonas()" style="width:65px;padding:5px 7px;border:1px solid var(--brd);border-radius:6px;font-size:13px;text-align:right"> %</td>
-    <td><button class="btn D sm" onclick="_comPersonas.splice(${i},1);guardarComPersonas();renderComPersonas()">🗑</button></td>
-  </tr>`).join('');
+
+  tbody.innerHTML = _comPersonas.map((p, i) => `
+    <tr>
+      <td>
+        <input type="text" value="${esc(p.nombre || '')}" 
+          id="com-nombre-${i}"
+          placeholder="Escribí un nombre..."
+          autocomplete="off"
+          oninput="comFiltrarVendedores(${i}, this.value)"
+          onfocus="comFiltrarVendedores(${i}, this.value)"
+          style="width:100%; padding:6px 10px; border:1px solid var(--brd); border-radius:6px; font-size:13px; font-family:inherit;">
+        <div id="com-drop-${i}" class="drop" style="display:none;"></div>
+      </td>
+      <td>
+        <select onchange="_comPersonas[${i}].rol=this.value;guardarComPersonas()" style="padding:6px 10px; border:1px solid var(--brd); border-radius:6px; font-size:13px; font-family:inherit; width:100%;">
+          <option value="vendedor" ${(p.rol||'vendedor')==='vendedor'?'selected':''}>Vendedor</option>
+          <option value="cobrador" ${p.rol==='cobrador'?'selected':''}>Cobrador</option>
+          <option value="repartidor" ${p.rol==='repartidor'?'selected':''}>Repartidor</option>
+        </select>
+      </td>
+      <td style="text-align:center;">
+        <input type="number" value="${p.pct_ventas ?? 2}" min="0" max="100" step="0.1" 
+          oninput="_comPersonas[${i}].pct_ventas=parseFloat(this.value)||0;guardarComPersonas()" 
+          style="width:60px; padding:6px 4px; border:1px solid var(--brd); border-radius:6px; font-size:13px; text-align:center; font-family:inherit;">
+      </td>
+      <td style="text-align:center;">
+        <input type="number" value="${p.pct_cobranza ?? 1}" min="0" max="100" step="0.1" 
+          oninput="_comPersonas[${i}].pct_cobranza=parseFloat(this.value)||0;guardarComPersonas()" 
+          style="width:60px; padding:6px 4px; border:1px solid var(--brd); border-radius:6px; font-size:13px; text-align:center; font-family:inherit;">
+      </td>
+      <td style="text-align:center;">
+        <button class="btn D sm" onclick="_comPersonas.splice(${i},1);guardarComPersonas();renderComPersonas()">🗑</button>
+      </td>
+    </tr>
+  `).join('');
 }
+
+// ─── FILTRAR VENDEDORES PARA COMISIONES POR PERSONA ───
+function comFiltrarVendedores(idx, valor) {
+  const drop = document.getElementById('com-drop-' + idx);
+  if (!drop) return;
+  
+  const q = (valor || '').toLowerCase().trim();
+  
+  const vendedores = [...new Set(_clientes.map(c => c.vendedor).filter(Boolean))].sort();
+  const usuarios = USUARIOS.filter(u => u.rol === 'vendedor' || u.rol === 'repartidor').map(u => u.nombre);
+  const todosVendedores = [...new Set([...vendedores, ...usuarios])].sort();
+  
+  if (q.length < 1) {
+    drop.style.display = 'none';
+    return;
+  }
+  
+  const filtrados = todosVendedores.filter(v => v.toLowerCase().includes(q));
+  
+  const input = document.getElementById('com-nombre-' + idx);
+  if (!input) return;
+  
+  const rect = input.getBoundingClientRect();
+  
+  drop.style.position = 'fixed';
+  drop.style.top = (rect.bottom + 4) + 'px';
+  drop.style.left = rect.left + 'px';
+  drop.style.width = (rect.width || 200) + 'px';
+  drop.style.maxHeight = '200px';
+  drop.style.overflowY = 'auto';
+  drop.style.zIndex = '99999';
+  drop.style.background = 'var(--bg)';
+  drop.style.border = '1px solid var(--brd)';
+  drop.style.borderRadius = '8px';
+  drop.style.boxShadow = '0 4px 12px rgba(0,0,0,.1)';
+  
+  if (!filtrados.length) {
+    drop.innerHTML = '<div style="padding:8px 12px; color:var(--txt2); font-size:13px;">Sin resultados</div>';
+    drop.style.display = 'block';
+    return;
+  }
+  
+  drop.innerHTML = filtrados.map(v => `
+    <div onmousedown="comSeleccionarVendedor(${idx}, '${v}')" 
+      style="padding:8px 12px; cursor:pointer; font-size:13px; border-bottom:1px solid var(--brd);"
+      onmouseover="this.style.background='var(--bg2)'" 
+      onmouseout="this.style.background=''">
+      ${v}
+    </div>
+  `).join('');
+  
+  drop.style.display = 'block';
+  
+  const spaceBelow = window.innerHeight - rect.bottom;
+  if (spaceBelow < 200 && rect.top > 200) {
+    drop.style.top = (rect.top - 200) + 'px';
+  }
+}
+
+// ─── SELECCIONAR VENDEDOR DEL DESPLEGABLE ───
+function comSeleccionarVendedor(idx, nombre) {
+  const input = document.getElementById('com-nombre-' + idx);
+  const drop = document.getElementById('com-drop-' + idx);
+  
+  if (input) {
+    input.value = nombre;
+    // Forzar el evento input para que actualice _comPersonas
+    const event = new Event('input', { bubbles: true });
+    input.dispatchEvent(event);
+  }
+  
+  if (drop) {
+    drop.style.display = 'none';
+    drop.innerHTML = '';
+  }
+  
+  // Actualizar el objeto _comPersonas
+  if (_comPersonas[idx]) {
+    _comPersonas[idx].nombre = nombre;
+    guardarComPersonas();
+  }
+  
+  // Cerrar cualquier otro drop abierto
+  document.querySelectorAll('[id^="com-drop-"]').forEach(d => {
+    if (d.id !== 'com-drop-' + idx) {
+      d.style.display = 'none';
+    }
+  });
+}
+
+// ─── CERRAR DROPS DE VENDEDORES AL HACER CLICK FUERA ───
+document.addEventListener('click', function(e) {
+  document.querySelectorAll('[id^="com-drop-"]').forEach(drop => {
+    const inputId = drop.id.replace('com-drop-', 'com-nombre-');
+    const input = document.getElementById(inputId);
+    if (!e.target.closest('.drop-wrap') || (input && e.target !== input && !input.contains(e.target))) {
+      drop.style.display = 'none';
+    }
+  });
+});
 
 function agregarPersonaCom(){
   _comPersonas.push({nombre:'',rol:'vendedor',pct_ventas:2,pct_cobranza:1});
@@ -864,7 +1056,7 @@ function calcularComisionesPorPersona(){
 
   const tbody=document.getElementById('com-res-tbody');
   tbody.innerHTML=res.map(p=>`<tr>
-    <td style="font-weight:600">${p.nombre||'—'}</td>
+    <td style="font-weight:600">${esc(p.nombre||'—')}</td>
     <td><span class="b ${rolBadge(p.rol)}">${rolLabel(p.rol)}</span></td>
     <td style="text-align:right">${fmt(p.ventas)}</td>
     <td style="text-align:right">${fmt(p.cobranza)}</td>
@@ -905,17 +1097,20 @@ function calcularComisionesPorPersona(){
     zonaDiv.innerHTML=`<div class="tbl-wrap"><table class="tbl">
       <thead><tr><th>Zona</th><th style="text-align:right">Ventas</th><th style="text-align:right">% del total</th><th style="text-align:right">Cobranza</th><th style="text-align:right">% Cobrado</th></tr></thead>
       <tbody>${zonasArr.map(([z,d])=>{
-        const pctTotal=totalZ>0?Math.round(d.ventas/totalZ*100):0;
-        const pctCob=d.ventas>0?Math.round(d.cobranza/d.ventas*100):0;
-        return `<tr>
-          <td><span class="b bA">${_zonas.find(x=>x.codigo===z)?.descripcion||z}</span></td>
-          <td style="text-align:right;font-weight:600">${fmt(d.ventas)}</td>
-          <td style="text-align:right"><div style="display:flex;align-items:center;justify-content:flex-end;gap:6px">
-            <div style="background:var(--PL);border-radius:3px;height:8px;width:${pctTotal}px;max-width:80px"></div>
-            <span style="font-size:11px;color:var(--txt2)">${pctTotal}%</span></div></td>
-          <td style="text-align:right">${fmt(d.cobranza)}</td>
-          <td style="text-align:right"><span class="b ${pctCob>=80?'bP':pctCob>=50?'bW':'bD'}">${pctCob}%</span></td>
-        </tr>`;
+      const pctTotal = totalZ > 0 ? Math.round(d.ventas / totalZ * 100) : 0;
+      const pctCob = d.ventas > 0 ? Math.round(d.cobranza / d.ventas * 100) : 0;
+      return `<tr>
+        <td><span class="b bA">${_zonas.find(x=>x.codigo===z)?.descripcion||z}</span></td>
+        <td style="text-align:right;font-weight:600">${fmt(d.ventas)}</td>
+        <td style="text-align:right">
+          <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px">
+            <div style="background:var(--P);border-radius:3px;height:8px;width:${Math.min(pctTotal, 100)}px;max-width:80px;opacity:0.4;"></div>
+            <span style="font-size:12px;font-weight:600;color:var(--P)">${pctTotal}%</span>
+          </div>
+        </td>
+        <td style="text-align:right">${fmt(d.cobranza)}</td>
+        <td style="text-align:right"><span class="b ${pctCob>=80?'bP':pctCob>=50?'bW':'bD'}">${pctCob}%</span></td>
+      </tr>`;
       }).join('')}</tbody>
       <tfoot><tr style="font-weight:700;background:var(--bg2)">
         <td>TOTAL</td>
@@ -947,7 +1142,7 @@ function dropProvComp(){
   if(q.length<1){drop.style.display='none';return;}
   const m=_proveedores.filter(p=>(p.nombre||'').toLowerCase().includes(q)).sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es'));
   drop.innerHTML=m.map(p=>`<div style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--brd);font-size:13px"
-    onmousedown="selProvComp(${p.id})"><strong>${p.nombre}</strong>
+    onmousedown="selProvComp(${p.id})"><strong>${esc(p.nombre)}</strong>
     ${p.cuit?'<span style="font-size:11px;color:var(--txt2);margin-left:6px">CUIT: '+p.cuit+'</span>':''}</div>`).join('');
   drop.style.display=m.length?'block':'none';
 }
@@ -1025,7 +1220,7 @@ function filtrarBusqProv(){
     <div style="padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;gap:10px"
       onmousedown="selProvComp(${p.id});document.getElementById('modal-busq-prov').remove();setTimeout(()=>document.getElementById('comp-nro')?.focus(),50)">
       <div>
-        <div style="font-weight:600;font-size:13px">${p.nombre}</div>
+        <div style="font-weight:600;font-size:13px">${esc(p.nombre)}</div>
         ${p.cuit?'<div style="font-size:11px;color:var(--txt2)">CUIT: '+p.cuit+'</div>':''}
       </div>
       ${p._saldo?`<div style="font-size:12px;font-weight:700;color:var(--D);flex-shrink:0">${fmt(p._saldo)}</div>`:''}
@@ -1038,7 +1233,7 @@ function navBusqProv(e){
   if(!items.length)return;
   if(e.key==='ArrowDown'){e.preventDefault();_busqProvIdx=Math.min(_busqProvIdx+1,items.length-1);items.forEach((el,i)=>el.style.background=i===_busqProvIdx?'var(--PL)':'');items[_busqProvIdx]?.scrollIntoView({block:'nearest'});}
   else if(e.key==='ArrowUp'){e.preventDefault();_busqProvIdx=Math.max(_busqProvIdx-1,0);items.forEach((el,i)=>el.style.background=i===_busqProvIdx?'var(--PL)':'');items[_busqProvIdx]?.scrollIntoView({block:'nearest'});}
-  else if(e.key==='Enter'){e.preventDefault();const target=_busqProvIdx>=0?items[_busqProvIdx]:items.length===1?items[0]:null;if(target){const attr=target.getAttribute('onmousedown');if(attr)eval(attr);}_busqProvIdx=-1;}
+  else if(e.key==='Enter'){e.preventDefault();const target=_busqProvIdx>=0?items[_busqProvIdx]:items.length===1?items[0]:null;if(target){target.onmousedown?.();}_busqProvIdx=-1;}
   else if(e.key==='Escape'){document.getElementById('modal-busq-prov')?.remove();}
 }
 
@@ -1074,6 +1269,87 @@ async function abrirComprobante(){
 
   document.getElementById('m-comprobante').classList.add('on');
   setTimeout(()=>document.getElementById('comp-prov-cod').focus(), 100);
+}
+
+function editarComprobante(id) {
+  const comp = _comprobantes.find(c => c.id === id);
+  if (!comp) {
+    toast('Comprobante no encontrado', 'err');
+    return;
+  }
+
+  // Rellenar el modal con los datos del comprobante
+  document.getElementById('comp-edit-id').value = comp.id;
+  document.getElementById('m-comp-title').textContent = 'Editar comprobante';
+  document.getElementById('comp-fecha').value = comp.fecha || '';
+  document.getElementById('comp-nro').value = comp.nro_comprobante || '';
+  document.getElementById('comp-desc').value = comp.descripcion || '';
+  document.getElementById('comp-importe').value = comp.importe || 0;
+  document.getElementById('comp-obs').value = comp.observaciones || '';
+  document.getElementById('comp-condpago').value = comp.condicion_pago || 0;
+  document.getElementById('comp-tipo').value = comp.tipo || 'factura';
+  
+  // Cuenta contable
+  const cuenta = comp.cuenta_cod && comp.cuenta_nom ? `${comp.cuenta_cod}|${comp.cuenta_nom}` : '';
+  if (cuenta) document.getElementById('comp-cuenta').value = cuenta;
+
+  // Forma de pago
+  const formaPago = comp.forma_pago_cod && comp.forma_pago_nom ? `${comp.forma_pago_cod}|${comp.forma_pago_nom}` : '';
+  if (formaPago) document.getElementById('comp-formapago').value = formaPago;
+
+  // Vencimiento
+  if (comp.fecha_vencimiento) {
+    document.getElementById('comp-vencimiento').value = comp.fecha_vencimiento;
+  } else {
+    calcVencimiento();
+  }
+
+  // Proveedor
+  if (comp.proveedor_id) {
+    selProvComp(comp.proveedor_id);
+    document.getElementById('comp-prov-id').value = comp.proveedor_id;
+  }
+
+  // Productos (items)
+  const listaCostos = document.getElementById('comp-costos-lista');
+  listaCostos.innerHTML = '';
+  if (comp.items && comp.items.length) {
+    comp.items.forEach(item => {
+      agregarItemCostoComp();
+      const rows = document.querySelectorAll('.comp-costo-row');
+      const last = rows[rows.length - 1];
+      if (!last) return;
+      
+      const sel = last.querySelector('.comp-costo-sel');
+      const cod = last.querySelector('.comp-costo-cod');
+      const cant = last.querySelector('.comp-costo-cant');
+      const val = last.querySelector('.comp-costo-val');
+      
+      // Buscar producto por ID o nombre
+      const prod = _productos.find(p => p.id === item.producto_id || p.nombre === item.producto_nom);
+      if (prod && sel) {
+        sel.value = prod.id;
+        last.dataset.prodId = prod.id;
+        if (cod) cod.value = prod.codigo || prod.id || '';
+        sel.dispatchEvent(new Event('change'));
+      } else if (sel) {
+        // Producto no encontrado, agregar opción temporal
+        const opt = document.createElement('option');
+        opt.value = item.producto_id || '';
+        opt.textContent = item.producto_nom || 'Producto desconocido';
+        sel.appendChild(opt);
+        sel.value = opt.value;
+        last.dataset.prodId = item.producto_id || '';
+        if (cod) cod.value = item.codigo || '';
+      }
+      if (cant && item.cantidad) cant.value = item.cantidad;
+      if (val && item.costo_unitario) val.value = item.costo_unitario;
+    });
+  }
+
+  // Mostrar el modal
+  document.getElementById('m-comprobante').classList.add('on');
+  setTimeout(() => document.getElementById('comp-prov-cod')?.focus(), 100);
 }
 
 function calcCostoReal(costoFacturado, condFiscal, pctFact){
@@ -1222,8 +1498,8 @@ async function guardarComprobante(){
         ?Math.round((stockActual*costoActual+cantidad*costoReal)/(stockActual+cantidad)*100)/100
         :Math.round(costoReal*100)/100;
       upd.costo=costoPromedio;
-      const margen=prod.margen_objetivo||30;
-      upd.precio=margen>0&&margen<100?Math.ceil(costoPromedio/(1-margen/100)):prod.precio;
+      // El precio ya NO se recalcula al cargar una compra: el producto guarda
+      // el costo y el precio de venta sale de la lista de precios del cliente.
       costosCambiados++;
     }
     if(cantidad>0){
@@ -1271,7 +1547,7 @@ function toggleCompCostos(){
 
 function agregarItemCostoComp(){
   const lista=document.getElementById('comp-costos-lista');
-  const opts=_productos.map(p=>`<option value="${p.id}">${p.codigo?p.codigo+' — ':''}${p.nombre}</option>`).join('');
+  const opts=_productos.map(p=>`<option value="${p.id}">${p.codigo?p.codigo+' — ':''}${esc(p.nombre)}</option>`).join('');
   const row=document.createElement('div');
   row.className='comp-costo-row';
   row.style.cssText='display:grid;grid-template-columns:1fr 72px 130px 90px 20px;gap:4px;align-items:center';
@@ -1336,7 +1612,7 @@ function abrirCargaArticulos(compId){
   const comp=_comprobantes.find(c=>c.id===compId); if(!comp)return;
   _cargaArtCompId=compId;
   const info=document.getElementById('carga-art-info');
-  if(info)info.innerHTML=`Comprobante <b>${comp.nro_comprobante||'#'+comp.id}</b> · <b>${comp.proveedor_nom||''}</b> · ${comp.fecha||''} · ${fmt(comp.importe)}`;
+  if(info)info.innerHTML=`Comprobante <b>${comp.nro_comprobante||'#'+comp.id}</b> · <b>${esc(comp.proveedor_nom||'')}</b> · ${comp.fecha||''} · ${fmt(comp.importe)}`;
   _caItems=[]; _caProTemp=null; _caStagingVals={cod:'',cant:'1',costo:'0'};
   document.getElementById('m-carga-articulos').classList.add('on');
   renderItemsCA();
@@ -1375,7 +1651,7 @@ function dropProCA(){
   const q=val.toLowerCase();
   const m=_productos.filter(p=>(p.nombre||'').toLowerCase().includes(q));
   drop.innerHTML=m.length?m.map(p=>`<div class="drop-item" onmousedown="selProCA(${p.id})" style="padding:9px 12px">
-      <div style="font-weight:600;font-size:14px">${p.nombre}</div>
+      <div style="font-weight:600;font-size:14px">${esc(p.nombre)}</div>
       <div style="font-size:12px;color:var(--txt2);margin-top:2px">Cód: ${p.codigo||p.id} · Unidad: ${p.unidad||'—'} · Costo actual: ${fmt(p.costo||0)}</div>
     </div>`).join(''):'<div style="padding:8px;color:var(--txt2);font-size:12px">Sin resultados</div>';
   drop.style.display='block';
@@ -1459,7 +1735,7 @@ function _caStagingRowHTML(){
         oninput="dropProCA()" onkeydown="_caCodKeydown(event)" style="width:100%;text-align:center;${_caInputStyle}">
       <div class="drop" id="ca-pro-drop" style="width:280px"></div>
     </span>
-    <span class="pnom" style="color:${p?'inherit':'var(--txt2)'}">${p?p.nombre:'— código, nombre o F2 —'}</span>
+    <span class="pnom" style="color:${p?'inherit':'var(--txt2)'}">${esc(p?p.nombre:'— código, nombre o F2 —')}</span>
     <span style="width:64px;flex-shrink:0;text-align:center;font-size:12px;color:var(--txt2)">${p?.unidad||''}</span>
     <input type="text" inputmode="decimal" id="ca-cant" value="${_caStagingVals.cant}" oninput="updStagingCA('cant',this.value,this)" onkeydown="_caStagingKeydown(event,'cant')"
       style="width:80px;text-align:center;${_caInputStyle};border-color:var(--P);border-width:2px" title="Cantidad recibida (actualiza stock)">
@@ -1476,7 +1752,7 @@ function renderItemsCA(){
     const sub=it.cant*it.costo;
     return `<div class="pitem">
       <span style="width:80px;flex-shrink:0;text-align:center;font-size:11px;color:var(--txt2)">${it.codigo||''}</span>
-      <span class="pnom">${it.nom}</span>
+      <span class="pnom">${esc(it.nom)}</span>
       <span style="width:64px;flex-shrink:0;text-align:center;font-size:12px;color:var(--txt2)">${it.unidad||''}</span>
       <input type="text" inputmode="decimal" data-idx="${i}" data-field="cant" value="${it.cant}" oninput="updItemCA(${i},'cant',this.value,this)" style="width:80px;text-align:center;${_caInputStyle}">
       <input type="text" inputmode="decimal" data-idx="${i}" data-field="costo" value="${it.costo}" oninput="updItemCA(${i},'costo',this.value,this)" style="width:110px;text-align:right;${_caInputStyle}">
@@ -1602,8 +1878,8 @@ async function guardarCargaArticulos(){
         ?Math.round((stockActual*costoActual+cantidad*costoReal)/(stockActual+cantidad)*100)/100
         :Math.round(costoReal*100)/100;
       upd.costo=costoPromedio;
-      const margen=prod.margen_objetivo||30;
-      upd.precio=margen>0&&margen<100?Math.ceil(costoPromedio/(1-margen/100)):prod.precio;
+      // El precio ya NO se recalcula al cargar una compra: el producto guarda
+      // el costo y el precio de venta sale de la lista de precios del cliente.
       costosCambiados++;
     }
     if(cantidad>0){
@@ -1658,7 +1934,7 @@ function histProveedor(id){
   document.getElementById('m-ver-body').innerHTML=`
     <div style="background:var(--bg2);border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--txt2)">
       <span>CUIT: ${p.cuit||'—'}</span>
-      <span>📞 ${p.telefono||'—'}</span>
+      <span>📞 ${esc(p.telefono||'—')}</span>
       <span>Plazo pago: <b>${p.plazo_pago_dias!=null?p.plazo_pago_dias+' días':'—'}</b></span>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;background:${saldoFinal>0?'var(--DL)':'var(--PL)'};border-radius:8px;padding:10px 14px;margin-bottom:12px">
@@ -1700,7 +1976,7 @@ function pagarComprobante(id){
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:3000;display:flex;align-items:center;justify-content:center';
   modal.innerHTML=`<div style="background:var(--bg);border-radius:12px;padding:20px;width:360px;max-width:95vw">
     <div style="font-weight:600;font-size:15px;margin-bottom:4px">💸 Pagar comprobante ${comp.nro_comprobante||'#'+comp.id}</div>
-    <div style="font-size:13px;color:var(--txt2);margin-bottom:14px">${comp.proveedor_nom||''} · ${fmt(comp.importe)}</div>
+    <div style="font-size:13px;color:var(--txt2);margin-bottom:14px">${esc(comp.proveedor_nom||'')} · ${fmt(comp.importe)}</div>
     <div style="margin-bottom:14px">
       <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Forma de pago</label>
       <select id="pagcomp-forma" style="width:100%">
@@ -1722,7 +1998,7 @@ function pagarComprobante(id){
     const hoy=hoyLocal();
     const {error:e1}=await sb.from('comprobantes_compras').update({estado:'pagado', fecha_pago:hoy}).eq('id',id);
     if(e1){alert('Error al marcar el comprobante: '+e1.message);this.textContent='✓ Confirmar pago';this.disabled=false;return;}
-    const concepto=`${(comp.tipo||'Comprobante').toUpperCase()} ${comp.nro_comprobante||'#'+comp.id}${comp.descripcion?' — '+comp.descripcion:''}`;
+    const concepto=`${(comp.tipo||'Comprobante').toUpperCase()} ${comp.nro_comprobante||'#'+comp.id}${esc(comp.descripcion?' — '+comp.descripcion:'')}`;
     const {error:e2}=await sb.from('pagos_proveedores').insert({
       fecha:hoy, proveedor_id:comp.proveedor_id, proveedor:comp.proveedor_nom||'',
       importe:comp.importe, forma, concepto
@@ -1753,7 +2029,7 @@ function imprimirOrdenPago(id, fechaPago, forma){
   if(!forma){const pago=_pagoDeComprobante(c);forma=pago?.forma||'';}
   const formaLabel=forma==='efectivo'?'💵 Efectivo':forma==='transferencia'?'🏦 Transferencia':forma==='cheque'?'📋 Cheque':'';
   const w=window.open('','_blank');
-  w.document.write(`<!DOCTYPE html><html><head><title>Orden de pago — ${c.proveedor_nom||''}</title>
+  w.document.write(`<!DOCTYPE html><html><head><title>Orden de pago — ${esc(c.proveedor_nom||'')}</title>
   <style>
     body{font-family:Arial,sans-serif;padding:30px;color:#000;max-width:520px;margin:0 auto}
     .titulo{text-align:center;border-bottom:2px solid #000;padding-bottom:10px;margin-bottom:16px}
@@ -1766,16 +2042,16 @@ function imprimirOrdenPago(id, fechaPago, forma){
     @media print{button{display:none}}
   </style></head><body>
   <div class="titulo">
-    <div class="empresa">🌸 DISTRIBUIDORA LILA</div>
+    <div class="empresa"> DISTRIBUIDORA LILA</div>
     <div class="nro">ORDEN DE PAGO</div>
   </div>
   <div class="row"><span><b>Fecha de pago:</b></span><span>${hoy}</span></div>
   ${formaLabel?`<div class="row"><span><b>Forma de pago:</b></span><span>${formaLabel}</span></div>`:''}
-  <div class="row"><span><b>Proveedor:</b></span><span>${c.proveedor_nom||'—'}</span></div>
+  <div class="row"><span><b>Proveedor:</b></span><span>${esc(c.proveedor_nom||'—')}</span></div>
   ${prov?.cuit?`<div class="row"><span><b>CUIT:</b></span><span>${prov.cuit}</span></div>`:''}
   <div class="row"><span><b>Comprobante:</b></span><span>${c.nro_comprobante||'#'+c.id}</span></div>
   <div class="row"><span><b>Fecha comprobante:</b></span><span>${c.fecha||'—'}</span></div>
-  ${c.descripcion?`<div class="row"><span><b>Descripción:</b></span><span>${c.descripcion}</span></div>`:''}
+  ${c.descripcion?`<div class="row"><span><b>Descripción:</b></span><span>${esc(c.descripcion)}</span></div>`:''}
   <div class="row total"><span>IMPORTE PAGADO</span><span>${fmt(c.importe)}</span></div>
   <div class="firma">
     <div>Firma proveedor</div>
@@ -1810,12 +2086,12 @@ function imprimirComprobante(id){
     @media print{button{display:none}}
   </style></head><body>
   <div class="titulo">
-    <div class="empresa">🌸 DISTRIBUIDORA LILA</div>
+    <div class="empresa"> DISTRIBUIDORA LILA</div>
     <div class="nro">COMPROBANTE DE COMPRA ${c.nro_comprobante||'#'+c.id}</div>
   </div>
   <div class="row"><span><b>Fecha:</b></span><span>${c.fecha||'—'}</span></div>
-  <div class="row"><span><b>Proveedor:</b></span><span>${c.proveedor_nom||'—'}</span></div>
-  ${c.descripcion?`<div class="row"><span><b>Descripción:</b></span><span>${c.descripcion}</span></div>`:''}
+  <div class="row"><span><b>Proveedor:</b></span><span>${esc(c.proveedor_nom||'—')}</span></div>
+  ${c.descripcion?`<div class="row"><span><b>Descripción:</b></span><span>${esc(c.descripcion)}</span></div>`:''}
   ${c.fecha_vencimiento?`<div class="row"><span><b>Vencimiento:</b></span><span>${c.fecha_vencimiento}</span></div>`:''}
   <div class="row"><span><b>Cond. pago:</b></span><span>${c.condicion_pago?c.condicion_pago+' días':'Contado'}</span></div>
   <div class="row"><span><b>Estado:</b></span><span>${estado}</span></div>
@@ -1836,10 +2112,10 @@ function verComprobanteCompra(id){
       <span>Cond. pago: <b>${c.condicion_pago?c.condicion_pago+'d':'Contado'}</b></span>
       ${c.fecha_vencimiento?`<span>Vence: <b>${c.fecha_vencimiento}</b></span>`:''}
     </div>
-    ${c.descripcion?`<div style="font-size:12px;color:var(--txt2);margin-bottom:8px">${c.descripcion}</div>`:''}
+    ${c.descripcion?`<div style="font-size:12px;color:var(--txt2);margin-bottom:8px">${esc(c.descripcion)}</div>`:''}
     <div style="text-align:right;font-size:16px;font-weight:700;color:var(--PD);border-top:2px solid var(--brd);padding-top:10px">Importe: ${fmt(c.importe)}</div>
   `;
-  popupDetalle(c.nro_comprobante||('Comprobante #'+c.id),`${c.proveedor_nom||''} · ${c.fecha}`,body);
+  popupDetalle(c.nro_comprobante||('Comprobante #'+c.id),`${esc(c.proveedor_nom||'')} · ${c.fecha}`,body);
 }
 
 function renderComprobantes(){
@@ -1852,6 +2128,7 @@ function renderComprobantes(){
   
   const fFecha=document.getElementById('comp-f-fecha')?.value||'';
   const fProv=document.getElementById('comp-f-prov')?.value||'';
+  const fCodProv=document.getElementById('comp-f-cod')?.value||'';
   const fNro=document.getElementById('comp-f-nro')?.value||'';
   const fDesc=document.getElementById('comp-f-desc')?.value||'';
   const fVenc=document.getElementById('comp-f-venc')?.value||'';
@@ -1863,7 +2140,22 @@ function renderComprobantes(){
     if(estado === 'pendiente' && c.fecha_vencimiento && c.fecha_vencimiento < hoy) estado = 'vencido';
     const okE = !est || estado === est;
     const okM = !mes || (c.fecha||'').startsWith(mes);
-    const okCols = matchFiltroCol(c.fecha,fFecha)&&matchFiltroCol(c.proveedor_nom,fProv)&&matchFiltroCol(c.nro_comprobante,fNro)&&
+    // Filtro por código de proveedor: busca en el catálogo _proveedores por
+    // proveedor_id y compara contra la columna codigo. Número puro → match
+    // exacto (para que "10" no traiga 110, 210...); texto → contains.
+    let okCodProv = true;
+    if(fCodProv){
+      const prov = _proveedores.find(p => String(p.id) === String(c.proveedor_id));
+      // Mismo criterio que la tabla: usa codigo si existe, si no el id.
+      // Antes solo miraba codigo, y como casi ningún proveedor tiene codigo
+      // cargado, el filtro nunca matcheaba con lo que se ve en pantalla.
+      const cod = String(prov?.codigo || prov?.id || '').trim();
+      const f = fCodProv.trim();
+      okCodProv = cod
+        ? (/^\d+$/.test(f) ? cod === f : cod.includes(f))
+        : false;
+    }
+    const okCols = matchFiltroCol(c.fecha,fFecha)&&matchFiltroCol(c.proveedor_nom,fProv)&&okCodProv&&matchFiltroCol(c.nro_comprobante,fNro)&&
       matchFiltroCol(c.descripcion||c.tipo,fDesc)&&matchFiltroCol(c.fecha_vencimiento,fVenc)&&matchFiltroCol(c.importe,fImp);
     return okQ && okE && okM && okCols;
   });
@@ -1885,30 +2177,40 @@ function renderComprobantes(){
     <div class="stat" style="padding:8px 12px"><div class="n" style="font-size:16px;color:var(--D)">${fmt(totalVenc)}</div><div class="l">Vencido</div></div>
     <div class="stat" style="padding:8px 12px"><div class="n" style="font-size:16px;color:var(--P)">${fmt(totalPag)}</div><div class="l">Pagado</div></div>
   `;
+
+  const proveedoresMap = {};
+  _proveedores.forEach(p => {
+    proveedoresMap[p.id] = p.codigo || p.id || '';
+  });
   
   const sl = data.slice((_compPg-1)*PP, _compPg*PP);
   const tbody = document.getElementById('comp-tbody');
   tbody.innerHTML = sl.length ? sl.map(c => {
+    const proveedor = _proveedores.find(p => p.id === c.proveedor_id);
+    const codigoProveedor = proveedor?.codigo || proveedor?.id || '—';
+    
     let estado = c.estado;
     if(estado === 'pendiente' && c.fecha_vencimiento && c.fecha_vencimiento < hoy) estado = 'vencido';
-    const badgeClass = estado==='pagado'?'bP':estado==='vencido'?'bD':'bW';
-    const diasVenc = c.fecha_vencimiento ? Math.floor((new Date(c.fecha_vencimiento)-new Date())/(864e5)) : null;
-    return `<tr data-comp-id="${c.id}" style="${estado==='vencido'?'background:var(--DL)':''}">
+    const badgeClass = estado === 'pagado' ? 'bP' : estado === 'vencido' ? 'bD' : 'bW';
+    const diasVenc = c.fecha_vencimiento ? Math.floor((new Date(c.fecha_vencimiento) - new Date()) / (864e5)) : null;
+    
+    return `<tr data-comp-id="${c.id}" onclick="verComprobanteCompra(${c.id})" style="cursor:pointer; ${estado === 'vencido' ? 'background:var(--DL)' : ''}">
       <td>${c.fecha}</td>
-      <td style="font-weight:600">${c.proveedor_nom}</td>
+      <td style="font-size:11px;color:var(--txt2);text-align:center;">${esc(codigoProveedor)}</td>
+      <td style="font-weight:600">${esc(c.proveedor_nom)}</td>
       <td style="color:var(--txt2);font-size:12px">${c.nro_comprobante||'—'}</td>
-      <td style="font-size:12px">${c.descripcion||c.tipo||'—'}</td>
-      <td style="font-size:12px;${estado==='vencido'?'color:var(--D);font-weight:600':''}">${c.fecha_vencimiento||'—'}${diasVenc!==null&&estado==='pendiente'?` <span style="font-size:10px;color:var(--txt2)">(${diasVenc}d)</span>`:''}</td>
-      <td style="font-size:12px">${c.condicion_pago?c.condicion_pago+'d':'Contado'}</td>
+      <td style="font-size:12px">${esc(c.descripcion||c.tipo||'—')}</td>
+      <td style="font-size:12px;${estado === 'vencido' ? 'color:var(--D);font-weight:600' : ''}">${c.fecha_vencimiento||'—'}${diasVenc !== null && estado === 'pendiente' ? ` <span style="font-size:10px;color:var(--txt2)">(${diasVenc}d)</span>` : ''}</td>
       <td style="font-weight:600;color:var(--D)">${fmt(c.importe)}</td>
-      <td><span class="b ${badgeClass}">${estado}</span>${(()=>{ if(estado!=='pagado')return ''; const pago=_pagoDeComprobante(c); const f=pago?.forma; const lbl=f==='efectivo'?'💵':f==='transferencia'?'🏦':f==='cheque'?'📋':''; return lbl?` <span title="Forma de pago" style="font-size:12px">${lbl}</span>`:''; })()}</td>
-      <td style="display:flex;gap:3px;flex-wrap:wrap">
-        ${estado!=='pagado'?`<button class="btn P sm" onclick="pagarComprobante(${c.id})">✓ Pagar</button>`:`<button class="btn sm" onclick="imprimirOrdenPago(${c.id})" title="Reimprimir orden de pago">🧾 Orden</button>`}
-        <button class="btn sm" onclick="abrirCargaArticulos(${c.id})" title="Cargar los productos recibidos: actualiza stock y costo">📦 Artículos${c.items&&c.items.length?` (${c.items.length})`:''}</button>
-        <button class="btn sm" onclick="abrirAjusteComp(${c.id},'nc')" title="Nota de crédito del proveedor" style="background:#dbeafe;color:#1e40af;border:none">NC</button>
-        <button class="btn sm" onclick="abrirAjusteComp(${c.id},'nd')" title="Nota de débito del proveedor" style="background:#fef3c7;color:#92400e;border:none">ND</button>
-        <button class="btn sm" onclick="imprimirComprobante(${c.id})" title="Imprimir">🖨</button>
-        <button class="btn D sm" onclick="eliminarComprobante(${c.id})">🗑</button>
+      <td><span class="b ${badgeClass}" style="font-size:10px; padding:1px 6px;">${estado}</span></td>
+      <td style="display:flex; flex-wrap:wrap; gap:3px; align-items:center;">
+        ${estado !== 'pagado' ? `<button class="btn P sm" onclick="event.stopPropagation();pagarComprobante(${c.id})" style="padding:2px 8px; font-size:11px;">✓</button>` : `<button class="btn sm" onclick="event.stopPropagation();imprimirOrdenPago(${c.id})" style="padding:2px 8px; font-size:11px;">🧾</button>`}
+        <button class="btn sm" onclick="event.stopPropagation();editarComprobante(${c.id})" style="padding:2px 8px; font-size:11px;">✏️</button>
+        <button class="btn sm" onclick="event.stopPropagation();abrirCargaArticulos(${c.id})" style="padding:2px 8px; font-size:11px;" title="Cargar artículos">📦</button>
+        <button class="btn sm" onclick="event.stopPropagation();abrirAjusteComp(${c.id},'nc')" style="padding:2px 8px; font-size:11px; background:#dbeafe; color:#1e40af; border:none;">NC</button>
+        <button class="btn sm" onclick="event.stopPropagation();abrirAjusteComp(${c.id},'nd')" style="padding:2px 8px; font-size:11px; background:#fef3c7; color:#92400e; border:none;">ND</button>
+        <button class="btn sm" onclick="event.stopPropagation();imprimirComprobante(${c.id})" style="padding:2px 8px; font-size:11px;">🖨</button>
+        <button class="btn D sm" onclick="event.stopPropagation();eliminarComprobante(${c.id})" style="padding:2px 8px; font-size:11px;">🗑</button>
       </td>
     </tr>`;
   }).join('') : '<tr><td colspan="9"><div class="empty">Sin comprobantes</div></td></tr>';
@@ -2090,7 +2392,7 @@ async function importarCSVAfip(input){
   if(conCuenta.length){
     const {data:asientosIns,error:errAs}=await sb.from('asientos').insert(conCuenta.map(c=>({
       fecha:c.fecha,
-      descripcion:`${(c.tipo||'').toUpperCase()} ${c.nro_comprobante} - ${c.proveedor_nom} - ${c.descripcion}`,
+      descripcion:`${(c.tipo||'').toUpperCase()} ${c.nro_comprobante} - ${esc(c.proveedor_nom)} - ${esc(c.descripcion)}`,
       tipo:'COMPRA', referencia_id:c.id, referencia_tipo:'comprobante_compra'
     }))).select();
     if(!errAs&&asientosIns){
@@ -2194,4 +2496,189 @@ async function leerFacturaConIA(input){
     setTimeout(()=>{status.style.display='none';},4000);
   }
   input.value='';
+}
+
+// ─── LIMPIAR FILTROS DE COMPROBANTES ───
+function limpiarFiltrosComprobantes() {
+  document.getElementById('comp-q').value = '';
+  document.getElementById('comp-est').value = '';
+  document.getElementById('comp-mes').value = '';
+  document.getElementById('comp-f-cod').value = '';
+  document.getElementById('comp-f-nro').value = '';
+  document.getElementById('comp-f-desc').value = '';
+  document.getElementById('comp-f-venc').value = '';
+  document.getElementById('comp-f-imp').value = '';
+  renderComprobantes();
+}
+
+// ─── LISTENER PARA CLIC EN FILAS DE COMPROBANTES (ignorar botones) ───
+document.addEventListener('DOMContentLoaded', function() {
+  const tbody = document.getElementById('comp-tbody');
+  if (tbody) {
+    tbody.addEventListener('click', function(e) {
+      const tr = e.target.closest('tr[data-comp-id]');
+      if (!tr) return;
+      // Si el clic fue en un botón, no hacer nada
+      if (e.target.closest('button')) return;
+      const id = parseInt(tr.dataset.compId);
+      if (id) verComprobanteCompra(id);
+    });
+  }
+});
+
+function agregarItemCostoComp(){
+  const lista = document.getElementById('comp-costos-lista');
+  const opts = _productos.map(p => `<option value="${p.id}">${esc(p.nombre)}</option>`).join('');
+  
+  const row = document.createElement('div');
+  row.className = 'comp-costo-row';
+  row.style.cssText = 'display:grid; grid-template-columns:55px 1fr 60px 90px 50px 70px 20px; gap:4px; align-items:center;';
+  
+  row.innerHTML = `
+    <!-- Código -->
+    <input type="text" class="comp-costo-cod" placeholder="Cód." autocomplete="off"
+      style="padding:5px 6px; border:1px solid var(--brd); border-radius:6px; font-size:12px; width:100%; box-sizing:border-box; text-align:center; height:32px;"
+      onkeydown="if(event.key==='Enter'){event.preventDefault();buscarProductoPorCodigoComp(this.closest('.comp-costo-row'));}"
+      onblur="buscarProductoPorCodigoComp(this.closest('.comp-costo-row'))">
+    
+    <!-- Producto -->
+    <select class="comp-costo-sel" style="padding:5px 6px; border:1px solid var(--brd); border-radius:6px; font-size:12px; width:100%; box-sizing:border-box; height:32px;"
+      onchange="actualizarCostoAnterior(this); this.closest('.comp-costo-row').dataset.prodId = this.value; habilitarCamposCosto(this.closest('.comp-costo-row'));">
+      <option value="">— Producto —</option>
+      ${opts}
+    </select>
+    
+    <!-- Cantidad -->
+    <input type="number" class="comp-costo-cant" placeholder="0" min="0" step="0.001" disabled
+      style="padding:5px 6px; border:2px solid var(--brd); border-radius:6px; font-size:12px; font-weight:700; text-align:center; width:100%; box-sizing:border-box; height:32px; background:var(--bg2);"
+      oninput="recalcularPrecioSugComp(this.closest('.comp-costo-row'))">
+    
+    <!-- Costo unitario con label flotante -->
+    <div style="position:relative; height:32px;">
+      <span class="comp-costo-ant" style="position:absolute; top:-14px; left:0; font-size:9px; color:var(--txt2); white-space:nowrap;">Costo anterior: —</span>
+      <input type="number" class="comp-costo-val" placeholder="$ costo" min="0" step="0.01" disabled
+        style="width:100%; height:100%; padding:5px 6px 5px 6px; padding-top:14px; border:1px solid var(--brd); border-radius:6px; font-size:12px; box-sizing:border-box; text-align:right; background:var(--bg2);"
+        oninput="recalcularPrecioSugComp(this.closest('.comp-costo-row'))">
+    </div>
+    
+    <!-- Descuento % -->
+    <input type="number" class="comp-costo-dto" placeholder="0" min="0" max="100" step="0.5" disabled
+      style="padding:5px 6px; border:1px solid var(--brd); border-radius:6px; font-size:12px; width:100%; box-sizing:border-box; text-align:center; height:32px; background:var(--bg2);"
+      oninput="recalcularPrecioSugComp(this.closest('.comp-costo-row'))">
+    
+    <!-- Precio sugerido -->
+    <span class="comp-precio-sug" style="font-size:11px; color:var(--P); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:right; font-weight:600; height:32px; display:flex; align-items:center; justify-content:flex-end;"></span>
+    
+    <!-- Botón eliminar -->
+    <button type="button" onclick="this.closest('.comp-costo-row').remove()"
+      style="background:none; border:none; cursor:pointer; color:var(--D); font-size:16px; padding:0; line-height:1; text-align:center; height:32px; display:flex; align-items:center; justify-content:center;">✕</button>
+  `;
+  
+  lista.appendChild(row);
+  row.dataset.prodId = '';
+  
+  // Evento change del select para actualizar código y habilitar campos
+  const sel = row.querySelector('.comp-costo-sel');
+  sel.addEventListener('change', function() {
+    const prod = _productos.find(p => p.id == this.value);
+    const codInput = this.closest('.comp-costo-row').querySelector('.comp-costo-cod');
+    if (prod && codInput) {
+      codInput.value = prod.codigo || prod.id || '';
+    } else if (codInput) {
+      codInput.value = '';
+    }
+    actualizarCostoAnterior(this);
+    habilitarCamposCosto(this.closest('.comp-costo-row'));
+    recalcularPrecioSugComp(this.closest('.comp-costo-row'));
+  });
+  
+  // Poner foco en cantidad
+  row.querySelector('.comp-costo-cant').focus();
+}
+
+function buscarProductoPorCodigoComp(row) {
+  const codInput = row.querySelector('.comp-costo-cod');
+  const sel = row.querySelector('.comp-costo-sel');
+  if (!codInput || !sel) return;
+  
+  const cod = codInput.value.trim();
+  if (!cod) {
+    sel.value = '';
+    row.dataset.prodId = '';
+    codInput.style.borderColor = '';
+    return;
+  }
+  
+  // Buscar SOLO por código real 
+  const prod = _productos.find(p => String(p.codigo).trim() === cod);
+  
+  if (prod) {
+    sel.value = prod.id;
+    row.dataset.prodId = prod.id;
+    // El código ya está escrito, no hace falta cambiarlo
+    codInput.style.borderColor = 'var(--P)';
+    setTimeout(() => codInput.style.borderColor = '', 1500);
+    sel.dispatchEvent(new Event('change')); // actualiza costo anterior y otros campos
+  } else {
+    // No encontrado: limpiar selección y resaltar en rojo
+    sel.value = '';
+    row.dataset.prodId = '';
+    codInput.style.borderColor = 'var(--D)';
+    setTimeout(() => codInput.style.borderColor = '', 1500);
+  }
+}
+
+function recalcularPrecioSugComp(row) {
+  const sel = row.querySelector('.comp-costo-sel');
+  const cant = parseFloat(row.querySelector('.comp-costo-cant').value) || 0;
+  const costo = parseFloat(row.querySelector('.comp-costo-val').value) || 0;
+  const dto = parseFloat(row.querySelector('.comp-costo-dto').value) || 0;
+  const precioSugEl = row.querySelector('.comp-precio-sug');
+  
+  // Obtener margen objetivo del producto seleccionado
+  const prodId = row.dataset.prodId;
+  const prod = _productos.find(p => p.id == prodId);
+  const margen = prod?.margen_objetivo || 30;
+  
+  if (costo > 0 && margen > 0 && margen < 100) {
+    // Precio sin descuento
+    const precioBase = costo / (1 - margen / 100);
+    // Aplicar descuento (reducir el precio final)
+    const precioFinal = precioBase * (1 - dto / 100);
+    precioSugEl.textContent = fmt(Math.ceil(precioFinal));
+    // Guardar el valor calculado como dataset para usar al guardar
+    precioSugEl.dataset.precioFinal = Math.ceil(precioFinal);
+  } else {
+    precioSugEl.textContent = '—';
+    precioSugEl.dataset.precioFinal = '';
+  }
+}
+
+function habilitarCamposCosto(row) {
+  const prodId = row.dataset.prodId;
+  const cant = row.querySelector('.comp-costo-cant');
+  const costo = row.querySelector('.comp-costo-val');
+  const dto = row.querySelector('.comp-costo-dto');
+  
+  if (prodId) {
+    // Producto seleccionado: habilitar campos
+    [cant, costo, dto].forEach(el => {
+      if (el) {
+        el.disabled = false;
+        el.style.background = '';
+        el.style.borderColor = 'var(--P)';
+      }
+    });
+    if (cant) cant.style.borderColor = 'var(--P)';
+  } else {
+    // Sin producto: deshabilitar campos
+    [cant, costo, dto].forEach(el => {
+      if (el) {
+        el.disabled = true;
+        el.style.background = 'var(--bg2)';
+        el.style.borderColor = 'var(--brd)';
+        el.value = '';
+      }
+    });
+  }
 }

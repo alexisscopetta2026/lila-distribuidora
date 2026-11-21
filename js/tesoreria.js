@@ -1,6 +1,46 @@
 // ─── TESORERÍA: cobros, cheques, caja, rendición, cobranza móvil ───
 
-async function cargarCobros(){const {data,error}=await sb.from('cobros').select('id,cliente_id,cliente,fecha,forma,importe,referencia,total,efectivo,transferencia,cheque_propio,cheque_terceros,retencion_ganancias,retencion_ing_brutos,retencion_otras,estado_transferencia,estado_rendicion,reparto,carga_id,tipo_cobrador,vendedor,imputaciones,observaciones,comprobante_url,saldo_favor,banco_cheque,nro_cheque,nombre_transferencia,created_at').order('id',{ascending:false});if(error)console.error('[cobros]',error.message,error.details);_cobros=data||[];}
+async function cargarCobros() {
+  let all = [];
+  let from = 0;
+  const pageSize = 1000;
+  let hasMore = true;
+
+  while (hasMore) {
+    const result = await q(
+      sb
+        .from('cobros')
+        .select(`
+          id, cliente_id, cliente, fecha, forma, importe, referencia, total,
+          efectivo, transferencia, cheque_propio, cheque_terceros,
+          retencion_ganancias, retencion_ing_brutos, retencion_otras,
+          estado_transferencia, estado_rendicion, reparto, carga_id,
+          tipo_cobrador, vendedor, imputaciones, observaciones,
+          comprobante_url, saldo_favor, banco_cheque, nro_cheque,
+          nombre_transferencia, created_at, numero_rendicion
+        `)
+        .order('id', { ascending: false })
+        .range(from, from + pageSize - 1),
+      'cobros (página ' + (Math.floor(from / pageSize) + 1) + ')'
+    );
+
+    if (result === null) {
+      _cobros = [];
+      return;
+    }
+
+    if (result.length === 0) {
+      hasMore = false;
+      break;
+    }
+
+    all = all.concat(result);
+    from += pageSize;
+    if (result.length < pageSize) hasMore = false;
+  }
+
+  _cobros = all;
+}
 
 async function cobrarRemito(id){
   const r = _remitos.find(x=>x.id===id); if(!r) return;
@@ -12,7 +52,7 @@ async function cobrarRemito(id){
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:3000;display:flex;align-items:center;justify-content:center';
   modal.innerHTML = `<div style="background:var(--bg);border-radius:12px;padding:20px;width:360px;max-width:95vw">
     <div style="font-weight:600;font-size:15px;margin-bottom:4px">💵 Cobrar remito R-${String(r.id).padStart(4,'0')}</div>
-    <div style="font-size:13px;color:var(--txt2);margin-bottom:14px">${r.cliente} · Saldo: ${fmt(saldo)}</div>
+    <div style="font-size:13px;color:var(--txt2);margin-bottom:14px">${esc(r.cliente)} · Saldo: ${fmt(saldo)}</div>
     <div style="margin-bottom:10px">
       <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Importe a cobrar</label>
       <input type="number" id="cob-rap-imp" value="${saldo}" style="width:100%;font-size:18px;font-weight:600;box-sizing:border-box">
@@ -41,7 +81,7 @@ async function cobrarRemito(id){
     const reactivar=()=>{this.textContent='✓ Confirmar cobro';this.disabled=false;};
 
     const hoy = hoyLocal();
-    const {error:cobErr}=await sb.from('cobros').insert({
+    const {data:nuevoCobroRap,error:cobErr}=await sb.from('cobros').insert({
       cliente_id: r.cliente_id, cliente: r.cliente||'',
       fecha: hoy, importe: imp, forma: medio,
       efectivo: medio==='efectivo'?imp:0,
@@ -50,8 +90,12 @@ async function cobrarRemito(id){
       vendedor: r.vendedor||usuarioActual?.nombre||'',
       estado_rendicion:'pendiente',
       imputaciones:[{remito_id:id,monto:imp}]
-    });
+    }).select().single();
     if(cobErr){alert('Error al guardar cobro: '+cobErr.message);reactivar();return;}
+    if(medio==='cheque'){
+      await crearChequeDesdeCobro(nuevoCobroRap, imp, 'S/N', '');
+      await cargarCheques();
+    }
 
     // ⚠️ Remito y saldo del cliente NO se modifican aquí.
     // Se aplican cuando un admin valida el cobro (validarCobro).
@@ -73,31 +117,43 @@ function detalleHTML(d,isRem){
   const rows=(d.items||[]).map(it=>{
     const base=it.precio*it.cant,dtoA=base*(it.dto/100),neto=base-dtoA;
     sub+=base;dtoT+=dtoA;tot+=neto;
-    return `<tr><td>${it.nom}</td><td style="text-align:center">${fmtN(it.cant,2)} ${it.un||''}</td><td style="text-align:right">${fmt(it.precio)}</td><td style="text-align:center">${it.dto||0}%</td><td style="text-align:right;font-weight:600">${fmt(neto)}</td></tr>`;
+    return `<tr style="font-size:15px">
+      <td style="padding:11px 10px">${esc(it.nom)}</td>
+      <td style="padding:11px 10px;text-align:center;white-space:nowrap">${fmtN(it.cant,2)} ${it.un||''}</td>
+      <td style="padding:11px 10px;text-align:right;white-space:nowrap">${fmt(it.precio)}</td>
+      <td style="padding:11px 10px;text-align:center">${it.dto||0}%</td>
+      <td style="padding:11px 10px;text-align:right;font-weight:700;white-space:nowrap">${fmt(neto)}</td>
+    </tr>`;
   }).join('');
   return `<div style="font-size:13px">
     <div style="display:flex;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
       <div>
         <div style="font-size:16px;font-weight:700;color:#1a7a52">${num}</div>
         <div style="color:#555">Fecha: ${d.fecha||''}</div>
-        ${d.vendedor?`<div style="color:#555">Vendedor: ${d.vendedor}</div>`:''}
-        ${isRem&&d.carga_id?`<div style="color:#555">Carga: #${d.carga_id}${_cargas.find(c=>c.id===d.carga_id)?.nombre?' · '+_cargas.find(c=>c.id===d.carga_id).nombre:''}</div>`:''}
+        ${d.vendedor?`<div style="color:#555">Vendedor: ${esc(d.vendedor)}</div>`:''}
+        ${isRem&&d.carga_id?`<div style="color:#555">Carga: #${d.carga_id}${_cargas.find(c=>c.id===d.carga_id)?.nombre?' · '+esc(_cargas.find(c=>c.id===d.carga_id).nombre):''}</div>`:''}
       </div>
       <div style="text-align:right;border-left:3px solid #1a7a52;padding-left:12px">
-        <div style="font-weight:700;font-size:14px">${d.cliente}</div>
-        ${dir?`<div style="color:#555">${dir}</div>`:''}
-        <div style="color:#555">${d.localidad||''} · Zona ${_zonas.find(z=>z.codigo===d.zona)?.descripcion||d.zona||'-'}</div>
-        ${tel?`<div style="color:#555">Tel: ${tel}</div>`:''}
-        ${d.lugar_entrega?`<div style="color:#c07000;font-weight:600">📍 Entrega: ${d.lugar_entrega}</div>`:''}
+        <div style="font-weight:700;font-size:14px">${esc(d.cliente)}</div>
+        ${dir?`<div style="color:#555">${esc(dir)}</div>`:''}
+        <div style="color:#555">${esc(d.localidad||'')} · Zona ${_zonas.find(z=>z.codigo===d.zona)?.descripcion||d.zona||'-'}</div>
+        ${tel?`<div style="color:#555">Tel: ${esc(tel)}</div>`:''}
+        ${d.lugar_entrega?`<div style="color:#c07000;font-weight:600">📍 Entrega: ${esc(d.lugar_entrega)}</div>`:''}
       </div>
     </div>
-    <div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px">
-      <thead><tr style="background:#f5f5f5"><th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ccc">Producto</th><th style="padding:6px 8px;border-bottom:1px solid #ccc">Cant.</th><th style="padding:6px 8px;text-align:right;border-bottom:1px solid #ccc">P.Unit</th><th style="padding:6px 8px;border-bottom:1px solid #ccc">Dto</th><th style="padding:6px 8px;text-align:right;border-bottom:1px solid #ccc">Total</th></tr></thead>
+    <div class="tbl-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:#f5f5f5">
+        <th style="padding:9px 10px;text-align:left;border-bottom:1px solid #ccc">Producto</th>
+        <th style="padding:9px 10px;border-bottom:1px solid #ccc;text-align:center">Cant.</th>
+        <th style="padding:9px 10px;text-align:right;border-bottom:1px solid #ccc">P.Unit</th>
+        <th style="padding:9px 10px;border-bottom:1px solid #ccc;text-align:center">Dto</th>
+        <th style="padding:9px 10px;text-align:right;border-bottom:1px solid #ccc">Total</th>
+      </tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
     <div style="margin-top:8px;font-size:12px;color:#777">${dtoT>0?'Descuento: '+fmt(dtoT):''}</div>
     <div style="margin-top:6px;text-align:right;font-size:16px">Total: <strong style="color:#1a7a52">${fmt(tot)}</strong></div>
-    ${(d.observaciones||d.obs)?`<div style="margin-top:8px;color:#555;font-size:12px">Obs: ${d.observaciones||d.obs}</div>`:''}
+    ${(d.observaciones||d.obs)?`<div style="margin-top:8px;color:#555;font-size:12px">Obs: ${esc(d.observaciones||d.obs)}</div>`:''}
   </div>`;
 }
 
@@ -170,12 +226,14 @@ function limpiarModalCobro(){
   ['cob-efectivo','cob-transferencia','cob-cheque3','cob-ret-gan','cob-ret-ib','cob-ret-otras'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='0';});
   const fch=document.getElementById('cob-fecha-cheque');if(fch)fch.value='';
   const td=document.getElementById('cob-total-display');if(td)td.textContent='$0';
-  const ti=document.getElementById('cob-total-imputar');if(ti)ti.value='0';
+  const ti=document.getElementById('cob-total-imputar');if(ti)ti.value='';
   const fecEl=document.getElementById('cob-fecha');if(fecEl)fecEl.value=hoyLocal();
   const rp=document.getElementById('cob-remitos-pendientes');if(rp)rp.innerHTML='';
   const rEmpty=document.getElementById('cob-remitos-empty');
   if(rEmpty){rEmpty.textContent='Seleccioná un cliente para ver sus facturas';rEmpty.style.display='block';}
   const rWrap=document.getElementById('cob-remitos-tablewrap');if(rWrap)rWrap.style.display='none';
+  const rAcc=document.getElementById('cob-remitos-acciones');
+  if(rAcc){rAcc.style.display='none';rAcc.innerHTML='';}
   const rs2=document.getElementById('cob-resto-section');if(rs2)rs2.style.display='none';
   const av=document.getElementById('cob-saldo-favor-aviso');if(av)av.style.display='none';
   const ci=document.getElementById('cob-cli-info');if(ci)ci.style.display='none';
@@ -237,7 +295,7 @@ function dropCliCob(){
   const drop=document.getElementById('cob-cli-drop');
   if(q.length<1){drop.style.display='none';return;}
   const m=_clientes.filter(c=>(c.nombre||'').toLowerCase().includes(q));
-  drop.innerHTML=m.map(c=>`<div onmousedown="selCliCob(${c.id})"><strong>${c.nombre}</strong> <span style="color:var(--txt2);font-size:11px">Saldo: ${fmt(c.saldo)}</span></div>`).join('');
+  drop.innerHTML=m.map(c=>`<div onmousedown="selCliCob(${c.id})"><strong>${esc(c.nombre)}</strong> <span style="color:var(--txt2);font-size:11px">Saldo: ${fmt(c.saldo)}</span></div>`).join('');
   drop.style.display=m.length?'block':'none';
 }
 
@@ -252,7 +310,7 @@ function selCliCob(id){
   const ciTxt=document.getElementById('cob-cli-info-txt');
   if(ci){
     const dias=diasDesde(c.ultimo_remito);
-    if(ciTxt)ciTxt.innerHTML=`<b>${c.nombre}</b> · ${c.localidad||''} · ${c.direccion?'📍 '+c.direccion+' · ':''} ${c.telefono||'—'} · Saldo: <b style="${(c.saldo||0)>0?'color:var(--D)':''}">${fmt(c.saldo)}</b>${dias!==null?` · Último rem: ${dias}d`:''}`;
+    if(ciTxt)ciTxt.innerHTML=`<b>${esc(c.nombre)}</b> · ${esc(c.localidad||'')} · ${esc(c.direccion?'📍 '+esc(c.direccion)+' · ':'')} ${esc(c.telefono||'—')} · Saldo: <b style="${(c.saldo||0)>0?'color:var(--D)':''}">${fmt(c.saldo)}</b>${dias!==null?` · Último rem: ${dias}d`:''}`;
     ci.style.display='flex';
   }
   // Mostrar remitos pendientes
@@ -263,14 +321,13 @@ function selCliCob(id){
   if(remsPend.length){
     if(rEmpty)rEmpty.style.display='none';
     if(rWrap)rWrap.style.display='block';
-    if(lista)lista.innerHTML=remsPend.map(r=>`
+    if(lista)lista.innerHTML = remsPend.map(r=>`
        <tr>
          <td style="border:1px solid #000;padding:5px 7px"><button onclick="verRemitoEnCobro(${r.id})" title="Ver detalle" style="background:none;border:none;font-size:12px;font-weight:700;color:var(--P);cursor:pointer;padding:0;white-space:nowrap;text-decoration:underline">R-${String(r.id).padStart(4,'0')}</button></td>
-         <td style="border:1px solid #000;padding:5px 7px;font-size:11px;color:var(--txt2)">${r.fecha}</td>
          <td style="border:1px solid #000;padding:5px 7px;text-align:right;font-weight:700;color:var(--D)">${fmt(r.saldo_pendiente||r.total)}</td>
          <td style="border:1px solid #000;padding:3px 5px">
            <div style="display:flex;gap:4px;align-items:center;justify-content:flex-end">
-             <input type="number" id="imp-rem-${r.id}" value="0" min="0" max="${r.saldo_pendiente||r.total}" step="0.01"
+             <input type="number" id="imp-rem-${r.id}" value="0" min="0" max="${r.saldo_pendiente||r.total}" step="1"
                style="width:90px;padding:5px 6px;border:1.5px solid var(--brd);border-radius:5px;text-align:right;font-size:13px;font-weight:700"
                placeholder="0" onfocus="this.select()" oninput="limitarImputacion(this,${r.saldo_pendiente||r.total});calcTotalDesdeImputacion()"
                ondblclick="imputarTotal(${r.id},${r.saldo_pendiente||r.total});this.select();"
@@ -282,19 +339,29 @@ function selCliCob(id){
            </div>
          </td>
        </tr>`).join('');
+    // Botón "Repartir automáticamente" — abajo de la tabla, ancho propio
+    const acc = document.getElementById('cob-remitos-acciones');
+    if(acc){
+      acc.style.display = 'block';
+      acc.innerHTML = `<button onclick="cobAutoImputar()"
+        style="padding:7px 14px;background:var(--A);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap"
+        title="Reparte el total entre las facturas más viejas primero">⚡ Repartir automáticamente</button>`;
+    }
   } else {
     if(rEmpty){rEmpty.textContent='Sin facturas pendientes';rEmpty.style.display='block';}
     if(rWrap)rWrap.style.display='none';
     if(lista)lista.innerHTML='';
+    const acc = document.getElementById('cob-remitos-acciones');
+    if(acc){acc.style.display='none';acc.innerHTML='';}
   }
   // Sugerir saldo en efectivo y sincronizar total a imputar
-  const ef=document.getElementById('cob-efectivo');
-  if(ef&&(c.saldo||0)>0){
-    ef.value=Math.round(c.saldo);
-    calcTotalCobro();
-    const ti=document.getElementById('cob-total-imputar');
-    if(ti){ti.value=Math.round(c.saldo);calcTotalDesdeImputacion();}
-  }
+  // const ef=document.getElementById('cob-efectivo');
+  // if(ef&&(c.saldo||0)>0){
+  //   ef.value=Math.round(c.saldo);
+  //   calcTotalCobro();
+  //   const ti=document.getElementById('cob-total-imputar');
+  //   if(ti){ti.value=Math.round(c.saldo);calcTotalDesdeImputacion();}
+  // }
   // foco manejado por buscarCodCli o dropdown
 }
 
@@ -329,7 +396,7 @@ function verRemitoEnCobro(id){
   const rows=(r.items||[]).map(it=>{
     const q=it.esPeso?(it.peso||it.cant||0):it.cant;
     const sub=it.precio*q*(1-(it.dto||0)/100);
-    return `<tr><td style="padding:6px 10px;border-bottom:1px solid var(--brd)">${it.nom}</td><td style="padding:6px 10px;border-bottom:1px solid var(--brd);text-align:center">${q}</td><td style="padding:6px 10px;border-bottom:1px solid var(--brd);text-align:center;color:var(--txt2)">${it.un||''}</td><td style="padding:6px 10px;border-bottom:1px solid var(--brd);text-align:right">${fmt(sub)}</td></tr>`;
+    return `<tr><td style="padding:6px 10px;border-bottom:1px solid var(--brd)">${esc(it.nom)}</td><td style="padding:6px 10px;border-bottom:1px solid var(--brd);text-align:center">${q}</td><td style="padding:6px 10px;border-bottom:1px solid var(--brd);text-align:center;color:var(--txt2)">${it.un||''}</td><td style="padding:6px 10px;border-bottom:1px solid var(--brd);text-align:right">${fmt(sub)}</td></tr>`;
   }).join('');
   const ov=document.createElement('div');
   ov.id='cob-rem-popup';
@@ -339,7 +406,7 @@ function verRemitoEnCobro(id){
       <span style="font-size:16px;font-weight:700;color:var(--P)">${num}</span>
       <button onclick="document.getElementById('cob-rem-popup').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--txt2);line-height:1">✕</button>
     </div>
-    <div style="font-size:12px;color:var(--txt2);margin-bottom:12px">${r.cliente} · ${r.fecha}</div>
+    <div style="font-size:12px;color:var(--txt2);margin-bottom:12px">${esc(r.cliente)} · ${r.fecha}</div>
     <table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="background:var(--bg2)">
         <th style="padding:6px 10px;text-align:left;font-weight:600">Producto</th>
@@ -369,32 +436,38 @@ function verCobroDetalle(id){
     <div style="display:flex;flex-wrap:wrap;gap:10px;font-size:13px;margin-bottom:10px">
       <span>Forma: <b>${r.forma||'—'}</b></span>
       <span>Estado: <b>${estBadge}</b></span>
-      ${r.reparto?`<span>Reparto: <b>${r.reparto}</b></span>`:''}
-      ${r.vendedor?`<span>Cobrador: <b>${r.vendedor}</b></span>`:''}
+      ${r.reparto?`<span>Reparto: <b>${esc(r.reparto)}</b></span>`:''}
+      ${r.vendedor?`<span>Cobrador: <b>${esc(r.vendedor)}</b></span>`:''}
     </div>
     ${impRows?`<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:8px">
       <thead><tr style="background:var(--bg2)"><th style="padding:5px 8px;text-align:left">Imputado a</th><th style="padding:5px 8px;text-align:right">Monto</th></tr></thead>
       <tbody>${impRows}</tbody>
     </table>`:''}
-    ${r.observaciones?`<div style="font-size:12px;color:var(--txt2);margin-bottom:8px">Obs: ${r.observaciones}</div>`:''}
+    ${r.observaciones?`<div style="font-size:12px;color:var(--txt2);margin-bottom:8px">Obs: ${esc(r.observaciones)}</div>`:''}
     ${r.comprobante_url?`<div style="margin-bottom:8px"><a href="${r.comprobante_url}" target="_blank">📎 Ver comprobante adjunto</a></div>`:''}
     <div style="text-align:right;font-size:16px;font-weight:700;color:var(--PD);border-top:2px solid var(--brd);padding-top:10px">Total: ${fmt(r.importe)}</div>
-    <button class="btn P" style="width:100%;margin-top:12px" onclick="imprimirRecibo(${r.id})">🧾 Ver / imprimir recibo</button>
+    ${usuarioActual?.vista==='movil' ? '' : `<button class="btn P" style="width:100%;margin-top:12px" onclick="imprimirRecibo(${r.id})">🧾 Ver / imprimir recibo</button>`}
   `;
-  popupDetalle('RC-'+String(r.id).padStart(4,'0'),`${r.cliente||''} · ${r.fecha}`,body);
+  popupDetalle('RC-'+String(r.id).padStart(4,'0'),`${esc(r.cliente||'')} · ${r.fecha}`,body);
 }
 
 function limitarImputacion(input, maxRemito){
   const val = parseFloat(input.value)||0;
+  const totalCobra = parseFloat(document.getElementById('cob-total-imputar')?.value)||0;
+  
+  // Si no hay total a cobrar, no limitar (permitir escritura libre)
+  if (totalCobra <= 0) {
+    input.style.borderColor = '';
+    return;
+  }
+  
   // Calcular cuánto ya está imputado en otros remitos
   const inputs = document.querySelectorAll('[id^="imp-rem-"]');
   let otrosImputados = 0;
   inputs.forEach(inp => { if(inp !== input) otrosImputados += parseFloat(inp.value)||0; });
-  // Total que cobra
-  const totalCobra = parseFloat(document.getElementById('cob-total-imputar')?.value)||0;
   const disponible = Math.max(0, totalCobra - otrosImputados);
-  // Limitar al mínimo entre el saldo del remito y lo disponible
   const maximo = Math.min(maxRemito, disponible);
+  
   if(val > maximo){
     input.value = maximo.toFixed(2);
     input.style.borderColor = 'var(--W)';
@@ -403,7 +476,6 @@ function limitarImputacion(input, maxRemito){
     input.style.borderColor = '';
   }
 }
-
 function imputarTotal(remId, total){
   const input = document.getElementById(`imp-rem-${remId}`);
   if(!input) return;
@@ -419,6 +491,33 @@ function imputarTotal(remId, total){
   const disponible = Math.max(0, totalCobra - yaImputado);
   input.value = Math.min(total, disponible) || 0;
   calcTotalDesdeImputacion();
+}
+
+// Reparte el total a cobrar entre las facturas pendientes, de la más vieja
+// a la más nueva (FIFO). Setea los inputs imp-rem-* y recalcula el resumen.
+function cobAutoImputar(){
+  const importe = parseFloat(document.getElementById('cob-total-imputar')?.value)||0;
+  if(importe<=0){
+    alert('Ingresá primero el total que cobra');
+    document.getElementById('cob-total-imputar')?.focus();
+    return;
+  }
+  const inputs = [...document.querySelectorAll('[id^="imp-rem-"]')];
+  if(!inputs.length){alert('No hay facturas pendientes');return;}
+  let resto = importe;
+  inputs.forEach(inp=>{
+    if(resto<=0){inp.value='';return;}
+    const max = parseFloat(inp.max)||0;
+    const aplicar = Math.min(max, resto);
+    inp.value = aplicar>0?aplicar:'';
+    resto -= aplicar;
+  });
+  calcTotalDesdeImputacion();
+  if(resto>0){
+    toast(`Se imputó todo. Quedan ${fmt(resto)} sin imputar (irán a saldo a favor)`,'warn',4000);
+  } else {
+    toast(`✅ Repartido ${fmt(importe)} en las facturas más viejas`);
+  }
 }
 
 function calcTotalDesdeImputacion(){
@@ -546,6 +645,12 @@ async function guardarCobro(){
     imputaciones,saldo_favor:_cobRestoSaldoFavor||0,comprobante_url
   }).select().single();
   if(cobErr){toast('Error al guardar cobro: '+cobErr.message,'err',6000);reactivar();return;}
+  if(ch3>0){
+    await crearChequeDesdeCobro(nuevoCobro, ch3,
+      document.getElementById('cob-nrocheque')?.value||'',
+      document.getElementById('cob-banco')?.value||'');
+    await cargarCheques();
+  }
 
   if(imputarYa){
     // El admin ya tiene la plata en mano: no hay rendición física que esperar,
@@ -601,11 +706,11 @@ function renderCobros(){
     const rendAcciones=esAdmin&&estRend==='pendiente'?`<button class="btn sm" style="background:var(--G);color:#fff;font-size:10px" onclick="validarCobro(${r.id})" title="Validar cobro — aplica saldo">✅</button><button class="btn sm D" style="font-size:10px" onclick="rechazarCobro(${r.id})" title="Rechazar cobro — sin cambio de saldo">❌</button>`:'';
     return `<tr>
       <td>${r.fecha}</td>
-      <td style="font-weight:500">${r.cliente}</td>
+      <td style="font-weight:500">${esc(r.cliente)}</td>
       <td style="font-size:11px;color:var(--txt2)">${formas.join(' · ')||r.forma||'—'}${compLink}</td>
-      <td style="font-size:11px;color:var(--txt2)">${r.reparto||'—'}</td>
+      <td style="font-size:11px;color:var(--txt2)">${esc(r.reparto||'—')}</td>
       <td style="font-weight:600;color:var(--P)">${fmt(r.importe)}</td>
-      <td>${r.vendedor||'—'}</td>
+      <td>${esc(r.vendedor||'—')}</td>
       <td>${transfBadge} ${transfAcciones}</td>
       <td>${rendBadge} ${rendAcciones}</td>
       <td><button class="btn sm" onclick="imprimirRecibo(${r.id})">🖨️</button></td>
@@ -622,7 +727,7 @@ async function validarTransf(id){
 }
 
 async function rechazarTransf(id){
-  if(!confirm('¿Rechazar esta transferencia? El cobro quedará marcado como rechazado.'))return;
+  if(!await _confirmar('¿Rechazar esta transferencia? El cobro quedará marcado como rechazado.',{titulo:'Rechazar transferencia', textoOk:'Rechazar'}))return;
   const {error}=await sb.from('cobros').update({estado_transferencia:'rechazado'}).eq('id',id);
   if(error){toast('Error al rechazar','err');return;}
   const c=_cobros.find(x=>x.id===id);if(c)c.estado_transferencia='rechazado';
@@ -630,7 +735,7 @@ async function rechazarTransf(id){
 }
 
 async function validarCobro(id){
-  if(!confirm('¿Validar este cobro? Se descontará el saldo del cliente y sus remitos.'))return;
+  if(!await _confirmar('¿Validar este cobro? Se descontará el saldo del cliente y sus remitos.', {titulo:'Validar cobro', textoOk:'Validar'}))return;
   const cob=_cobros.find(x=>x.id===id);if(!cob)return;
   const {error}=await sb.from('cobros').update({estado_rendicion:'validado'}).eq('id',id);
   if(error){toast('Error al validar cobro: '+error.message,'err');return;}
@@ -655,7 +760,7 @@ async function validarCobro(id){
 }
 
 async function rechazarCobro(id){
-  if(!confirm('¿Rechazar este cobro?'))return;
+  if(!await _confirmar('¿Rechazar este cobro?', {titulo:'Rechazar cobro', textoOk:'Rechazar'}))return;
   const cob=_cobros.find(x=>x.id===id);if(!cob)return;
   const imps=Array.isArray(cob.imputaciones)?cob.imputaciones:[];
   const remImpactados=imps.map(imp=>_remitos.find(r=>r.id===imp.remito_id)).filter(r=>r&&r.cobrado);
@@ -704,6 +809,16 @@ async function _proximoNumeroRendicion(){
 
 function _idsChk(sel){return [...document.querySelectorAll(sel+':checked')].map(c=>parseInt(c.dataset.cobid));}
 
+// Devuelve la hora (HH:MM) a partir del created_at del cobro, o '—' si no
+// hay dato. created_at es un timestamptz en UTC; toLocaleTimeString lo
+// convierte automáticamente a la zona local del dispositivo (Argentina).
+function _horaCobro(c){
+  if(!c || !c.created_at) return '—';
+  try {
+    return new Date(c.created_at).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+  } catch { return '—'; }
+}
+
 function renderRendicion(){
   renderListaHojasRuta();
   if(_rendHojaSel)renderGrillaRendicion();
@@ -712,6 +827,7 @@ function renderRendicion(){
 
 function renderListaHojasRuta(){
   const el=document.getElementById('rend-hr-lista');if(!el)return;
+  const wrap=document.getElementById('rend-grilla-wrap'); // referencia viva (aunque la saque el innerHTML)
   const q=(document.getElementById('rend-hr-q')?.value||'').toLowerCase();
   const num=(document.getElementById('rend-hr-num')?.value||'').trim();
   const desde=document.getElementById('rend-hr-desde')?.value||'';
@@ -727,40 +843,80 @@ function renderListaHojasRuta(){
   if(q)lista=lista.filter(g=>g.vendedor.toLowerCase().includes(q));
   if(desde)lista=lista.filter(g=>g.fecha>=desde);
   if(hasta)lista=lista.filter(g=>g.fecha<=hasta);
-  if(num)lista=lista.filter(g=>g.filas.some(f=>String(f.numero_rendicion||'').includes(num)));
-  if(!lista.length){el.innerHTML='<div class="empty">No hay hojas de ruta cargadas.</div>';return;}
-  el.innerHTML=lista.map(g=>{
-    const cerrada=g.filas.length>0&&g.filas.every(f=>f.cerrada);
-    const numRend=g.filas.find(f=>f.numero_rendicion)?.numero_rendicion;
-    const cerradoPor=g.filas.find(f=>f.cerrado_por)?.cerrado_por;
-    const fechaFmt=g.fecha.split('-').reverse().join('/');
-    const sel=_rendHojaSel&&_rendHojaSel.fecha===g.fecha&&_rendHojaSel.vendedor===g.vendedor;
-    const vendJsSafe=g.vendedor.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-    return `<div onclick="seleccionarHojaRendicion('${g.fecha}','${vendJsSafe}')"
+  // Match exacto: si buscás "11", trae la rendición 11 y no la 110, 115
+  // o 511 (que `includes` sí matchearía).
+  if(num)lista=lista.filter(g=>g.filas.some(f=>String(f.numero_rendicion||'')===String(num)));
+  if(!lista.length){
+    el.innerHTML='<div class="empty">No hay hojas de ruta cargadas.</div>';
+    if(wrap){ el.appendChild(wrap); wrap.style.display='none'; }
+    return;
+  }
+  el.innerHTML = lista.map(g => {
+    const cerrada = g.filas.length > 0 && g.filas.every(f => f.cerrada);
+    const numRend = g.filas.find(f => f.numero_rendicion)?.numero_rendicion;
+    const cerradoPor = g.filas.find(f => f.cerrado_por)?.cerrado_por;
+    const fechaFmt = g.fecha.split('-').reverse().join('/');
+    const sel = _rendHojaSel && _rendHojaSel.fecha === g.fecha && _rendHojaSel.vendedor === g.vendedor;
+    const vendJsSafe = g.vendedor.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    const rk = encodeURIComponent(g.fecha+'|'+g.vendedor);
+    const toggleIcon = sel ? '▲' : '▼';
+    return `<div onclick="toggleHojaRendicion('${g.fecha}','${vendJsSafe}')" data-rk="${rk}"
       style="cursor:pointer;padding:10px 14px;border-radius:8px;margin-bottom:6px;border:1.5px solid ${sel?'var(--P)':'var(--brd)'};background:${sel?'var(--PL)':'var(--bg)'};display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-      <div><b>${g.vendedor}</b> <span style="color:var(--txt2);font-size:12px">— ${fechaFmt} · ${g.filas.length} cliente${g.filas.length>1?'s':''}</span>
+      <div>
+        <b>${esc(g.vendedor)}</b>
+        <span style="color:var(--txt2);font-size:12px">— ${fechaFmt} · ${g.filas.length} cliente${g.filas.length>1?'s':''}</span>
         ${cerradoPor&&cerradoPor.toLowerCase()!==g.vendedor.toLowerCase()?`<span style="color:var(--txt2);font-size:11px"> · cerrada por ${cerradoPor}</span>`:''}
       </div>
       <div style="display:flex;gap:8px;align-items:center;font-size:11px">
+        <span style="font-size:12px;color:${sel?'var(--P)':'var(--txt2)'}">${toggleIcon}</span>
         ${numRend?`<span class="b bA">Rendición #${numRend}</span>`:''}
         <span class="b ${cerrada?'bP':'bW'}">${cerrada?'🔒 Cerrada':'🔓 Abierta'}</span>
       </div>
     </div>`;
   }).join('');
+
+  // Reinsertar la grilla debajo de la tarjeta seleccionada (o al final, oculta).
+  if(wrap){
+    if(_rendHojaSel){
+      const rk = encodeURIComponent(_rendHojaSel.fecha+'|'+_rendHojaSel.vendedor);
+      const tarjeta = el.querySelector(`[data-rk="${rk}"]`);
+      if(tarjeta){
+        tarjeta.insertAdjacentElement('afterend', wrap);
+        wrap.style.display='block';
+      } else {
+        el.appendChild(wrap);
+        wrap.style.display='none';
+      }
+    } else {
+      el.appendChild(wrap);
+      wrap.style.display='none';
+    }
+  }
 }
 
 function seleccionarHojaRendicion(fecha,vendedor){
   _rendHojaSel={fecha,vendedor};
-  renderListaHojasRuta();
-  const wrap=document.getElementById('rend-grilla-wrap');
-  if(wrap)wrap.style.display='block';
+  renderListaHojasRuta();  // ya se encarga de mover la grilla al lugar correcto
   renderGrillaRendicion();
 }
 
+// ─── TOGGLE HOJA DE RENDICIÓN (abrir/cerrar con el mismo click) ──────
+
+function toggleHojaRendicion(fecha, vendedor) {
+  // Si ya está seleccionada y es la misma → cerrar
+  if (_rendHojaSel && _rendHojaSel.fecha === fecha && _rendHojaSel.vendedor === vendedor) {
+    cerrarGrillaRendicion();
+    return;
+  }
+  
+  // Si no está seleccionada o es diferente → abrir
+  seleccionarHojaRendicion(fecha, vendedor);
+}
+
 function cerrarGrillaRendicion(){
-  _rendHojaSel=null;
-  const wrap=document.getElementById('rend-grilla-wrap');
-  if(wrap)wrap.style.display='none';
+  _rendHojaSel = null;
+  const wrap = document.getElementById('rend-grilla-wrap');
+  if (wrap) wrap.style.display = 'none';
   renderListaHojasRuta();
 }
 
@@ -787,8 +943,13 @@ function renderGrillaRendicion(){
     const importeCobrado=cobs.reduce((a,c)=>a+(c.importe||0),0);
     const formas=[...new Set(cobs.map(c=>c.forma).filter(Boolean))].join('+');
     const estado=cobPrincipal?(cobPrincipal.estado_rendicion||'pendiente'):null;
-    const numRend=cobPrincipal?.numero_rendicion||hr.numero_rendicion||null;
-    return {hr,cli,zona,importeRemito,cobs,cobPrincipal,importeCobrado,formas,estado,numRend};
+    const cgDelCobro = cobPrincipal?.carga_id ? _cargas.find(c=>c.id===cobPrincipal.carga_id) : null;
+    const numRend = cobPrincipal?.numero_rendicion 
+      || cgDelCobro?.numero_rendicion 
+      || hr.numero_rendicion 
+      || null;
+    const hora=_horaCobro(cobPrincipal);
+    return {hr,cli,zona,importeRemito,cobs,cobPrincipal,importeCobrado,formas,estado,numRend,hora};
   });
 
   // Filtros dinámicos de columna (zona/forma) según lo que hay en esta hoja
@@ -822,20 +983,51 @@ function renderGrillaRendicion(){
     const puedeAccion=esAdmin&&f.cobPrincipal&&f.estado==='pendiente';
     const acciones=puedeAccion?`<button class="btn sm" style="background:var(--G);color:#fff;font-size:10px" onclick="validarCobro(${f.cobPrincipal.id})">✅</button><button class="btn sm D" style="font-size:10px" onclick="rechazarCobro(${f.cobPrincipal.id})">❌</button>`:'';
     const chk=puedeAccion?`<input type="checkbox" class="rend-chk" data-cobid="${f.cobPrincipal.id}">`:'';
+    const tilde = f.cobs.length ? '<span style="color:var(--P);font-weight:700">✅ Sí</span>' : '<span style="color:var(--txt2)">—</span>';
+    // Saldo inicial y final: simula el efecto de este cobro sobre el saldo
+    // actual del cliente.
+    //   · Sin cobro o cobro rechazado → no cambia (ini = fin = saldo actual).
+    //   · Cobro ya validado (aplicado) → el saldo actual YA tiene el descuento,
+    //     así que el "inicial" se reconstruye sumándolo.
+    //   · Cobro pendiente → el "final" se proyecta restándolo.
+    const saldoActual = f.cli ? (f.cli.saldo || 0) : null;
+    let saldoIni, saldoFin;
+    if(saldoActual === null){
+      saldoIni = null; saldoFin = null;
+    } else if(!f.cobPrincipal || f.estado === 'rechazado'){
+      saldoIni = saldoActual; saldoFin = saldoActual;
+    } else if(f.estado === 'validado'){
+      saldoIni = saldoActual + f.importeCobrado;
+      saldoFin = saldoActual;
+    } else {
+      saldoIni = saldoActual;
+      saldoFin = saldoActual - f.importeCobrado;
+    }
+    const colorFin = saldoFin === null ? 'var(--txt2)' : (saldoFin > 0.01 ? 'var(--D)' : 'var(--P)');
     return `<tr>
       <td>${chk}</td>
-      <td style="font-weight:500">${nombre}</td>
-      <td>${f.zona?`<span class="b bA">${_zonas.find(z=>z.codigo===f.zona)?.descripcion||f.zona}</span>`:'—'}</td>
-      <td>${vendedor}</td>
-      <td style="text-align:right">${f.importeRemito?fmt(f.importeRemito):'—'}</td>
-      <td style="text-align:center">${f.cobs.length?'✅ Sí':'—'}</td>
-      <td style="text-align:right;${f.importeCobrado?'font-weight:700;color:var(--P)':''}">${f.importeCobrado?fmt(f.importeCobrado):'—'}</td>
-      <td style="font-size:11px;color:var(--txt2)">${f.formas||'—'}</td>
-      <td style="text-align:center">${f.numRend||'—'}</td>
-      <td>${badge}</td>
+      <td style="font-weight:500">${esc(nombre)}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;line-height:1.35;font-size:12px">
+        <div style="color:var(--txt2)">${saldoIni===null?'—':fmt(saldoIni)}</div>
+        <div style="font-weight:600;color:${colorFin}">→ ${saldoFin===null?'—':fmt(saldoFin)}</div>
+      </td>
+      <td style="text-align:center">${f.zona?`<span class="b bA">${esc(_zonas.find(z=>z.codigo===f.zona)?.descripcion||f.zona)}</span>`:'—'}</td>
+      <td style="text-align:right">
+        <div>${f.importeRemito?fmt(f.importeRemito):'—'}</div>
+        <div style="font-size:11px;margin-top:2px">${tilde}</div>
+      </td>
+      <td style="text-align:right;${f.importeCobrado?'font-weight:700;color:var(--P)':''}">
+        <div>${f.importeCobrado?fmt(f.importeCobrado):'—'}</div>
+        <div style="font-size:11px;color:var(--txt2);font-weight:400;margin-top:2px">${f.formas||'—'}</div>
+      </td>
+      <td style="text-align:center;font-variant-numeric:tabular-nums;color:var(--txt2)">${f.hora||'—'}</td>
+      <td style="text-align:center">
+        <div style="font-size:11px;color:var(--txt2)">${f.numRend?'#'+f.numRend:'—'}</div>
+        <div style="margin-top:2px">${badge}</div>
+      </td>
       <td style="white-space:nowrap">${acciones}</td>
     </tr>`;
-  }).join(''):'<tr><td colspan="11"><div class="empty">Sin resultados</div></td></tr>';
+  }).join(''):'<tr><td colspan="9"><div class="empty">Sin resultados</div></td></tr>';
 
   const totalClientes=filas.length;
   const cobrados=filas.filter(f=>f.cobs.length>0).length;
@@ -856,7 +1048,7 @@ function renderGrillaRendicion(){
     ${gastos.length?`
     <div class="card" style="margin-top:10px">
       <div style="font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;margin-bottom:8px">⛽ Gastos de reparto</div>
-      ${gastos.map(g=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;color:var(--txt2)"><span>${g.concepto}${g.proveedor?' · '+g.proveedor:''}</span><span>${fmt(g.importe)}</span></div>`).join('')}
+      ${gastos.map(g=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;color:var(--txt2)"><span>${esc(g.concepto)}${esc(g.proveedor?' · '+g.proveedor:'')}</span><span>${fmt(g.importe)}</span></div>`).join('')}
       <div style="display:flex;justify-content:space-between;border-top:1px solid var(--brd);margin-top:8px;padding-top:8px;font-size:13px;font-weight:700">
         <span>Total cobrado</span><span>${fmt(totalCobrado)}</span>
       </div>
@@ -898,7 +1090,7 @@ async function rendAsignarNumeroAuto(){
   if(!_rendHojaSel)return;
   const {fecha,vendedor}=_rendHojaSel;
   const num=await _proximoNumeroRendicion();
-  if(!confirm(`¿Asignar el número de rendición #${num} a esta hoja de ruta?`))return;
+  if(!await _confirmar(`¿Asignar el número de rendición #${num} a esta hoja de ruta?`, {titulo:'Asignar número', textoOk:'Asignar'}))return;
   const dq=sb.from('hoja_ruta').update({numero_rendicion:num}).eq('fecha',fecha).is('numero_rendicion',null);
   if(vendedor&&vendedor!=='—')dq.eq('vendedor',vendedor);
   await dq;
@@ -906,7 +1098,11 @@ async function rendAsignarNumeroAuto(){
   for(const cid of clienteIds){
     await sb.from('cobros').update({numero_rendicion:num}).eq('cliente_id',cid).eq('fecha',fecha).is('numero_rendicion',null);
   }
-  await Promise.all([cargarCobros(),cargarHojaRutaTodas()]);
+  // Mismo criterio que hrCerrarYGenerarRendicion: propagar también a cargas.
+  let cq = sb.from('cargas').update({numero_rendicion:num}).eq('fecha',fecha).is('numero_rendicion',null);
+  if(vendedor && vendedor !== '—') cq = cq.ilike('vendedor', vendedor);
+  await cq;
+  await Promise.all([cargarCobros(),cargarHojaRutaTodas(),cargarCargas()]);
   renderRendicion();
   toast(`✅ Número de rendición #${num} asignado`);
 }
@@ -915,7 +1111,7 @@ async function rendAsignarNumeroAutoSinHoja(){
   const ids=_idsChk('.rend-sh-chk');
   if(!ids.length){toast('Seleccioná al menos un cobro','err');return;}
   const num=await _proximoNumeroRendicion();
-  if(!confirm(`¿Asignar el número de rendición #${num} a ${ids.length} cobro(s)?`))return;
+  if(!await _confirmar(`¿Asignar el número de rendición #${num} a ${ids.length} cobro(s)?`, {titulo:'Asignar número', textoOk:'Asignar'}))return;
   for(const id of ids){await sb.from('cobros').update({numero_rendicion:num}).eq('id',id);}
   await cargarCobros();
   renderRendicion();
@@ -924,10 +1120,45 @@ async function rendAsignarNumeroAutoSinHoja(){
 
 function renderSinHojaRuta(){
   const el=document.getElementById('rend-sin-hoja');if(!el)return;
+  const countEl=document.getElementById('rend-sin-hoja-count');
   const mostrarTodos=document.getElementById('rend-mostrar-todos')?.checked;
+
+  // Filtros de la barra superior (mismos que usa renderListaHojasRuta)
+  const desde=document.getElementById('rend-hr-desde')?.value||'';
+  const hasta=document.getElementById('rend-hr-hasta')?.value||'';
+  const num=(document.getElementById('rend-hr-num')?.value||'').trim();
+
   const hojaKeys=new Set(_hojaRutaTodas.map(r=>String(r.cliente_id)+'|'+r.fecha));
   let cobrosSinHoja=_cobros.filter(c=>!hojaKeys.has(String(c.cliente_id)+'|'+c.fecha));
-  if(!mostrarTodos)cobrosSinHoja=cobrosSinHoja.filter(c=>(c.estado_rendicion||'pendiente')==='pendiente');
+
+  // Filtro de fechas (aplica siempre)
+  if(desde)cobrosSinHoja=cobrosSinHoja.filter(c=>(c.fecha||'')>=desde);
+  if(hasta)cobrosSinHoja=cobrosSinHoja.filter(c=>(c.fecha||'')<=hasta);
+
+  // Filtro por número de rendición: match EXACTO, se aplica siempre
+  // que haya algo en el input (independiente del checkbox de mostrar
+  // todos). Si no hay número, no se filtra por número.
+  if(num){
+    cobrosSinHoja=cobrosSinHoja.filter(c=>String(c.numero_rendicion||'')===String(num));
+  }
+
+  // Filtro por estado, según el checkbox "Mostrar todos":
+  //   · Mostrar todos MARCADO → se ven pendientes + aprobados + rechazados.
+  //   · Mostrar todos DESMARCADO → solo pendientes.
+  // En ambos casos, si NO hay número en el input, también se filtra a
+  // los que NO tienen número asignado (huérfanos reales). Si hay
+  // número, ese filtro extra no aplica porque ya se filtró por número.
+  if(!mostrarTodos){
+    cobrosSinHoja=cobrosSinHoja.filter(c=>(c.estado_rendicion||'pendiente')==='pendiente');
+  }
+  if(!num){
+    cobrosSinHoja=cobrosSinHoja.filter(c=>!c.numero_rendicion);
+  }
+
+  if(countEl){
+    if(cobrosSinHoja.length){ countEl.textContent=cobrosSinHoja.length; countEl.style.display=''; }
+    else { countEl.style.display='none'; }
+  }
   if(!cobrosSinHoja.length){el.innerHTML='<div class="empty">No hay cobros sin hoja de ruta.</div>';return;}
   const esAdmin=usuarioActual?.esAdmin||usuarioActual?.rol_original==='admin';
   const rows=cobrosSinHoja.map(c=>{
@@ -936,7 +1167,7 @@ function renderSinHojaRuta(){
     const puede=esAdmin&&est==='pendiente';
     const chk=puede?`<input type="checkbox" class="rend-sh-chk" data-cobid="${c.id}">`:'';
     const acciones=puede?`<button class="btn sm" style="background:var(--G);color:#fff;font-size:10px" onclick="validarCobro(${c.id})">✅</button><button class="btn sm D" style="font-size:10px" onclick="rechazarCobro(${c.id})">❌</button>`:'';
-    return `<tr><td>${chk}</td><td style="font-weight:500">${c.cliente||'?'}</td><td>${c.fecha}</td><td>${c.vendedor||'—'}</td><td style="text-align:right;font-weight:700;color:var(--P)">${fmt(c.importe)}</td><td style="font-size:11px;color:var(--txt2)">${c.forma||'—'}</td><td>${c.numero_rendicion||'—'}</td><td>${badge}</td><td style="white-space:nowrap">${acciones}</td></tr>`;
+    return `<tr><td>${chk}</td><td style="font-weight:500">${esc(c.cliente||'?')}</td><td>${c.fecha}</td><td>${esc(c.vendedor||'—')}</td><td style="text-align:right;font-weight:700;color:var(--P)">${fmt(c.importe)}</td><td style="font-size:11px;color:var(--txt2)">${c.forma||'—'}</td><td style="text-align:center;font-variant-numeric:tabular-nums;color:var(--txt2)">${_horaCobro(c)}</td><td>${c.numero_rendicion||'—'}</td><td>${badge}</td><td style="white-space:nowrap">${acciones}</td></tr>`;
   }).join('');
   el.innerHTML=`
     <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
@@ -947,9 +1178,18 @@ function renderSinHojaRuta(){
       <button class="btn sm A" onclick="rendGenerarHojaRutaFaltante()" title="Crea la hoja de ruta que falta para estos cobros (vinieron de una carga sin hoja armada a mano)">🔗 Generar hoja de ruta</button>
     </div>
     <div class="tbl-wrap"><table class="tbl" style="font-size:12px">
-      <thead><tr><th></th><th>Cliente</th><th>Fecha</th><th>Vendedor</th><th style="text-align:right">Importe</th><th>Forma</th><th>Nº Rend.</th><th>Estado</th><th></th></tr></thead>
+      <thead><tr><th></th><th>Cliente</th><th>Fecha</th><th>Vendedor</th><th style="text-align:right">Importe</th><th>Forma</th><th style="text-align:center">Hora</th><th>Nº Rend.</th><th>Estado</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>`;
+}
+
+function toggleSinHojaRuta(){
+  const body=document.getElementById('rend-sin-hoja');
+  const chev=document.getElementById('rend-sin-hoja-chevron');
+  if(!body)return;
+  const abrir = body.style.display === 'none';
+  body.style.display = abrir ? 'block' : 'none';
+  if(chev) chev.style.transform = abrir ? 'rotate(90deg)' : 'rotate(0deg)';
 }
 
 // Backfill: crea la hoja_ruta que falta para los cobros ya guardados que
@@ -959,7 +1199,7 @@ async function rendGenerarHojaRutaFaltante(){
   const hojaKeys=new Set(_hojaRutaTodas.map(r=>String(r.cliente_id)+'|'+r.fecha));
   const cobrosSinHoja=_cobros.filter(c=>!hojaKeys.has(String(c.cliente_id)+'|'+c.fecha));
   if(!cobrosSinHoja.length){toast('No hay cobros sin hoja de ruta.');return;}
-  if(!confirm(`¿Generar la hoja de ruta faltante para ${cobrosSinHoja.length} cobro(s)?`))return;
+  if(!await _confirmar(`¿Generar la hoja de ruta faltante para ${cobrosSinHoja.length} cobro(s)?`, {titulo:'Generar hoja de ruta', textoOk:'Generar'}))return;
   for(const c of cobrosSinHoja){
     await _asegurarHojaRutaParaCobro(c.cliente_id,c.fecha,c.vendedor||'');
   }
@@ -969,7 +1209,7 @@ async function rendGenerarHojaRutaFaltante(){
 }
 
 async function aprobarTodoRendicion(ids){
-  if(!confirm(`¿Aprobar ${ids.length} cobro(s)? Se descontará el saldo de los clientes y sus remitos.`))return;
+  if(!await _confirmar(`¿Aprobar ${ids.length} cobro(s)? Se descontará el saldo de los clientes y sus remitos.`,{titulo:'Aprobar todo', textoOk:'Aprobar'}))return;
   const esAdmin=usuarioActual?.esAdmin||usuarioActual?.rol_original==='admin';
   if(!esAdmin){toast('Solo el admin puede aprobar cobros','err');return;}
   let ok=0,err=0;
@@ -1007,7 +1247,7 @@ async function aprobarTodoRendicion(ids){
 }
 
 async function rechazarTodoRendicion(ids){
-  if(!confirm(`¿Rechazar ${ids.length} cobro(s)?`))return;
+  if(!await _confirmar(`¿Rechazar ${ids.length} cobro(s)?`,{titulo:'Rechazar todo', textoOk:'Rechazar'}))return;
   const esAdmin=usuarioActual?.esAdmin||usuarioActual?.rol_original==='admin';
   if(!esAdmin){toast('Solo el admin puede rechazar cobros','err');return;}
   let ok=0;
@@ -1065,7 +1305,7 @@ function imprimirRecibo(id){
   if((r.efectivo||0)>0)medios.push(['Efectivo',r.efectivo]);
   if((r.transferencia||0)>0)medios.push(['Transferencia',r.transferencia]);
   if((r.cheque_propio||0)>0)medios.push(['Cheque propio',r.cheque_propio]);
-  if((r.cheque_terceros||0)>0)medios.push([`Cheque de terceros${r.banco_cheque?' ('+r.banco_cheque+')':''}${r.nro_cheque?' Nro:'+r.nro_cheque:''}`,r.cheque_terceros]);
+  if((r.cheque_terceros||0)>0)medios.push([`Cheque de terceros${esc(r.banco_cheque?' ('+esc(r.banco_cheque)+')':'')}${r.nro_cheque?' Nro:'+r.nro_cheque:''}`,r.cheque_terceros]);
   const filasMedios=medios.map(([label,val])=>`
     <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #000;font-size:12px">
       <span>${label}</span><span>${fmt(val)}</span>
@@ -1088,7 +1328,7 @@ function imprimirRecibo(id){
   const validadoRec=(r.estado_rendicion||'pendiente')==='validado';
   const saldoRestante=cliRec?Math.round(((cliRec.saldo||0)-(validadoRec?0:r.importe))*100)/100:null;
 
-  const textoCompartir=`Recibo ${nro} — Distribuidora Lila\nCliente: ${r.cliente}\nFecha: ${r.fecha}\nImporte: ${fmt(r.importe)}${saldoRestante!=null?`\nSaldo restante: ${fmt(saldoRestante)}`:''}`;
+  const textoCompartir=`Recibo ${nro} — Distribuidora Lila\nCliente: ${esc(r.cliente)}\nFecha: ${r.fecha}\nImporte: ${fmt(r.importe)}${saldoRestante!=null?`\nSaldo restante: ${fmt(saldoRestante)}`:''}`;
 
   const w=window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html><head><title>Recibo ${nro}</title>
@@ -1112,9 +1352,9 @@ function imprimirRecibo(id){
   </div>
 
   <div style="font-size:15px;margin-bottom:14px">
-    <b>Cliente:</b> ${r.cliente}${r.cliente_id?' (Cód: '+r.cliente_id+')':''}<br>
-    ${r.vendedor?`<b>Vendedor:</b> ${r.vendedor}<br>`:''}
-    ${r.reparto?`<b>Reparto:</b> ${r.reparto}<br>`:''}
+    <b>Cliente:</b> ${esc(r.cliente)}${esc(r.cliente_id?' (Cód: '+esc(r.cliente_id)+')':'')}<br>
+    ${r.vendedor?`<b>Vendedor:</b> ${esc(r.vendedor)}<br>`:''}
+    ${r.reparto?`<b>Reparto:</b> ${esc(r.reparto)}<br>`:''}
   </div>
 
   <div class="fila-medios">
@@ -1134,7 +1374,7 @@ function imprimirRecibo(id){
     </div>
   </div>
 
-  ${r.observaciones?`<div style="font-size:14px;margin-top:10px">Obs: ${r.observaciones}</div>`:''}
+  ${r.observaciones?`<div style="font-size:14px;margin-top:10px">Obs: ${esc(r.observaciones)}</div>`:''}
 
   <div style="display:flex;justify-content:flex-end;margin-top:16px">
     <table style="font-size:15px;min-width:260px;width:auto">
@@ -1202,7 +1442,7 @@ function imprimirCuentaCorriente(){
     @page{size:A4 landscape;margin:10mm}
     @media print{button{display:none}}
   </style></head><body>
-  <div style="font-size:16px;font-weight:700;color:#1a7a52;border-bottom:2px solid #1a7a52;padding-bottom:8px;margin-bottom:14px">🌸 Distribuidora Lila — ${titulo}</div>
+  <div style="font-size:16px;font-weight:700;color:#1a7a52;border-bottom:2px solid #1a7a52;padding-bottom:8px;margin-bottom:14px">Distribuidora Lila — ${titulo}</div>
   ${body}
   <div style="text-align:center;margin-top:16px"><button onclick="window.print()" style="padding:8px 20px;background:#1a7a52;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px">🖨️ Imprimir</button></div>
   </body></html>`);
@@ -1229,7 +1469,17 @@ function renderCC(){
   const fSaldo=document.getElementById('cc-f-saldo')?.value||'';
   const fTotal=document.getElementById('cc-f-total')?.value||'';
   let data=_clientes.filter(c=>{
-    const okQ=!q||(c.nombre||'').toLowerCase().includes(q)||(c.localidad||'').toLowerCase().includes(q)||String(c.codigo||'').includes(q)||String(c.id||'').includes(q);
+  // Búsqueda en dos modos bien distintos:
+  //   · Si es un número puro (10, 102, 5000) → busca SOLO por código/id
+  //     exactos. No matchea nombre ni localidad (antes "2" traía todos los
+  //     clientes con un "2" en el nombre, en el teléfono, o en la dirección).
+  //   · Si tiene letras (GUTI, CASILDA) → busca por nombre y localidad.
+  const esNumeroPuro = /^\d+$/.test(q);
+  let okQ;
+  if(!q) okQ = true;
+  else if(esNumeroPuro) okQ = (String(c.codigo||'').trim()===q || String(c.id||'')===q);
+  else okQ = (c.nombre||'').toLowerCase().includes(q)
+          || (c.localidad||'').toLowerCase().includes(q);
     const dias=diasDesde(c.ultimo_remito);
     const venc=c.saldo>0&&dias!==null&&dias>(c.condicion_pago||0)+5;
     const okF=f===''||(f==='deuda'&&c.saldo>0)||(f==='ok'&&c.saldo<=0)||(f==='vencido'&&venc);
@@ -1249,10 +1499,14 @@ function renderCC(){
     const venc=c.saldo>0&&dias!==null&&dias>(c.condicion_pago||0)+5;
     const dColor=dias===null?'':venc?'color:var(--D);font-weight:600':dias<=(c.condicion_pago||0)?'color:var(--P)':'color:var(--W)';
     return `<tr style="${venc?'background:var(--DL)':''};cursor:pointer" onclick="histCliente(${c.id})">
-      <td style="font-weight:600">${c.nombre}<div style="font-size:10px;color:var(--txt2)">${c.telefono||''}</div></td>
-      <td>${c.localidad||''}</td>
+      <td style="color:var(--txt2);font-size:12px;text-align:center;font-variant-numeric:tabular-nums">${esc(c.codigo||c.id)}</td>
+      <td style="font-weight:600">
+        ${esc(c.nombre)}
+        <div style="font-size:10px;color:var(--txt2)">${esc(c.telefono||'')}</div>
+      </td>
+      <td>${esc(c.localidad||'')}</td>
       <td><span class="b bA">${(_zonas.find(z=>z.codigo===c.zona)?.descripcion||c.zona)||'-'}</span></td>
-      <td>${c.vendedor||'—'}</td>
+      <td>${esc(c.vendedor||'—')}</td>
       <td style="color:var(--txt2);font-size:12px">${c.ultimo_remito||'—'}</td>
       <td style="${dColor}">${dias!==null?dias+'d':'—'}</td>
       <td style="${(c.saldo||0)>0?'color:var(--D);font-weight:600':'color:var(--P)'}">${fmt(c.saldo)}</td>
@@ -1262,14 +1516,17 @@ function renderCC(){
         <button class="btn P sm" onclick="cobroRapido(${c.id})">💰</button>
       </td>
     </tr>`;
-  }).join(''):'<tr><td colspan="9"><div class="empty">Sin resultados</div></td></tr>';
+  }).join(''):'<tr><td colspan="10"><div class="empty">Sin resultados</div></td></tr>';
   pag('cc-pg',tot,_ccPg,p=>{_ccPg=p;renderCC();});
 }
 
 function cobroRapido(id){
-  abrirCobro();
-  setTimeout(()=>selCliCob(id),50);
+  // Antes llamaba a abrirCobro() (que ya hacía go('cobranza')) Y TAMBIÉN
+  // llamaba a go('cobranza') de nuevo → dos pushState iguales, por eso el
+  // botón atrás necesitaba 2 toques.
+  limpiarModalCobro();
   go('cobranza');
+  setTimeout(()=>selCliCob(id),50);
 }
 
 function colorDias(dias,condPago){
@@ -1316,7 +1573,7 @@ function _ccTarjetasHTML(movs,c){
   const filas=movs.map(m=>{
     const esHaber=m.haber>0;
     const monto=esHaber?'−'+fmt(m.haber):'+'+fmt(m.debe);
-    const sub=[m.fecha,m.forma||'',m.reparto?'Rep: '+m.reparto:''].filter(Boolean).join(' · ');
+    const sub=esc([m.fecha,m.forma||'',m.reparto?'Rep: '+m.reparto:''].filter(Boolean).join(' · '));
     return `<div tabindex="0" onclick="histAbrirDetalle('${m.tipo}',${m.id})"
       onkeydown="histNavFila(event,this,'${m.tipo}',${m.id})"
       onfocus="this.style.outline='2px solid var(--P)'" onblur="this.style.outline=''"
@@ -1332,7 +1589,7 @@ function _ccTarjetasHTML(movs,c){
           <div style="font-size:11px;color:var(--txt2);margin-top:2px">Saldo: <b style="color:${m.saldo>0?'var(--D)':'var(--P)'}">${fmt(m.saldo)}</b></div>
         </div>
       </div>
-      ${m.obs?`<div style="font-size:11px;color:var(--txt2);margin-top:5px;word-break:break-word">${m.obs}</div>`:''}
+      ${m.obs?`<div style="font-size:11px;color:var(--txt2);margin-top:5px;word-break:break-word">${esc(m.obs)}</div>`:''}
     </div>`;
   }).join('');
   return `
@@ -1393,14 +1650,21 @@ function histCliente(id){
 
   document.getElementById('m-ver-title').textContent='Cuenta corriente — '+c.nombre;
   const _mvpCC=document.getElementById('m-ver-print');
-  if(_mvpCC){_mvpCC.textContent='🖨 Imprimir';_mvpCC.onclick=imprimirCuentaCorriente;_mvpCC.style.display='inline-flex';}
+  if(_mvpCC){
+    _mvpCC.textContent='🖨 Imprimir';
+    _mvpCC.onclick=imprimirCuentaCorriente;
+    // En vista móvil no mostramos el botón de imprimir: no tiene sentido
+    // desde el celu, y menos dentro del flujo de cobranza. En escritorio sigue
+    // funcionando igual que siempre.
+    _mvpCC.style.display=(usuarioActual?.vista==='movil')?'none':'inline-flex';
+  }
   const _mvp2CC=document.getElementById('m-ver-print2');if(_mvp2CC)_mvp2CC.style.display='none';
   const _anuCC=document.getElementById('m-ver-anular');if(_anuCC)_anuCC.style.display='none';
   document.getElementById('m-ver-body').innerHTML=`
     <div style="background:var(--bg2);border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--txt2)">
-      <span>📍 ${c.direccion||'—'}, ${c.localidad||''}</span>
-      <span>📞 ${c.telefono||'—'}</span>
-      <span>Vendedor: <b>${c.vendedor||'—'}</b></span>
+      <span>📍 ${esc(c.direccion||'—')}, ${esc(c.localidad||'')}</span>
+      <span>📞 ${esc(c.telefono||'—')}</span>
+      <span>Vendedor: <b>${esc(c.vendedor||'—')}</b></span>
       <span>Zona: <b>${_zonas.find(z=>z.codigo===c.zona)?.descripcion||c.zona||'—'}</b></span>
       <span>Cond. pago: <b>${c.condicion_pago?c.condicion_pago+' días':'Contado'}</b></span>
       <span>Dto: <b>${c.descuento||0}%</b></span>
@@ -1435,8 +1699,8 @@ function histCliente(id){
           <td style="padding:8px 10px;border-bottom:0.5px solid var(--brd);text-align:right;color:var(--D)">${m.debe>0?fmt(m.debe):''}</td>
           <td style="padding:8px 10px;border-bottom:0.5px solid var(--brd);text-align:right;color:var(--P)">${m.haber>0?fmt(m.haber):''}</td>
           <td style="padding:8px 10px;border-bottom:0.5px solid var(--brd);text-align:right;font-weight:700;color:${m.saldo>0?'var(--D)':'var(--P)'}">${fmt(m.saldo)}${m.pendienteAprobar?'<span style="font-size:10px;font-weight:400;color:var(--txt2)"> (proy.)</span>':''}</td>
-          <td style="padding:8px 10px;border-bottom:0.5px solid var(--brd);text-align:center;color:var(--txt2)">${m.reparto||'—'}</td>
-          <td style="padding:8px 10px;border-bottom:0.5px solid var(--brd);color:var(--txt2);font-size:12px">${m.obs||''}</td>
+          <td style="padding:8px 10px;border-bottom:0.5px solid var(--brd);text-align:center;color:var(--txt2)">${esc(m.reparto||'—')}</td>
+          <td style="padding:8px 10px;border-bottom:0.5px solid var(--brd);color:var(--txt2);font-size:12px">${esc(m.obs||'')}</td>
         </tr>`).join(''):`<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--txt2)">Sin movimientos registrados en el sistema nuevo.<br><small>El saldo inicial refleja la historia anterior.</small></td></tr>`}
       </tbody>
       ${movs.length?`<tfoot>
@@ -1463,13 +1727,24 @@ function histCliente(id){
 }
 
 async function initRendicion(){
-  // Por defecto, últimos 7 días — si no, se acumula todo el historial de
-  // hojas de ruta (muchas de una sola parada, abiertas y ya sin uso).
+  // Por defecto, solo las rendiciones de HOY. Si el usuario tenía un rango
+  // de fechas puesto, se respeta (por si viene de estar mirando otro día).
   const desdeEl=document.getElementById('rend-hr-desde');
-  if(desdeEl&&!desdeEl.value)desdeEl.value=hoyLocalOffset(-7);
+  const hastaEl=document.getElementById('rend-hr-hasta');
+  if(desdeEl&&hastaEl&&!desdeEl.value&&!hastaEl.value){
+    desdeEl.value=hoyLocal();
+    hastaEl.value=hoyLocal();
+  }
   await Promise.all([cargarHojaRutaTodas(),cargarGastosReparto()]);
   renderRendicion();
 }
+
+// Actualización en vivo: vuelve a pedir cobros + hojas de ruta + gastos y
+// repinta la grilla que esté abierta, sin recargar la página ni re-loguear.
+registrarRefresco('rendicion', async()=>{
+  await Promise.all([cargarCobros(),cargarHojaRutaTodas(),cargarGastosReparto()]);
+  renderRendicion();
+});
 
 function calcEfectivo(){
   const billetes=[20000,10000,2000,1000,500,200,100,50,20,10];
@@ -1567,10 +1842,10 @@ async function generarRendicion(){
               const cli=_clientes.find(x=>x.id===c.cliente_id);
               return `<tr>
                 <td style="padding:5px 8px;border-bottom:0.5px solid var(--brd);color:var(--txt2)">${c.fecha}</td>
-                <td style="padding:5px 8px;border-bottom:0.5px solid var(--brd);font-weight:500">${c.cliente}${cli?.codigo?' <span style="color:var(--txt2);font-size:10px">#'+cli.codigo+'</span>':''}</td>
+                <td style="padding:5px 8px;border-bottom:0.5px solid var(--brd);font-weight:500">${esc(c.cliente)}${cli?.codigo?' <span style="color:var(--txt2);font-size:10px">#'+cli.codigo+'</span>':''}</td>
                 <td style="padding:5px 8px;border-bottom:0.5px solid var(--brd);text-align:right;font-weight:600;color:var(--P)">${fmt(c.importe)}</td>
                 <td style="padding:5px 8px;border-bottom:0.5px solid var(--brd);font-size:11px;color:var(--txt2)">${c.forma||'—'}</td>
-                <td style="padding:5px 8px;border-bottom:0.5px solid var(--brd);text-align:center;color:var(--txt2)">${c.reparto||'—'}</td>
+                <td style="padding:5px 8px;border-bottom:0.5px solid var(--brd);text-align:center;color:var(--txt2)">${esc(c.reparto||'—')}</td>
                 <td style="padding:5px 8px;border-bottom:0.5px solid var(--brd);text-align:center">${estBadge}</td>
                 <td style="padding:5px 8px;border-bottom:0.5px solid var(--brd);text-align:center;color:var(--txt2)">___________</td>
               </tr>`;
@@ -1672,143 +1947,387 @@ function imprimirRendicion(){
 }
 
 // ─── SALDOS POR ZONA ───
-function initSaldosZona(){
-  if(!_clientes.length)cargarClientes().then(renderSaldosZona);
-  else renderSaldosZona();
-  // Poblar select de zonas
-  const sel=document.getElementById('sz-zona');
-  if(sel&&sel.options.length<=1){
-    const zonas=[...new Set(_clientes.map(c=>c.zona||'Sin zona').filter(Boolean))].sort();
-    zonas.forEach(z=>{const o=document.createElement('option');o.value=z;o.textContent=z==='Sin zona'?z:nombreZona(z);sel.appendChild(o);});
+
+function initSaldosZona() {
+  // Cargar clientes si no están cargados
+  if (!_clientes.length) {
+    cargarClientes().then(() => {
+      poblarSelectorZonas();
+      renderSaldosZona();
+    });
+  } else {
+    poblarSelectorZonas();
+    renderSaldosZona();
   }
 }
 
-function renderSaldosZona(){
-  const zonaFil=document.getElementById('sz-zona')?.value||'';
-  const filtro=document.getElementById('sz-filtro')?.value||'deudores';
-  const orden=document.getElementById('sz-orden')?.value||'saldo';
-  const hoy=hoyLocal();
+function poblarSelectorZonas() {
+  const sel = document.getElementById('sz-zona');
+  if (!sel) return;
 
-  let lista=_clientes.filter(c=>c.activo!==false);
-  if(zonaFil)lista=lista.filter(c=>(c.zona||'Sin zona')===zonaFil);
-  if(filtro==='deudores')lista=lista.filter(c=>(c.saldo||0)>0);
+  // Guardar valor seleccionado actual
+  const valorActual = sel.value;
 
-  if(orden==='saldo')lista.sort((a,b)=>(b.saldo||0)-(a.saldo||0));
-  else if(orden==='nombre')lista.sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||''));
-  else if(orden==='dias')lista.sort((a,b)=>{
-    const dA=a.ultimo_remito?Math.floor((new Date(hoy)-new Date(a.ultimo_remito))/864e5):9999;
-    const dB=b.ultimo_remito?Math.floor((new Date(hoy)-new Date(b.ultimo_remito))/864e5):9999;
-    return dB-dA;
+  // Limpiar y agregar opción por defecto
+  sel.innerHTML = '<option value="">— Seleccioná una zona —</option>';
+
+  // Zona ya es igual a localidad (decisión de negocio). Poblamos desde
+  // localidad para no depender de que el cliente tenga zona migrada, y
+  // filtramos valores que no son localidades reales:
+  //   · vacíos
+  //   · 'SIN LOCALIDAD' (marcador de carga pendiente)
+  //   · puramente numéricos (restos de códigos viejos del FoxPro)
+  //   · que empiezan con 'TEST' (productos/zonas de prueba)
+  // Normalizamos a MAYÚSCULAS y ordenamos alfabéticamente.
+  const zonasSet = new Set();
+  (_clientes || []).filter(c => c.activo !== false).forEach(c => {
+    const loc = String(c.localidad || '').trim().toUpperCase();
+    if (!loc) return;
+    if (loc === 'SIN LOCALIDAD') return;
+    if (/^\d+$/.test(loc)) return;
+    if (loc.startsWith('TEST')) return;
+    zonasSet.add(loc);
   });
 
-  const totalSaldo=lista.reduce((s,c)=>s+(c.saldo||0),0);
-  const totalClientes=lista.length;
-
-  // Resumen por zona
-  const porZona={};
-  lista.forEach(c=>{
-    const z=c.zona||'Sin zona';
-    if(!porZona[z]){porZona[z]={total:0,cant:0};}
-    porZona[z].total+=c.saldo||0;
-    porZona[z].cant++;
+  [...zonasSet].sort((a, b) => a.localeCompare(b, 'es')).forEach(z => {
+    const opt = document.createElement('option');
+    opt.value = z;
+    opt.textContent = z;
+    if (z === valorActual) opt.selected = true;
+    sel.appendChild(opt);
   });
+}
 
-  document.getElementById('sz-resumen').innerHTML=`
-    <div class="stat" style="flex:0 0 auto"><div class="n" style="color:var(--D)">${fmt(totalSaldo)}</div><div class="l">Deuda total</div></div>
-    <div class="stat" style="flex:0 0 auto"><div class="n">${totalClientes}</div><div class="l">Clientes con deuda</div></div>
-    ${Object.entries(porZona).sort((a,b)=>b[1].total-a[1].total).map(([z,v])=>
-      `<div class="stat" style="flex:0 0 auto"><div class="n" style="color:var(--D);font-size:15px">${fmt(v.total)}</div><div class="l">${z==='Sin zona'?z:nombreZona(z)} (${v.cant})</div></div>`
-    ).join('')}
-  `;
+function renderSaldosZona() {
+  const zonaSeleccionada = document.getElementById('sz-zona')?.value || '';
+  const filtro = document.getElementById('sz-filtro')?.value || 'deudores';
+  const orden = document.getElementById('sz-orden')?.value || 'saldo';
+  const hoy = hoyLocal();
 
-  if(!lista.length){
-    document.getElementById('sz-tabla').innerHTML='<div class="empty">Sin clientes con deuda en esa zona</div>';
+  const contenedor = document.getElementById('sz-tabla');
+  const resumenContainer = document.getElementById('sz-resumen');
+
+  // Si no hay zona seleccionada, mostrar mensaje
+  if (!zonaSeleccionada) {
+    resumenContainer.innerHTML = '';
+    contenedor.innerHTML = `
+      <div style="text-align:center; padding:60px 20px; color:var(--txt2); font-size:15px;">
+        <div style="font-size:40px; margin-bottom:12px;">🗺️</div>
+        <div style="font-weight:600;">Seleccioná una zona para ver los saldos</div>
+        <div style="font-size:13px; margin-top:6px;">Elegí una zona en el selector de arriba</div>
+      </div>
+    `;
     return;
   }
 
-  // Agrupar por zona para la tabla
-  let html='';
-  const grupos=zonaFil?{[zonaFil]:lista}:lista.reduce((acc,c)=>{
-    const z=c.zona||'Sin zona';
-    if(!acc[z])acc[z]=[];
-    acc[z].push(c);
-    return acc;
-  },{});
+  // Filtrar clientes por localidad (que es lo mismo que zona).
+  // Se normaliza a MAYÚSCULAS para tolerar diferencias entre el valor
+  // guardado en el cliente y el que devuelve el selector.
+  const zonaNorm = String(zonaSeleccionada || '').trim().toUpperCase();
+  let lista = _clientes.filter(c => 
+    c.activo !== false && 
+    String(c.localidad || '').trim().toUpperCase() === zonaNorm
+  );
+  
+  if (filtro === 'deudores') {
+    lista = lista.filter(c => (c.saldo || 0) > 0);
+  }
 
-  Object.entries(grupos).sort((a,b)=>{
-    const tA=a[1].reduce((s,c)=>s+(c.saldo||0),0);
-    const tB=b[1].reduce((s,c)=>s+(c.saldo||0),0);
-    return tB-tA;
-  }).forEach(([zona,clientes])=>{
-    const totalZ=clientes.reduce((s,c)=>s+(c.saldo||0),0);
-    html+=`<div style="margin-bottom:16px">
-      <div style="display:flex;justify-content:space-between;align-items:center;background:var(--PD);color:#fff;padding:8px 14px;border-radius:8px 8px 0 0">
-        <span style="font-weight:700">🗺️ ${zona==='Sin zona'?zona:nombreZona(zona)}</span>
-        <span style="font-weight:700">${fmt(totalZ)} · ${clientes.length} cliente${clientes.length!==1?'s':''}</span>
+  // Ordenar
+  if (orden === 'saldo') {
+    lista.sort((a, b) => (b.saldo || 0) - (a.saldo || 0));
+  } else if (orden === 'nombre') {
+    lista.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+  } else if (orden === 'dias') {
+    lista.sort((a, b) => {
+      const dA = a.ultimo_remito ? Math.floor((new Date(hoy) - new Date(a.ultimo_remito)) / 864e5) : 9999;
+      const dB = b.ultimo_remito ? Math.floor((new Date(hoy) - new Date(b.ultimo_remito)) / 864e5) : 9999;
+      return dB - dA;
+    });
+  }
+
+  // Calcular totales
+  const totalDeuda = lista.reduce((s, c) => s + (c.saldo || 0), 0);
+  const totalClientes = lista.length;
+  const clientesConDeuda = lista.filter(c => (c.saldo || 0) > 0.01).length;
+  const promedio = totalClientes > 0 ? totalDeuda / totalClientes : 0;
+
+  // --- RESÚMEN ---
+  resumenContainer.innerHTML = `
+    <div style="background:var(--bg); border:1px solid var(--brd); border-radius:8px; padding:10px 14px; display:flex; gap:20px; flex-wrap:wrap; align-items:center;">
+      <div>
+        <div style="font-size:11px; color:var(--txt2); font-weight:600; text-transform:uppercase;">Total Deuda</div>
+        <div style="font-size:20px; font-weight:700; color:var(--D);">${fmt(totalDeuda)}</div>
       </div>
-      <div class="tbl-wrap"><table class="tbl" style="border-radius:0 0 8px 8px">
-        <thead><tr><th>Cód.</th><th>Cliente</th><th>Localidad</th><th>Vendedor</th><th>Último remito</th><th>Días</th><th>Último cobro</th><th style="text-align:right">Saldo vencido</th><th style="text-align:right">Saldo</th></tr></thead>
-        <tbody>
-          ${clientes.map(c=>{
-            const dias=c.ultimo_remito?Math.floor((new Date(hoy)-new Date(c.ultimo_remito))/864e5):null;
-            const condPago=c.condicion_pago||0;
-            const diasColor=dias===null?'color:var(--txt2)':dias>(condPago+5)?'color:var(--D);font-weight:700':dias>condPago?'color:var(--W)':'color:var(--P)';
-            // Vencido = remitos sin cobrar cuya antigüedad supera los días de
-            // condición de pago del cliente (lo que estipule cada vendedor).
-            const remsCli=_remitos.filter(r=>String(r.cliente_id)===String(c.id)&&!r.anulado&&!r.cobrado);
-            const vencido=remsCli.filter(r=>{
-              const dRem=Math.floor((new Date(hoy)-new Date(r.fecha))/864e5);
-              return dRem>condPago;
-            }).reduce((s,r)=>s+(r.saldo_pendiente??r.total??0),0);
-            const ultimoCobro=_cobros.filter(co=>String(co.cliente_id)===String(c.id)).sort((a,b)=>a.fecha.localeCompare(b.fecha)).slice(-1)[0]?.fecha||'—';
-            return `<tr onclick="histCliente(${c.id})" style="cursor:pointer" title="Ver cuenta corriente">
-              <td style="color:var(--txt2)">${c.codigo||'—'}</td>
-              <td style="font-weight:600">${c.nombre}</td>
-              <td style="font-size:12px;color:var(--txt2)">${c.localidad||'—'}</td>
-              <td style="font-size:12px;color:var(--txt2)">${c.vendedor||'—'}</td>
-              <td style="font-size:12px;color:var(--txt2)">${c.ultimo_remito||'—'}</td>
-              <td style="${diasColor}">${dias!==null?dias+' d':'—'}</td>
-              <td style="font-size:12px;color:var(--txt2)">${ultimoCobro}</td>
-              <td style="text-align:right;font-weight:700;color:${vencido>0?'var(--D)':'var(--txt2)'}">${vencido>0?fmt(vencido):'—'}</td>
-              <td style="text-align:right;font-weight:700;color:var(--D)">${fmt(c.saldo||0)}</td>
-            </tr>`;
-          }).join('')}
-          <tr style="background:var(--PL);font-weight:700">
-            <td colspan="8" style="padding:7px 8px;border-top:2px solid var(--brd)">Total zona ${zona}</td>
-            <td style="text-align:right;color:var(--D);padding:7px 8px;border-top:2px solid var(--brd)">${fmt(totalZ)}</td>
-          </tr>
-        </tbody>
-      </table></div>
-    </div>`;
+      <div>
+        <div style="font-size:11px; color:var(--txt2); font-weight:600; text-transform:uppercase;">Clientes</div>
+        <div style="font-size:20px; font-weight:700; color:var(--txt);">${totalClientes}</div>
+        <div style="font-size:11px; color:var(--txt2);">${clientesConDeuda} con deuda</div>
+      </div>
+      <div>
+        <div style="font-size:11px; color:var(--txt2); font-weight:600; text-transform:uppercase;">Promedio</div>
+        <div style="font-size:20px; font-weight:700; color:var(--P);">${fmt(promedio)}</div>
+      </div>
+      <div style="flex:1; text-align:right; font-size:12px; color:var(--txt2);">
+        Zona: <strong style="color:var(--txt);">${zonaSeleccionada}</strong>
+        ${filtro === 'deudores' ? ' · Solo deudores' : ' · Todos los clientes'}
+      </div>
+    </div>
+  `;
+
+  // --- TABLA ---
+  if (!lista.length) {
+    contenedor.innerHTML = `
+      <div style="text-align:center; padding:40px 20px; color:var(--txt2);">
+        <div style="font-size:30px; margin-bottom:8px;">✅</div>
+        <div>No hay clientes ${filtro === 'deudores' ? 'con deuda' : ''} en la zona <strong>${zonaSeleccionada}</strong></div>
+      </div>
+    `;
+    return;
+  }
+
+  // Construir tabla
+  let html = `
+    <table class="tbl" style="width:100%; border-collapse:collapse; font-size:13px;">
+      <thead>
+        <tr>
+          <th style="border:1px solid var(--brd); padding:8px 10px; text-align:left; background:var(--bg2);">Cód.</th>
+          <th style="border:1px solid var(--brd); padding:8px 10px; text-align:left; background:var(--bg2);">Cliente</th>
+          <th style="border:1px solid var(--brd); padding:8px 10px; text-align:left; background:var(--bg2);">Localidad</th>
+          <th style="border:1px solid var(--brd); padding:8px 10px; text-align:left; background:var(--bg2);">Vendedor</th>
+          <th style="border:1px solid var(--brd); padding:8px 10px; text-align:center; background:var(--bg2);">Último remito</th>
+          <th style="border:1px solid var(--brd); padding:8px 10px; text-align:center; background:var(--bg2);">Días</th>
+          <th style="border:1px solid var(--brd); padding:8px 10px; text-align:right; background:var(--bg2);">Vencido</th>
+          <th style="border:1px solid var(--brd); padding:8px 10px; text-align:right; background:var(--bg2);">Saldo</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  lista.forEach(c => {
+    const dias = c.ultimo_remito ? Math.floor((new Date(hoy) - new Date(c.ultimo_remito)) / 864e5) : null;
+    const condPago = c.condicion_pago || 0;
+    
+    // Color de días
+    let diasColor = 'var(--txt2)';
+    if (dias !== null) {
+      if (dias > (condPago + 5)) diasColor = 'var(--D)';
+      else if (dias > condPago) diasColor = 'var(--W)';
+      else diasColor = 'var(--P)';
+    }
+    
+    // Calcular vencido (remitos sin cobrar que superan la condición de pago)
+    const remsCli = _remitos.filter(r => String(r.cliente_id) === String(c.id) && !r.anulado && !r.cobrado);
+    const vencido = remsCli.filter(r => {
+      const dRem = Math.floor((new Date(hoy) - new Date(r.fecha)) / 864e5);
+      return dRem > condPago;
+    }).reduce((s, r) => s + (r.saldo_pendiente ?? r.total ?? 0), 0);
+
+    // Badge de estado
+    const saldo = c.saldo || 0;
+    let estadoClass = 'bP';
+    let estadoText = '✅ Al día';
+    if (saldo > 0.01) {
+      if (dias !== null && dias > (condPago + 5)) {
+        estadoClass = 'bD';
+        estadoText = '⚠️ Vencido';
+      } else {
+        estadoClass = 'bW';
+        estadoText = '⏳ Pendiente';
+      }
+    }
+
+    html += `
+      <tr onclick="histCliente(${c.id})" style="cursor:pointer;" title="Ver cuenta corriente">
+        <td style="border:1px solid var(--brd); padding:6px 10px; color:var(--txt2);">${c.codigo || '—'}</td>
+        <td style="border:1px solid var(--brd); padding:6px 10px; font-weight:600;">${esc(c.nombre)}</td>
+        <td style="border:1px solid var(--brd); padding:6px 10px; color:var(--txt2);">${esc(c.localidad || '—')}</td>
+        <td style="border:1px solid var(--brd); padding:6px 10px; color:var(--txt2);">${esc(c.vendedor || '—')}</td>
+        <td style="border:1px solid var(--brd); padding:6px 10px; text-align:center; font-size:12px; color:var(--txt2);">${c.ultimo_remito || '—'}</td>
+        <td style="border:1px solid var(--brd); padding:6px 10px; text-align:center; font-weight:600; color:${diasColor};">${dias !== null ? dias + ' d' : '—'}</td>
+        <td style="border:1px solid var(--brd); padding:6px 10px; text-align:right; font-weight:700; color:${vencido > 0 ? 'var(--D)' : 'var(--txt2)'};">${vencido > 0 ? fmt(vencido) : '—'}</td>
+        <td style="border:1px solid var(--brd); padding:6px 10px; text-align:right; font-weight:700; color:${saldo > 0.01 ? 'var(--D)' : 'var(--P)'};">${fmt(saldo)}</td>
+      </tr>
+    `;
   });
 
-  document.getElementById('sz-tabla').innerHTML=html;
+  // Total general
+  html += `
+        <tr style="background:var(--PL); font-weight:700; border-top:2px solid var(--brd);">
+          <td colspan="7" style="padding:8px 10px; text-align:right;">TOTAL ZONA</td>
+          <td style="padding:8px 10px; text-align:right; color:var(--D);">${fmt(totalDeuda)}</td>
+        </tr>
+      </tbody>
+    </table>
+  `;
+
+  contenedor.innerHTML = html;
+
+  const wrap = document.getElementById('sz-tabla-wrap');
+  if (wrap) {
+    wrap.style.overflowY = 'auto';
+    wrap.style.flex = '1 1 auto';
+  }
 }
 
-function imprimirSaldosZona(){
-  const szVal=document.getElementById('sz-zona')?.value;
-  const titulo=szVal?(szVal==='Sin zona'?szVal:nombreZona(szVal)):'Todas las zonas';
-  const body=document.getElementById('sz-tabla').innerHTML;
-  const resumen=document.getElementById('sz-resumen').innerHTML;
-  const w=window.open('','_blank');
-  w.document.write(`<html><head><title>Saldos por Zona</title>
-  <style>body{font-family:Arial;padding:20px;font-size:12px;color:#000}table{width:100%;border-collapse:collapse;margin-bottom:12px}th,td{padding:5px 8px;border:1px solid #ddd;text-align:left}th{background:#f5f5f5;font-weight:600}h3{margin:14px 0 4px;color:#444}.stat{display:inline-block;margin:4px 8px 4px 0;font-size:12px}@media print{button{display:none}}</style>
-  </head><body>
-  <h2>Saldos por Zona — Distribuidora Lila</h2>
-  <h3>${titulo} · ${new Date().toLocaleDateString('es-AR')}</h3>
-  ${body}
-  <script>window.print();<\/script>
-  </body></html>`);
+function imprimirSaldosZona() {
+  const zonaVal = document.getElementById('sz-zona')?.value || '';
+  const titulo = zonaVal ? (zonaVal === 'Sin zona' ? zonaVal : (nombreZona(zonaVal) || zonaVal)) : 'Todas las zonas';
+  
+  // Obtener el contenido de la tabla (sin el mensaje de "seleccioná una zona")
+  const tablaContent = document.getElementById('sz-tabla').innerHTML;
+  const resumenContent = document.getElementById('sz-resumen').innerHTML;
+  
+  // Verificar si hay tabla o es el mensaje de selección
+  if (!zonaVal) {
+    alert('Primero seleccioná una zona para imprimir.');
+    return;
+  }
+
+  const w = window.open('', '_blank');
+  w.document.write(`
+    <html>
+      <head>
+        <title>Saldos por Zona — Distribuidora Lila</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; font-size: 12px; color: #000; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+          th, td { padding: 5px 8px; border: 1px solid #ddd; text-align: left; }
+          th { background: #f5f5f5; font-weight: 600; }
+          h2 { margin: 0 0 4px 0; color: #1a7a52; }
+          h3 { margin: 4px 0 14px 0; color: #444; font-weight: 400; }
+          .resumen-print { background: #f8f9fa; padding: 10px; border-radius: 6px; margin-bottom: 14px; display: flex; gap: 20px; }
+          .resumen-print .item { display: inline-block; margin-right: 20px; }
+          .resumen-print .label { font-size: 10px; color: #666; text-transform: uppercase; }
+          .resumen-print .value { font-size: 18px; font-weight: 700; }
+          @media print { button { display: none; } }
+        </style>
+      </head>
+      <body>
+        <h2>Distribuidora Lila</h2>
+        <h3>Saldos por Zona — ${titulo} · ${new Date().toLocaleDateString('es-AR')}</h3>
+        <div class="resumen-print">${resumenContent}</div>
+        ${tablaContent}
+        <script>
+          window.onload = function() { window.print(); }
+        <\/script>
+      </body>
+    </html>
+  `);
   w.document.close();
 }
 
-function renderChequesCartera(){
-  const el=document.getElementById('chq-lista');
-  if(!el)return;
-  el.innerHTML='<div style="color:var(--txt2);font-style:italic;padding:20px">Módulo de cheques en cartera — próximamente.</div>';
+// =====================================================
+// CARTERA DE CHEQUES — agregar al final de tesoreria.js
+// =====================================================
+
+let _cheques = [];
+let _chequesSeleccionadosPago = []; // ids de cheques elegidos para el pago actual
+
+async function cargarCheques() {
+  const { data, error } = await sb.from('cheques').select('*').order('created_at', { ascending: false });
+  if (error && error.code === '42P01') {
+    toast('Tabla cheques no existe. Crear en Supabase con el SQL del panel.', 'err', 6000);
+    _cheques = []; return;
+  }
+  _cheques = data || [];
 }
 
-function abrirCheque(){alert('Próximamente');}
+// Se llama justo después de insertar un cobro con cheque_terceros > 0.
+// cobro = fila devuelta por el insert (con .id); monto/numero/banco = datos del cheque.
+async function crearChequeDesdeCobro(cobro, monto, numero, banco) {
+  if (!monto || monto <= 0) return;
+  const { error } = await sb.from('cheques').insert({
+    numero: numero || 'S/N',
+    banco: banco || null,
+    monto,
+    cobro_id: cobro.id,
+    cliente_id: cobro.cliente_id,
+    cliente: cobro.cliente || '',
+    estado: 'en_cartera'
+  });
+  if (error) toast('Cobro guardado, pero falló el alta en cartera de cheques: ' + error.message, 'err', 6000);
+}
+
+// ── Selector de cheques para aplicar a un pago a proveedor ──
+function abrirSelectorChequesPago() {
+  const disponibles = _cheques.filter(c => c.estado === 'en_cartera');
+  _chequesSeleccionadosPago = [];
+
+  const modal = document.createElement('div');
+  modal.id = 'modal-sel-cheques';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:3000;display:flex;align-items:center;justify-content:center';
+  modal.innerHTML = `<div style="background:var(--bg);border-radius:12px;padding:20px;width:460px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column">
+    <div style="font-weight:600;font-size:15px;margin-bottom:10px">📋 Cheques disponibles en cartera</div>
+    <div style="overflow-y:auto;flex:1;border:1px solid var(--brd);border-radius:8px">
+      ${disponibles.length ? disponibles.map(c => `
+        <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--brd);cursor:pointer">
+          <input type="checkbox" class="sel-cheque-cb" value="${c.id}" data-monto="${c.monto}" onchange="_recalcularSelChequePago()">
+          <div style="flex:1">
+            <div style="font-weight:600">${esc(c.numero)} ${c.banco ? '· ' + esc(c.banco) : ''}</div>
+            <div style="font-size:11px;color:var(--txt2)">De: ${esc(c.cliente || '—')}</div>
+          </div>
+          <div style="font-weight:700">${fmt(c.monto)}</div>
+        </label>
+      `).join('') : '<div style="padding:20px;text-align:center;color:var(--txt2)">No hay cheques en cartera</div>'}
+    </div>
+    <div style="margin-top:10px;font-weight:700;text-align:right">Total seleccionado: <span id="sel-cheque-total">$ 0</span></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button onclick="document.getElementById('pag-forma').value='efectivo';this.closest('#modal-sel-cheques').remove()" style="padding:8px 16px;background:var(--bg2);border:0.5px solid var(--brd);border-radius:6px;cursor:pointer">Cancelar</button>
+      <button onclick="_confirmarSelChequePago()" style="padding:8px 16px;background:var(--G);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600">✓ Aplicar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+function _recalcularSelChequePago() {
+  const cbs = [...document.querySelectorAll('.sel-cheque-cb:checked')];
+  const total = cbs.reduce((a, cb) => a + parseFloat(cb.dataset.monto || 0), 0);
+  document.getElementById('sel-cheque-total').textContent = fmt(total);
+}
+
+function _confirmarSelChequePago() {
+  const cbs = [...document.querySelectorAll('.sel-cheque-cb:checked')];
+  if (!cbs.length) { alert('Seleccioná al menos un cheque'); return; }
+  _chequesSeleccionadosPago = cbs.map(cb => parseInt(cb.value));
+  const total = cbs.reduce((a, cb) => a + parseFloat(cb.dataset.monto || 0), 0);
+  document.getElementById('pag-importe').value = total;
+  document.getElementById('modal-sel-cheques')?.remove();
+}
+
+// Enganchar el selector al cambiar "Forma de pago" a "cheque".
+// Llamar initPagProvChequeListener() una vez desde initTesoreria().
+function initPagProvChequeListener() {
+  const sel = document.getElementById('pag-forma');
+  if (!sel || sel.dataset.chequeListenerOn) return;
+  sel.dataset.chequeListenerOn = '1';
+  sel.addEventListener('change', () => {
+    if (sel.value === 'cheque') abrirSelectorChequesPago();
+    else _chequesSeleccionadosPago = [];
+  });
+}
+
+// Vista simple de la cartera (opcional): listado con filtro por estado.
+function renderCarteraCheques(estadoFiltro) {
+  const cont = document.getElementById('cheques-tbody');
+  if (!cont) return;
+  const data = estadoFiltro ? _cheques.filter(c => c.estado === estadoFiltro) : _cheques;
+  cont.innerHTML = data.length ? data.map(c => `
+    <tr>
+      <td>${esc(c.numero)}</td>
+      <td>${esc(c.banco || '—')}</td>
+      <td style="font-weight:700">${fmt(c.monto)}</td>
+      <td>${esc(c.cliente || '—')}</td>
+      <td>${c.estado}</td>
+      <td>${esc(c.proveedor || '—')}</td>
+    </tr>`).join('') : '<tr><td colspan="6"><div class="empty">Sin cheques</div></td></tr>';
+}
+
+async function renderChequesCartera(){
+  if(!_cheques.length) await cargarCheques();
+  const estado = document.getElementById('chq-filtro-estado')?.value||'';
+  renderCarteraCheques(estado);
+}
 
 // ─── FIN GASTOS ───
 let _cobMovilCliId=null, _cobMovilForma=null;
@@ -1841,18 +2360,51 @@ function clearComprobanteMov(){
 
 // ── Navegación entre sub-paneles de cobranza ─────────────────────────────
 function cobmAbrirCC(){
+  // Ocultar solo las acciones y el formulario de cobro. El header verde se
+  // mantiene (permite volver al home). El sub-panel queda solo en pantalla.
   document.getElementById('cobm-acciones').style.display='none';
+  document.getElementById('cobm-paso-cliente').style.display='none';
+  document.getElementById('cobm-paso-cobro').style.display='none';
   document.getElementById('cobm-panel-cc').style.display='block';
+
+  // Ocultar el botón volver interno si se llegó desde el home
+  const btnVolver = document.getElementById('cobm-cc-btn-volver');
+  if(btnVolver) btnVolver.style.display = _cobmDesdeHome ? 'none' : '';
+
   const q=document.getElementById('cobm-cc-q');if(q)q.value='';
   const l=document.getElementById('cobm-cc-lista');if(l)l.innerHTML='';
-  poblarSelectZona('cobm-cc-zon');
-  setTimeout(()=>{const q=document.getElementById('cobm-cc-q');if(q)q.focus();},100);
+  _cobmPoblarZonasSelect();
+  buscarClienteCC();
+  _initSwipeSubPanelCobranza(); 
+}
+
+// Puebla el dropdown de zonas del panel de Cuenta corriente móvil.
+// Usa el catálogo real (_zonas) en lugar de inferir de los clientes:
+// si una zona se borró en Maestros → Zonas pero quedan clientes con
+// ese código asignado, ya no se muestra acá. Fuerza el repoblado
+// porque poblarSelectValores() tiene una guarda que no rehace el
+// select si ya tiene opciones (por eso quedaban zonas viejas pegadas).
+function _cobmPoblarZonasSelect(){
+  const sel = document.getElementById('cobm-cc-zon');
+  if (!sel) return;
+  const actual = sel.value;
+  // Zona ahora es la localidad del cliente. Poblamos con las zonas reales
+  // del pool de clientes activos, no con el catálogo _zonas.
+  const zonas = [...new Set(
+    (_clientes||[]).filter(c => c.activo !== false && c.zona).map(c => c.zona)
+  )].sort((a,b) => a.localeCompare(b,'es'));
+  sel.innerHTML = '<option value="">Todas las zonas</option>' +
+    zonas.map(z => `<option value="${esc(z)}">${esc(z)}</option>`).join('');
+  if (actual && zonas.includes(actual)) sel.value = actual;
 }
 
 function cobmVolverAcciones(){
-  document.getElementById('cobm-acciones').style.display='block';
+  _cobmDesdeHome = false;
+  document.getElementById('cobm-paso-cliente').style.display='block';
+  document.getElementById('cobm-paso-cobro').style.display='none';
   document.getElementById('cobm-panel-cc').style.display='none';
   document.getElementById('cobm-panel-miscobranzas').style.display='none';
+  _cobmResetHeader();
 }
 
 // ── Cuenta corriente desde cobranza ─────────────────────────────────────
@@ -1861,18 +2413,54 @@ function buscarClienteCC(){
   const zonaFil=document.getElementById('cobm-cc-zon')?.value||'';
   const lista=document.getElementById('cobm-cc-lista');
   if(!lista)return;
-  if(!q&&!zonaFil){lista.innerHTML='';return;}
-  const res=_clientes.filter(c=>
-    ((c.nombre||'').toLowerCase().includes(q)||(c.codigo||'').toString().includes(q))
-    &&(!zonaFil||c.zona===zonaFil)
-  ).slice(0,8);
-  if(!res.length){lista.innerHTML='<div style="font-size:13px;color:var(--txt2);padding:8px 0">Sin resultados</div>';return;}
-  lista.innerHTML=res.map(c=>`
+
+  // Misma lógica de búsqueda que renderClientes() en maestros.js:
+  //   · Número puro corto (≤6 dígitos) → código/id exactos. Sin matchear
+  //     teléfono/CUIT para evitar que "10" traiga el 102 o el 1100.
+  //   · Número puro largo (>6 dígitos) → también CUIT y teléfono
+  //     (contiene, sin guiones).
+  //   · Con letras o mixto → nombre, localidad, teléfono, CUIT.
+  // Así el usuario puede tipear "40" y ver exactamente el cliente 40.
+  const esNumeroPuro = /^\d+$/.test(q);
+  const matchea = (c) => {
+    if(!q) return true;
+    if(esNumeroPuro && q.length <= 6){
+      return String(c.codigo||'').trim()===q || String(c.id||'')===q;
+    }
+    if(esNumeroPuro){
+      const cuitNorm = String(c.cuit||'').replace(/\D/g,'');
+      const telNorm  = String(c.telefono||'').replace(/\D/g,'');
+      return String(c.codigo||'').trim()===q
+          || String(c.id||'')===q
+          || cuitNorm.includes(q)
+          || telNorm.includes(q);
+    }
+    return (c.nombre||'').toLowerCase().includes(q)
+        || (c.localidad||'').toLowerCase().includes(q)
+        || (c.telefono||'').toLowerCase().includes(q)
+        || (c.cuit||'').toLowerCase().includes(q);
+  };
+
+  const res = _clientes
+    .filter(c => c.activo !== false)
+    .filter(c => matchea(c))
+    .filter(c => !zonaFil || c.zona === zonaFil)
+    .sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''))
+    .slice(0, 100);
+
+  if(!res.length){
+    lista.innerHTML = '<div style="font-size:13px;color:var(--txt2);padding:12px 0;text-align:center">Sin resultados</div>';
+    return;
+  }
+
+  lista.innerHTML = res.map(c=>`
     <div onclick="cobmIrCC(${c.id})"
       style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:var(--bg2);border-radius:10px;margin-bottom:6px;cursor:pointer;border:1.5px solid var(--brd);-webkit-tap-highlight-color:transparent">
       <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nombre}</div>
-        <div style="font-size:11px;color:var(--txt2);margin-top:2px">${c.localidad||''}</div>
+        <div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+          <span style="color:var(--txt2);font-weight:600;margin-right:6px">${esc(c.codigo || c.id)}</span>${esc(c.nombre)}
+        </div>
+        <div style="font-size:11px;color:var(--txt2);margin-top:2px">${esc(c.localidad||'')}</div>
       </div>
       ${c.saldo?`<div style="font-size:15px;font-weight:700;color:var(--D);flex-shrink:0;margin-left:10px">${fmt(c.saldo)}</div>`:'<div style="font-size:12px;color:var(--P);flex-shrink:0;margin-left:10px">✓ Al día</div>'}
     </div>`).join('');
@@ -1881,11 +2469,12 @@ function buscarClienteCC(){
 function cobmIrCC(clienteId){
   const c=_clientes.find(x=>x.id===clienteId);
   if(!c)return;
-  go('cuentas');
-  setTimeout(()=>{
-    const q=document.getElementById('cc-q');
-    if(q){q.value=c.nombre;renderCC();}
-  },200);
+  // En móvil abrimos directo el modal de cuenta corriente del cliente
+  // (histCliente), que ya tiene una vista de tarjetas para pantallas
+  // angostas (_ccAngosta). Antes hacíamos go('cuentas'), que lleva al
+  // panel PC p-cuentas — la tabla con columnas — que en el celu queda
+  // incómoda y no es lo que el usuario espera al tocar un cliente.
+  histCliente(clienteId);
 }
 
 // ── Mis cobranzas ────────────────────────────────────────────────────────
@@ -1895,10 +2484,18 @@ let _cobmcZona='';
 
 function cobmAbrirMisCobranzas(){
   document.getElementById('cobm-acciones').style.display='none';
+  document.getElementById('cobm-paso-cliente').style.display='none';
+  document.getElementById('cobm-paso-cobro').style.display='none';
   document.getElementById('cobm-panel-cc').style.display='none';
   document.getElementById('cobm-panel-miscobranzas').style.display='block';
+
+  // Ocultar el botón volver interno si se llegó desde el home
+  const btnVolver = document.getElementById('cobm-mc-btn-volver');
+  if(btnVolver) btnVolver.style.display = _cobmDesdeHome ? 'none' : '';
+
   _cobmcZona='';
   cobmSetPeriodo('mes');
+  _initSwipeSubPanelCobranza();
 }
 
 function cobmSetPeriodo(periodo){
@@ -2044,10 +2641,10 @@ function cobmRenderMisCobranzas(){
       </div>
       ${cobsDia.map(c=>{
         const cli=_clientes.find(x=>x.id===c.cliente_id);
-        const zona=cli?.localidad?`<span style="font-size:10px;background:var(--bg2);border-radius:4px;padding:1px 5px;margin-left:4px">${cli.localidad}</span>`:'';
+        const zona=cli?.localidad?`<span style="font-size:10px;background:var(--bg2);border-radius:4px;padding:1px 5px;margin-left:4px">${esc(cli.localidad)}</span>`:'';
         return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#fff;border-radius:10px;margin-bottom:5px;border:1px solid var(--brd)">
           <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.cliente||'?'}${zona}</div>
+            <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.cliente||'?')}${zona}</div>
             <div style="font-size:11px;color:var(--txt2)">${formaIcon(c.forma)} ${c.forma||''}</div>
           </div>
           <div style="font-size:15px;font-weight:700;color:var(--PD);flex-shrink:0;margin-left:10px">${fmt(c.importe)}</div>
@@ -2058,93 +2655,736 @@ function cobmRenderMisCobranzas(){
 }
 
 function limpiarCobMovil(){
-  _cobMovilCliId=null;_cobMovilForma=null;
-  const qEl=document.getElementById('cobm-cli-q');if(qEl)qEl.value='';
-  const codEl=document.getElementById('cobm-cli-cod');if(codEl){codEl.value='';codEl.style.borderColor='';}
-  const lEl=document.getElementById('cobm-cli-lista');if(lEl){lEl.innerHTML='';lEl.style.display='none';}
-  const nEl=document.getElementById('cobm-cli-nombre');if(nEl)nEl.textContent='Seleccioná un cliente';
-  const sEl=document.getElementById('cobm-cli-saldo');if(sEl)sEl.textContent='';
-  const bcc=document.getElementById('cobm-btn-cc');if(bcc)bcc.style.display='none';
-  const pc=document.getElementById('cobm-paso-cliente');if(pc)pc.style.display='block';
-  const pp=document.getElementById('cobm-paso-cobro');if(pp)pp.style.display='none';
-  poblarSelectZona('cobm-cli-zon');
-  const imp=document.getElementById('cobm-importe');if(imp)imp.value='';
-  const obs=document.getElementById('cobm-obs');if(obs)obs.value='';
-  const fw=document.getElementById('cobm-facturas-wrap');if(fw)fw.style.display='none';
-  const rw=document.getElementById('cobm-resto-wrap');if(rw)rw.style.display='none';
-  const cw=document.getElementById('cobm-comp-wrap');if(cw)cw.style.display='none';
+  _cobMovilCliId=null;
+  _cobMovilForma=null;
+  
+  cerrarDropdownCobMovil();
+  
+  const qEl=document.getElementById('cobm-cli-q');
+  if(qEl) qEl.value='';
+  
+  const codEl=document.getElementById('cobm-cli-cod');
+  if(codEl){ codEl.value=''; codEl.style.borderColor=''; }
+  
+  _cobmResetHeader();
+  
+  const pc=document.getElementById('cobm-paso-cliente');
+  if(pc) pc.style.display='block';
+  
+  const pp=document.getElementById('cobm-paso-cobro');
+  if(pp) pp.style.display='none';
+  
+  const imp=document.getElementById('cobm-importe');
+  if(imp) imp.value='';
+  
+  const obs=document.getElementById('cobm-obs');
+  if(obs) obs.value='';
+  
+  const fw=document.getElementById('cobm-facturas-wrap');
+  if(fw) fw.style.display='none';
+  
+  const rw=document.getElementById('cobm-resto-wrap');
+  if(rw) rw.style.display='none';
+  
+  const cw=document.getElementById('cobm-comp-wrap');
+  if(cw) cw.style.display='none';
+  
   clearComprobanteMov();
-  const tn=document.getElementById('cobm-transf-nombre');if(tn)tn.value='';
-  const chw=document.getElementById('cobm-cheque-wrap');if(chw)chw.style.display='none';
-  const nc=document.getElementById('cobm-nrocheque');if(nc)nc.value='';
-  ['cobm-btn-ef','cobm-btn-tr','cobm-btn-ch'].forEach(id=>{const b=document.getElementById(id);if(b){b.style.background='#fff';b.style.borderColor='var(--brd)';b.style.color='';}});
-  // Volver a pantalla principal de cobranza (botones)
-  const acc=document.getElementById('cobm-acciones');if(acc)acc.style.display='block';
-  const pcc=document.getElementById('cobm-panel-cc');if(pcc)pcc.style.display='none';
-  const pmc=document.getElementById('cobm-panel-miscobranzas');if(pmc)pmc.style.display='none';
-  setTimeout(()=>document.getElementById('cobm-cli-q')?.focus(),100);
+  
+  const tn=document.getElementById('cobm-transf-nombre');
+  if(tn) tn.value='';
+  
+  const chw=document.getElementById('cobm-cheque-wrap');
+  if(chw) chw.style.display='none';
+  
+  const nc=document.getElementById('cobm-nrocheque');
+  if(nc) nc.value='';
+  
+  ['cobm-btn-ef','cobm-btn-tr','cobm-btn-ch'].forEach(id=>{
+    const b=document.getElementById(id);
+    if(b){ b.style.background='#fff'; b.style.borderColor='var(--brd)'; b.style.color=''; }
+  });
+  
+  // cobm-acciones está oculta por diseño (los accesos a CC y Mis cobranzas
+  // viven en el home). No la volvemos a mostrar acá.
+  const acc=document.getElementById('cobm-acciones');
+  if(acc) acc.style.display='none';
+  
+  const pcc=document.getElementById('cobm-panel-cc');
+  if(pcc) pcc.style.display='none';
+  
+  const pmc=document.getElementById('cobm-panel-miscobranzas');
+  if(pmc) pmc.style.display='none';
+ 
+  // Ocultar el footer flotante
+  const footer = document.getElementById('cobm-fixed-footer');
+  if (footer) footer.style.display = 'none';
 }
 
+// Resetea el header morado de cobranza móvil (nombre del cliente, saldo,
+// botón "📋 Cta. cte." y botón "← Volver"). Se llama al volver al paso
+// cliente y al limpiar el flujo, para que no queden datos del cliente
+// que se estaba cobrando antes de retroceder.
+function _cobmResetHeader(){
+  _cobMovilCliId = null;
+  const nombreEl = document.getElementById('cobm-cli-nombre');
+  if (nombreEl) nombreEl.textContent = 'Seleccioná un cliente';
+  const saldoEl = document.getElementById('cobm-cli-saldo');
+  if (saldoEl) saldoEl.textContent = '';
+  const btnCC = document.getElementById('cobm-btn-cc');
+  if (btnCC) btnCC.style.display = 'none';
+  const btnVolver = document.getElementById('cobm-btn-volver-header');
+  if (btnVolver) btnVolver.style.display = '';
+  // Limpiar inputs de búsqueda por si quedaron con texto
+  const q = document.getElementById('cobm-cli-q');
+  if (q) q.value = '';
+  const cod = document.getElementById('cobm-cli-cod');
+  if (cod) { cod.value = ''; cod.style.borderColor = ''; }
+}
+
+// Pool base de clientes para cobranza móvil.
+// No hace falta chequear el rol acá: _clientes ya viene filtrado por
+// _aplicarFiltroClientesPorRol() según el rol actual del usuario.
+//   · Repartidor puro o admin → _clientes = universo completo.
+//   · David en rol repartidor → universo completo (recargado al
+//     cambiar de rol vía toggleRolMovil).
+//   · David en rol vendedor  → solo sus clientes.
+//   · Vendedor puro (Franco) → solo sus clientes.
 function _cobmCliPool(){
-  if(!_hrClientesHoy||!_hrClientesHoy.length){
-    // Sin ruta: usar todos los clientes (vendedores) o todos (repartidores sin ruta)
-    if(usuarioActual?.rol==='repartidor'&&usuarioActual?.vendedor){
-      const v=(usuarioActual.vendedor||'').toLowerCase();
-      const porVendedor=_clientes.filter(c=>(c.vendedor||'').toLowerCase()===v);
-      return porVendedor.length?porVendedor:_clientes;
+  return _clientes.filter(c => c.activo !== false);
+}
+
+// ¿Este cliente tiene al menos una factura (remito) pendiente de cobro real?
+// Distinto de "saldo > 0": un cliente puede tener saldo histórico cargado
+// (migración, ajustes) sin remitos reales pendientes, y esos no queremos
+// mostrarlos en cobranza — aparecerían en la lista pero al abrirlos no hay
+// nada para imputar.
+function _cobmClienteTieneDeuda(clienteId){
+  return (_remitos||[]).some(r =>
+    String(r.cliente_id)===String(clienteId)
+    && !r.anulado
+    && !r.cobrado
+    && ((r.saldo_pendiente ?? r.total) > 0)
+  );
+}
+
+// ─── COBRANZA MÓVIL ──────
+
+// Variables globales para el buscador de zonas
+let _cobZonaInput = '';
+let _cobZonasCache = [];
+
+// Inicializar buscador de zonas
+function initBuscadorZonasCob() {
+  console.log('🔍 initBuscadorZonasCob() - EJECUTADA');
+  const input = document.getElementById('cobm-zona-input');
+  console.log('📌 Input zona encontrado:', input);
+  if (!input) return;
+  
+  // Cargar zonas únicas de los clientes
+  const zonasUnicas = [...new Set(_clientes.map(c => c.zona).filter(Boolean))];
+  _cobZonasCache = zonasUnicas.map(z => {
+    const zonaObj = _zonas.find(zn => zn.codigo === z);
+    return {
+      codigo: z,
+      descripcion: zonaObj?.descripcion || z,
+      clientes: _clientes.filter(c => c.zona === z && c.activo !== false)
+    };
+  }).sort((a,b) => a.descripcion.localeCompare(b.descripcion));
+  
+  // Eventos del input
+  input.addEventListener('input', function() {
+    _cobZonaInput = this.value.trim();
+    mostrarSugerenciasZonas();
+  });
+  
+  input.addEventListener('focus', function() {
+    if (this.value.trim() || _cobZonaInput) {
+      mostrarSugerenciasZonas();
     }
-    const v=usuarioActual?.vendedor||usuarioActual?.nombre||'';
-    if(!v)return _clientes;
-    const filtrado=_clientes.filter(c=>(c.vendedor||'').toLowerCase()===v.toLowerCase());
-    return filtrado.length?filtrado:_clientes;
+  });
+  
+  input.addEventListener('blur', function() {
+    setTimeout(() => {
+      document.getElementById('cobm-zona-sugerencias').style.display = 'none';
+    }, 200);
+  });
+  
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const sugerencias = document.getElementById('cobm-zona-sugerencias');
+      const items = sugerencias.querySelectorAll('.zona-sug-item');
+      if (items.length === 1) {
+        items[0].click();
+      } else if (items.length > 1) {
+        items[0].click();
+      }
+    }
+    if (e.key === 'Escape') {
+      document.getElementById('cobm-zona-sugerencias').style.display = 'none';
+    }
+  });
+}
+
+function mostrarSugerenciasZonas() {
+  const input = document.getElementById('cobm-zona-input');
+  const contenedor = document.getElementById('cobm-zona-sugerencias');
+  const termino = _cobZonaInput.toLowerCase();
+  
+  if (!termino || termino.length < 1) {
+    contenedor.style.display = 'none';
+    return;
   }
-  // Con ruta: solo los clientes de la hoja del día
-  const rutaSet=new Set(_hrClientesHoy);
-  return _clientes.filter(c=>rutaSet.has(c.id));
+  
+  const coincidencias = _cobZonasCache.filter(z => 
+    z.descripcion.toLowerCase().includes(termino) || 
+    z.codigo.toLowerCase().includes(termino)
+  );
+  
+  if (!coincidencias.length) {
+    contenedor.innerHTML = `
+      <div style="padding:12px 14px;color:var(--txt2);font-size:13px;text-align:center;">
+        ❌ No se encontraron zonas con "${termino}"
+      </div>
+    `;
+    contenedor.style.display = 'block';
+    posicionarSugerenciasZonas();
+    return;
+  }
+  
+  const mostrar = coincidencias.slice(0, 8);
+  contenedor.innerHTML = mostrar.map(z => `
+    <div class="zona-sug-item" 
+         onclick="seleccionarZonaUniversal('${z.codigo}')"
+         style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid #f0f0f0;cursor:pointer;transition:background 0.15s;"
+         onmouseover="this.style.background='var(--bg2)'" 
+         onmouseout="this.style.background='transparent'">
+      <div>
+        <div style="font-weight:600;font-size:14px;">${esc(z.descripcion)}</div>
+        <div style="font-size:11px;color:var(--txt2);">${z.codigo} · ${z.clientes.length} cliente${z.clientes.length !== 1 ? 's' : ''}</div>
+      </div>
+      <div style="font-size:12px;color:var(--P);background:var(--PL);padding:2px 10px;border-radius:12px;">
+        ${z.clientes.filter(c => (c.saldo||0) > 0).length} con deuda
+      </div>
+    </div>
+  `).join('');
+  
+  contenedor.style.display = 'block';
+  posicionarSugerenciasZonas();
+}
+
+
+function seleccionarZonaCob(codigoZona) {
+  const input = document.getElementById('cobm-zona-input');
+  const contenedor = document.getElementById('cobm-zona-sugerencias');
+  
+  // Mostrar la zona seleccionada
+  const zona = _cobZonasCache.find(z => z.codigo === codigoZona);
+  if (zona) {
+    input.value = `${zona.descripcion} (${zona.codigo})`;
+  }
+  
+  // Ocultar sugerencias
+  contenedor.style.display = 'none';
+  
+  // Cerrar dropdown de clientes si está visible
+  cerrarDropdownCobMovil();
+  
+  // Obtener clientes de la zona
+  const clientes = _clientes.filter(c => c.zona === codigoZona && c.activo !== false);
+  
+  // DETECTAR CONTEXTO: cobranza o pedido móvil
+  const contenedorClientes = document.getElementById('cobm-clientes-por-zona');
+  const listaPedidos = document.getElementById('pm-cli-lista');
+  
+  if (contenedorClientes) {
+    // MODO COBRANZA: mostrar en cobm-clientes-por-zona
+    if (!clientes.length) {
+      contenedorClientes.innerHTML = `
+        <div style="padding:20px;text-align:center;color:var(--txt2);font-size:14px;">
+          No hay clientes en esta zona
+        </div>
+      `;
+      contenedorClientes.style.display = 'block';
+      return;
+    }
+    
+    clientes.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
+    
+    contenedorClientes.innerHTML = clientes.map(c => `
+      <div onclick="selClienteCobMovil(${c.id})"
+        style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:#fff;border-radius:10px;margin-bottom:6px;border:1.5px solid var(--brd);cursor:pointer;-webkit-tap-highlight-color:transparent;transition:all 0.15s;"
+        onmouseover="this.style.borderColor='var(--P)';this.style.background='var(--bg2)'" 
+        onmouseout="this.style.borderColor='var(--brd)';this.style.background='#fff'">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.nombre)}</div>
+          <div style="font-size:12px;color:var(--txt2);margin-top:2px">${esc(c.localidad||'')} ${c.codigo ? '· #' + c.codigo : ''}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;margin-left:10px">
+          <div style="font-size:16px;font-weight:700;color:${(c.saldo||0)>0?'var(--D)':'var(--P)'}">${fmt(c.saldo||0)}</div>
+          <div style="font-size:10px;color:var(--txt2);">
+            ${c.ultimo_remito ? (Math.floor((new Date() - new Date(c.ultimo_remito)) / 864e5)) + 'd' : '—'}
+          </div>
+        </div>
+      </div>
+    `).join('');
+    
+    // Ocultar el paso de cliente (el input de zona) y mostrar los clientes
+    const pasoCliente = document.getElementById('cobm-paso-cliente');
+    if (pasoCliente) pasoCliente.style.display = 'none';
+    
+    contenedorClientes.style.display = 'block';
+    
+  } else if (listaPedidos) {
+    // MODO PEDIDO MÓVIL: mostrar en pm-cli-lista
+    if (!clientes.length) {
+      listaPedidos.innerHTML = `
+        <div style="padding:20px;text-align:center;color:var(--txt2);font-size:14px;">
+          No hay clientes en esta zona
+        </div>
+      `;
+      return;
+    }
+    
+    clientes.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
+    
+    listaPedidos.innerHTML = clientes.map(c => `
+      <div onclick="selClienteMovil(${c.id})" 
+        style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--brd);cursor:pointer;background:#fff;active:background:var(--PL);">
+        <div>
+          <div style="font-size:15px;font-weight:600;">[${c.codigo||c.id}] ${esc(c.nombre.toUpperCase())}</div>
+          <div style="font-size:12px;color:var(--txt2);">${esc(c.direccion||'')} ${esc(c.localidad||'')} · Tel: ${esc(c.telefono||'—')}</div>
+        </div>
+        <div style="text-align:right;min-width:80px;">
+          <div style="font-size:14px;font-weight:700;color:${(c.saldo||0)>0?'var(--D)':'var(--P)'}">${fmt(c.saldo||0)}</div>
+          <div style="font-size:10px;color:var(--txt2);">saldo</div>
+        </div>
+      </div>
+    `).join('');
+    
+    // Ocultar el input de zona y mostrar los clientes
+    const pasoCliente = document.getElementById('pm-paso-cliente');
+    if (pasoCliente) pasoCliente.style.display = 'none';
+  }
+}
+
+function mostrarClientesPorZona(codigoZona) {
+  const contenedor = document.getElementById('cobm-clientes-por-zona');
+  if (!contenedor) return;
+  
+  const clientes = _clientes.filter(c => c.zona === codigoZona && c.activo !== false);
+  
+  if (!clientes.length) {
+    contenedor.innerHTML = `
+      <div style="padding:20px;text-align:center;color:var(--txt2);font-size:14px;">
+        No hay clientes en esta zona
+      </div>
+    `;
+    contenedor.style.display = 'block';
+    return;
+  }
+  
+  // Ordenar por nombre
+  clientes.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
+  
+  // Mostrar como tarjetas
+  contenedor.innerHTML = clientes.map(c => `
+    <div onclick="selClienteCobMovil(${c.id})"
+      style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:#fff;border-radius:10px;margin-bottom:6px;border:1.5px solid var(--brd);cursor:pointer;-webkit-tap-highlight-color:transparent;transition:all 0.15s;"
+      onmouseover="this.style.borderColor='var(--P)';this.style.background='var(--bg2)'" 
+      onmouseout="this.style.borderColor='var(--brd)';this.style.background='#fff'">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.nombre)}</div>
+        <div style="font-size:12px;color:var(--txt2);margin-top:2px">${esc(c.localidad||'')} ${c.codigo ? '· #' + c.codigo : ''}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;margin-left:10px">
+        <div style="font-size:16px;font-weight:700;color:${(c.saldo||0)>0?'var(--D)':'var(--P)'}">${fmt(c.saldo||0)}</div>
+        <div style="font-size:10px;color:var(--txt2);">
+          ${c.ultimo_remito ? (Math.floor((new Date() - new Date(c.ultimo_remito)) / 864e5)) + 'd' : '—'}
+        </div>
+      </div>
+    </div>
+  `).join('');
+  
+  // Ocultar el paso de cliente (el input de zona) y mostrar los clientes
+  const pasoCliente = document.getElementById('cobm-paso-cliente');
+  if (pasoCliente) pasoCliente.style.display = 'none';
+  
+  contenedor.style.display = 'block';
+}
+
+function limpiarBuscadorZonas() {
+  const input = document.getElementById('cobm-zona-input');
+  if (input) input.value = '';
+  
+  const sugerencias = document.getElementById('cobm-zona-sugerencias');
+  if (sugerencias) sugerencias.style.display = 'none';
+  
+  const clientesPorZona = document.getElementById('cobm-clientes-por-zona');
+  if (clientesPorZona) {
+    clientesPorZona.innerHTML = '';
+    clientesPorZona.style.display = 'none';
+  }
+  
+  const pasoCliente = document.getElementById('cobm-paso-cliente');
+  if (pasoCliente) pasoCliente.style.display = 'block';
+  
+  _cobZonaInput = '';
 }
 
 function buscarClienteCobMovil(){
-  const q=(document.getElementById('cobm-cli-q').value||'').toLowerCase();
-  const zonaFil=document.getElementById('cobm-cli-zon')?.value||'';
+  const q=(document.getElementById('cobm-cli-q').value||'').toLowerCase().trim();
   const lista=document.getElementById('cobm-cli-lista');
-  if(q.length<1&&!zonaFil){lista.style.display='none';lista.innerHTML='';return;}
+  if(!lista) return;
+
+  // Sin búsqueda: ocultar dropdown. Los acordeones quedan visibles (no se
+  // tocan acá).
+  if(q.length<1){
+    lista.style.display='none';
+    lista.innerHTML='';
+    return;
+  }
+  // Con búsqueda: mostrar dropdown flotante. Los acordeones quedan visibles
+  // por debajo — el dropdown es position:fixed así que aparece por encima
+  // sin taparlos ni ocultarlos.
+
   const pool=_cobmCliPool();
-  const m=pool.filter(c=>
-    ((c.nombre||'').toLowerCase().includes(q)||String(c.codigo||c.id).includes(q))
-    &&(!zonaFil||c.zona===zonaFil)
-  ).slice(0,10);
-  lista.style.display=m.length?'block':'none';
-  if(!m.length){lista.innerHTML='<div style="padding:14px;font-size:14px;color:var(--txt2)">Sin resultados</div>';return;}
-  lista.innerHTML=m.map(c=>`<div onclick="selClienteCobMovil(${c.id})"
-    style="display:flex;justify-content:space-between;align-items:center;min-height:56px;padding:10px 14px;border-bottom:1px solid var(--brd);cursor:pointer;-webkit-tap-highlight-color:transparent">
-    <div style="flex:1;min-width:0">
-      <div style="font-size:16px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nombre}</div>
-      <div style="font-size:12px;color:var(--txt2);margin-top:2px">${c.localidad||''}${c.codigo?' · #'+c.codigo:''}</div>
+  const m=pool.filter(c=>{
+    const matchNombre=(c.nombre||'').toLowerCase().includes(q);
+    const matchCodigo=String(c.codigo||c.id).includes(q);
+    return matchNombre || matchCodigo;
+  }).slice(0,12);
+
+  if(!m.length){
+    lista.style.display='block';
+    lista.innerHTML='<div style="padding:14px;font-size:14px;color:var(--txt2);text-align:center">❌ Sin resultados</div>';
+    posicionarDropdownCobMovil();
+    return;
+  }
+
+  lista.style.display='block';
+  lista.innerHTML=m.map(c=>`
+    <div onclick="selClienteCobMovil(${c.id})"
+      style="display:flex;justify-content:space-between;align-items:center;min-height:56px;padding:10px 14px;border-bottom:1px solid var(--brd);cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.15s;"
+      onmouseover="this.style.background='var(--bg2)'"
+      onmouseout="this.style.background='transparent'">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.nombre)}</div>
+        <div style="font-size:12px;color:var(--txt2);margin-top:2px">${esc(c.localidad||'')}${c.codigo?' · #'+c.codigo:''}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;margin-left:10px">
+        <div style="font-size:16px;font-weight:700;color:${(c.saldo||0)>0?'var(--D)':'var(--P)'}">${fmt(c.saldo||0)}</div>
+      </div>
     </div>
-    <div style="text-align:right;flex-shrink:0;margin-left:10px">
-      <div style="font-size:17px;font-weight:700;color:${(c.saldo||0)>0?'var(--D)':'var(--P)'}">${fmt(c.saldo||0)}</div>
-    </div>
-  </div>`).join('');
+  `).join('');
+
+  posicionarDropdownCobMovil();
 }
 
+// ── Filtro de lista en cobranza móvil: ruta del día vs con deuda ──
+let _cobmFiltroCli = null; // 'ruta' | 'deuda' | null (auto al entrar)
+
+function cobmRenderChipsCli(){
+  const el = document.getElementById('cobm-cli-chips');
+  if(!el) return;
+  const rutaIds = _hrClientesHoy || [];
+  const rutaCount = rutaIds.length;
+  const pool = _cobmCliPool();
+  const todosCount = pool.length;
+  const deudaCount = pool.filter(c => _cobmClienteTieneDeuda(c.id)).length;
+  const esRepartidor = usuarioActual?.rol === 'repartidor';
+  const hayRuta = rutaCount > 0;
+
+  // Chip por defecto según rol y disponibilidad:
+  //   · Repartidor con ruta hoy → 'ruta'
+  //   · Cualquier otro caso       → 'todos'
+  if(!_cobmFiltroCli){
+    _cobmFiltroCli = (esRepartidor && hayRuta) ? 'ruta' : 'todos';
+  }
+  // Si el filtro activo era 'ruta' pero ya no hay ruta disponible, resetea.
+  if(_cobmFiltroCli === 'ruta' && !hayRuta) _cobmFiltroCli = 'todos';
+
+  const mkChip = (key, label, count) => {
+    const activo = _cobmFiltroCli === key;
+    const disabled = count === 0;
+    return `<button onclick="cobmSetFiltroCli('${key}')" ${disabled?'disabled':''}
+      style="flex:0 0 auto;padding:6px 12px;border-radius:20px;border:1.5px solid ${activo?'var(--PD)':'var(--brd)'};background:${activo?'var(--PD)':'var(--bg)'};color:${activo?'#fff':'var(--txt2)'};font-size:12px;font-weight:600;cursor:${disabled?'not-allowed':'pointer'};font-family:inherit;opacity:${disabled?'0.4':'1'};-webkit-tap-highlight-color:transparent">
+      ${label} (${count})
+    </button>`;
+  };
+
+  const chipRuta  = hayRuta ? mkChip('ruta',  '📍 Ruta de hoy', rutaCount) : '';
+  const chipTodos = mkChip('todos', '👥 Todos', todosCount);
+  const chipDeuda = mkChip('deuda', '💰 Con deuda', deudaCount);
+
+  // Orden de los chips por rol:
+  //   · Repartidor → Ruta, Todos, Deuda
+  //   · Vendedor   → Todos, Deuda, Ruta (si hay)
+  if(esRepartidor){
+    el.innerHTML = chipRuta + chipTodos + chipDeuda;
+  } else {
+    el.innerHTML = chipTodos + chipDeuda + chipRuta;
+  }
+}
+
+// Renderiza un acordeón por cada zona del catálogo (_zonas). Dentro de cada
+// uno, los clientes del pool activo que pertenezcan a esa zona. Si una zona
+// no tiene clientes para el día, igual se muestra (badge "0", expandida
+// vacía) para que no genere confusión al usuario: ve TODAS las zonas y
+// entiende que simplemente no hay nada para cobrar en esa.
+function cobmRenderZonasAcordeon(){
+  const cont = document.getElementById('cobm-zonas-lista');
+  if(!cont) return;
+  let pool = _cobmCliPool();
+  // Aplicar el filtro del chip activo:
+  //  · 'ruta'  → solo clientes de la hoja de ruta de hoy.
+  //  · 'deuda' → solo clientes con al menos una factura pendiente real.
+  //  · 'todos' → sin filtro (todos los del pool base).
+  if(_cobmFiltroCli === 'ruta'){
+    const rutaIds = new Set(_hrClientesHoy || []);
+    pool = pool.filter(c => rutaIds.has(c.id));
+  } else if(_cobmFiltroCli === 'deuda'){
+    pool = pool.filter(c => _cobmClienteTieneDeuda(c.id));
+  }
+  // 'todos' → sin filtro adicional
+  // Agrupar pool por zona
+  const porZona = {};
+  pool.forEach(c => {
+    const z = (c.zona || '').trim() || '_sin';
+    if(!porZona[z]) porZona[z] = [];
+    porZona[z].push(c);
+  });
+  // Zona ahora es la localidad del cliente (texto libre). Ya no tiene sentido
+  // mezclar el catálogo _zonas acá: si lo hacíamos, aparecían acordeones
+  // fantasma "Arequito" (del catálogo, sin clientes) duplicando "AREQUITO"
+  // (del pool real). Mostramos solo las zonas que efectivamente tienen
+  // clientes en el pool activo.
+  const setZonas = new Set(Object.keys(porZona));
+  // Ordenar alfabéticamente por localidad
+  const zonasArr = [...setZonas].filter(Boolean).sort((a, b) => {
+    const na = a === '_sin' ? 'zzz-sin-zona' : a.toLowerCase();
+    const nb = b === '_sin' ? 'zzz-sin-zona' : b.toLowerCase();
+    return na.localeCompare(nb);
+  });
+
+  if(!zonasArr.length){
+    cont.innerHTML = '<div class="empty" style="padding:20px">Sin zonas cargadas</div>';
+    return;
+  }
+
+  cont.innerHTML = zonasArr.map(z => {
+    const clis = (porZona[z] || []).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+    const zNom = z === '_sin' ? 'Sin zona' : z;
+    const count = clis.length;
+    const badge = count
+      ? `<span class="b bP" style="font-size:10px">${count}</span>`
+      : `<span class="b" style="background:var(--bg2);color:var(--txt2);font-size:10px">0</span>`;
+    return `<div class="cobm-zona-acordeon" style="border:1.5px solid var(--brd);border-radius:12px;margin-bottom:8px;overflow:hidden;background:#fff">
+      <div onclick="cobmToggleZonaAcordeon(this)" style="display:flex;justify-content:space-between;align-items:center;padding:14px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;background:var(--bg2);gap:14px">
+        <div style="flex:1;min-width:0;font-weight:700;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">🗺 ${esc(zNom)}</div>
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+          ${badge}
+          <span class="cobm-zona-chevron" style="font-size:16px;color:var(--txt2);transition:transform 0.2s">▶</span>
+        </div>
+      </div>
+      <div class="cobm-zona-clientes" style="display:none">
+        ${count ? clis.map(c => `
+          <div onclick="selClienteCobMovil(${c.id})" style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--brd);cursor:pointer;-webkit-tap-highlight-color:transparent">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.nombre)}</div>
+              <div style="font-size:11px;color:var(--txt2);margin-top:2px">${esc(c.localidad || '')}${c.codigo ? ' · #' + c.codigo : ''}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0;margin-left:10px">
+              <div style="font-size:14px;font-weight:700;color:${(c.saldo || 0) > 0 ? 'var(--D)' : 'var(--P)'}">${fmt(c.saldo || 0)}</div>
+            </div>
+          </div>
+        `).join('') : '<div style="padding:16px;text-align:center;color:var(--txt2);font-size:13px">Sin clientes para cobrar en esta zona</div>'}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function cobmToggleZonaAcordeon(header){
+  const cont = header.nextElementSibling;
+  const chev = header.querySelector('.cobm-zona-chevron');
+  if(!cont) return;
+  const abierto = cont.style.display === 'block';
+  cont.style.display = abierto ? 'none' : 'block';
+  if(chev) chev.style.transform = abierto ? 'rotate(0deg)' : 'rotate(90deg)';
+}
+
+function cobmSetFiltroCli(filtro){
+  _cobmFiltroCli = filtro;
+  cobmRenderChipsCli();
+  cobmRenderZonasAcordeon();
+}
+
+//Posicionamiento inteligente del dropdown
+function posicionarDropdownCobMovil() {
+  const input = document.getElementById('cobm-cli-q');
+  const lista = document.getElementById('cobm-cli-lista');
+  if (!input || !lista || lista.style.display === 'none') return;
+  
+  requestAnimationFrame(() => {
+    const rect = input.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const viewportWidth = window.innerWidth;
+    
+    const espacioAbajo = viewportHeight - rect.bottom - 10;
+    const espacioArriba = rect.top - 10;
+    const usarArriba = espacioAbajo < 180 && espacioArriba > espacioAbajo;
+    const espacioDisponible = usarArriba ? espacioArriba : espacioAbajo;
+    let alturaMax = Math.min(300, Math.max(80, espacioDisponible - 20));
+    
+    let topPos, bottomPos;
+    if (usarArriba) {
+      topPos = 'auto';
+      bottomPos = (viewportHeight - rect.top + 8) + 'px';
+    } else {
+      topPos = (rect.bottom + 6) + 'px';
+      bottomPos = 'auto';
+    }
+    
+    lista.style.position = 'fixed';
+    lista.style.top = topPos;
+    lista.style.bottom = bottomPos;
+    lista.style.left = Math.max(10, rect.left) + 'px';
+    lista.style.width = Math.min(rect.width, viewportWidth - 20) + 'px';
+    lista.style.maxHeight = alturaMax + 'px';
+    lista.style.overflowY = 'auto';
+    lista.style.overflowX = 'hidden';
+    lista.style.zIndex = '99999';
+    lista.style.background = '#fff';
+    lista.style.border = '2px solid var(--P)';
+    lista.style.borderRadius = '12px';
+    lista.style.boxShadow = '0 8px 32px rgba(0,0,0,0.18)';
+    lista.style.display = 'block';
+    lista.style.padding = '4px 0';
+    lista.style.WebkitOverflowScrolling = 'touch';
+    
+    const dropRect = lista.getBoundingClientRect();
+    if (dropRect.right > viewportWidth - 8) {
+      lista.style.left = Math.max(8, viewportWidth - dropRect.width - 8) + 'px';
+    }
+    if (dropRect.left < 8) {
+      lista.style.left = '8px';
+    }
+    
+    if (dropRect.height > viewportHeight * 0.7) {
+      lista.style.maxHeight = Math.floor(viewportHeight * 0.6) + 'px';
+    }
+  });
+}
+
+// Buscar por código (con posicionamiento mejorado)
 function cobmBuscarPorCod(){
   const cod=(document.getElementById('cobm-cli-cod')?.value||'').trim();
-  if(!cod){document.getElementById('cobm-cli-lista').style.display='none';return;}
+  const lista=document.getElementById('cobm-cli-lista');
+  if(!cod){
+    lista.style.display='none';
+    lista.innerHTML='';
+    return;
+  }
+  
   const pool=_cobmCliPool();
   const m=pool.filter(c=>String(c.codigo||c.id)===cod).slice(0,10);
-  const lista=document.getElementById('cobm-cli-lista');
-  lista.style.display=m.length?'block':'none';
-  lista.innerHTML=m.map(c=>`<div onclick="selClienteCobMovil(${c.id})"
-    style="display:flex;justify-content:space-between;align-items:center;min-height:56px;padding:10px 14px;border-bottom:1px solid var(--brd);cursor:pointer;-webkit-tap-highlight-color:transparent">
-    <div style="flex:1;min-width:0">
-      <div style="font-size:16px;font-weight:700">${c.nombre}</div>
-      <div style="font-size:12px;color:var(--txt2);margin-top:2px">${c.localidad||''}${c.codigo?' · #'+c.codigo:''}</div>
+  
+  if(!m.length){
+    lista.style.display='block';
+    lista.innerHTML='<div style="padding:14px;text-align:center;color:var(--txt2)">❌ Cliente no encontrado</div>';
+    posicionarDropdownCobMovil();
+    return;
+  }
+  
+  lista.style.display='block';
+  lista.innerHTML=m.map(c=>`
+    <div onclick="selClienteCobMovil(${c.id})"
+      style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--brd);cursor:pointer;-webkit-tap-highlight-color:transparent"
+      onmouseover="this.style.background='var(--bg2)'" 
+      onmouseout="this.style.background='transparent'">
+      <div>
+        <div style="font-size:16px;font-weight:700">${esc(c.nombre)}</div>
+        <div style="font-size:12px;color:var(--txt2)">${esc(c.localidad||'')}</div>
+      </div>
+      <div style="font-size:16px;font-weight:700;color:${(c.saldo||0)>0?'var(--D)':'var(--P)'}">${fmt(c.saldo||0)}</div>
     </div>
-    <div style="text-align:right;flex-shrink:0;margin-left:10px">
-      <div style="font-size:17px;font-weight:700;color:${(c.saldo||0)>0?'var(--D)':'var(--P)'}">${fmt(c.saldo||0)}</div>
-    </div>
-  </div>`).join('');
+  `).join('');
+  
+  posicionarDropdownCobMovil();
 }
+
+//Cerrar dropdown al hacer scroll o tocar fuera
+function cerrarDropdownCobMovil() {
+  const lista = document.getElementById('cobm-cli-lista');
+  if (lista) {
+    lista.style.display = 'none';
+    lista.innerHTML = '';
+  }
+}
+
+//Inicializar los event listeners para cerrar el dropdown
+function initDropdownCobMovil() {
+  // Cerrar al hacer scroll (con debounce para no cerrar mientras se escribe)
+  let scrollTimeout;
+  document.addEventListener('scroll', function() {
+    const lista = document.getElementById('cobm-cli-lista');
+    if (lista && lista.style.display === 'block') {
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => {
+        cerrarDropdownCobMovil();
+      }, 150);
+    }
+  }, { passive: true });
+  
+  // Cerrar al tocar fuera del dropdown y del input
+  document.addEventListener('touchstart', function(e) {
+    const lista = document.getElementById('cobm-cli-lista');
+    const input = document.getElementById('cobm-cli-q');
+    const codInput = document.getElementById('cobm-cli-cod');
+    if (lista && lista.style.display === 'block') {
+      const target = e.target;
+      if (!lista.contains(target) && target !== input && target !== codInput) {
+        cerrarDropdownCobMovil();
+      }
+    }
+  }, { passive: true });
+  
+  // Cerrar al hacer clic fuera
+  document.addEventListener('click', function(e) {
+    const lista = document.getElementById('cobm-cli-lista');
+    const input = document.getElementById('cobm-cli-q');
+    const codInput = document.getElementById('cobm-cli-cod');
+    if (lista && lista.style.display === 'block') {
+      if (!lista.contains(e.target) && e.target !== input && e.target !== codInput) {
+        cerrarDropdownCobMovil();
+      }
+    }
+  });
+  
+  // Re-posicionar al rotar o redimensionar
+  let resizeTimeout;
+  window.addEventListener('resize', function() {
+    const lista = document.getElementById('cobm-cli-lista');
+    if (lista && lista.style.display === 'block') {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        posicionarDropdownCobMovil();
+      }, 100);
+    }
+  }, { passive: true });
+  
+  // Re-posicionar al abrir el teclado en móvil
+  window.addEventListener('focusin', function(e) {
+    const lista = document.getElementById('cobm-cli-lista');
+    if (lista && lista.style.display === 'block' && 
+        (e.target === document.getElementById('cobm-cli-q') || 
+         e.target === document.getElementById('cobm-cli-cod'))) {
+      setTimeout(posicionarDropdownCobMovil, 300);
+    }
+  });
+}
+
 
 function cobmConfirmarCod(){
   const cod=(document.getElementById('cobm-cli-cod')?.value||'').trim();
@@ -2156,32 +3396,87 @@ function cobmConfirmarCod(){
 }
 
 function selClienteCobMovil(id){
-  const c=_clientes.find(x=>x.id===id);if(!c)return;
+  const c=_clientes.find(x=>x.id===id);
+  if(!c) return;
+  
   _cobMovilCliId=id;
-  const nEl=document.getElementById('cobm-cli-nombre');if(nEl)nEl.textContent=`[${c.codigo||c.id}] ${c.nombre.toUpperCase()}`;
-  const sEl=document.getElementById('cobm-cli-saldo');if(sEl)sEl.textContent=`Saldo: ${fmt(c.saldo||0)}`;
-  const pc=document.getElementById('cobm-paso-cliente');if(pc)pc.style.display='none';
-  const pcc=document.getElementById('cobm-panel-cc');if(pcc)pcc.style.display='none';
-  const pmc=document.getElementById('cobm-panel-miscobranzas');if(pmc)pmc.style.display='none';
-  const pa=document.getElementById('cobm-acciones');if(pa)pa.style.display='none';
-  const bcc=document.getElementById('cobm-btn-cc');if(bcc)bcc.style.display='block';
-  const pp=document.getElementById('cobm-paso-cobro');if(pp)pp.style.display='block';
+  const qEl=document.getElementById('cobm-cli-q');
+  if(qEl) qEl.value=c.nombre;
+  
+  const codEl=document.getElementById('cobm-cli-cod');
+  if(codEl) codEl.value=c.codigo||c.id||'';
+  
+  const nEl=document.getElementById('cobm-cli-nombre');
+  if(nEl) nEl.textContent=`[${c.codigo||c.id}] ${esc(c.nombre.toUpperCase())}`;
+  
+  const sEl=document.getElementById('cobm-cli-saldo');
+  if(sEl) sEl.textContent=`Saldo: ${fmt(c.saldo||0)}`;
+  
+  // Cerrar dropdown
+  cerrarDropdownCobMovil();
+  
+  // Mostrar paso de cobro
+  const pc=document.getElementById('cobm-paso-cliente');
+  if(pc) pc.style.display='none';
+  
+  const pcc=document.getElementById('cobm-panel-cc');
+  if(pcc) pcc.style.display='none';
+  
+  const pmc=document.getElementById('cobm-panel-miscobranzas');
+  if(pmc) pmc.style.display='none';
+  
+  const pa=document.getElementById('cobm-acciones');
+  if(pa) pa.style.display='none';
+  
+  const bcc=document.getElementById('cobm-btn-cc');
+  if(bcc) bcc.style.display='block';
+
+  // Al entrar a cargar un cobro, sacar el botón "← Volver" del header
+  // para que solo quede "📋 Cta. cte." (el usuario retrocede con swipe
+  // o terminando el cobro).
+  const btnVolverHeader = document.getElementById('cobm-btn-volver-header');
+  if (btnVolverHeader) btnVolverHeader.style.display = 'none';
+  
+  const pp=document.getElementById('cobm-paso-cobro');
+  if(pp) pp.style.display='block';
+  
+  // Cargar facturas pendientes
   const remsPend=_remitos.filter(r=>String(r.cliente_id)===String(id)&&!r.cobrado).sort((a,b)=>a.fecha.localeCompare(b.fecha));
   const wrap=document.getElementById('cobm-facturas-wrap');
   const lista=document.getElementById('cobm-facturas');
-  if(remsPend.length&&wrap&&lista){
+  if(remsPend.length && wrap && lista){
     wrap.style.display='block';
-    lista.innerHTML=remsPend.map(r=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--brd)">
-      <div style="flex:1;cursor:pointer" onclick="verRemitoEnCobro(${r.id})"><div style="font-size:14px;font-weight:600;text-decoration:underline;color:var(--P)">R-${String(r.id).padStart(4,'0')}</div>
-      <div style="font-size:11px;color:var(--txt2)">${r.fecha} · Saldo: ${fmt(r.saldo_pendiente||r.total)}</div></div>
-      <input type="number" id="cobm-imp-${r.id}" value="0" min="0" step="0.01"
-        style="width:120px;padding:8px;border:2px solid var(--brd);border-radius:8px;font-size:16px;font-weight:700;text-align:right"
-        oninput="calcCobMovil()" onfocus="this.select()" ondblclick="cobmImputarTodo(${r.id},${r.saldo_pendiente||r.total})"
-        onkeydown="if(event.key==='Home'){event.preventDefault();verRemitoEnCobro(${r.id})}"
-        title="Doble toque = todo · Inicio = ver factura">
-    </div>`).join('');
+    const btnAuto = `<button onclick="cobmAutoImputar()"
+      style="width:100%;padding:10px;margin-bottom:10px;background:var(--A);color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent">
+      ⚡ Repartir automáticamente (más viejas primero)
+    </button>`;
+    lista.innerHTML = btnAuto + remsPend.map(r=>{
+      const saldo = r.saldo_pendiente||r.total;
+      return `<div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--brd)">
+        <div style="flex:1;cursor:pointer;min-width:0" onclick="verRemitoEnCobro(${r.id})">
+          <div style="font-size:14px;font-weight:600;text-decoration:underline;color:var(--P)">R-${String(r.id).padStart(4,'0')}</div>
+          <div style="font-size:11px;color:var(--txt2)">${r.fecha} · Saldo: ${fmt(saldo)}</div>
+        </div>
+        <input type="number" id="cobm-imp-${r.id}" value="" min="0" max="${saldo}" step="1"
+          style="width:100px;padding:8px;border:2px solid var(--brd);border-radius:8px;font-size:16px;font-weight:700;text-align:right"
+          oninput="calcCobMovil()" onfocus="this.select()"
+          onkeydown="if(event.key==='Home'){event.preventDefault();verRemitoEnCobro(${r.id})}"
+          title="Inicio = ver factura">
+        <button onclick="cobmImputarTodo(${r.id},${saldo})"
+          style="min-width:76px;min-height:48px;padding:10px 14px;background:var(--P);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent">
+          ✓ Todo
+        </button>
+      </div>`;
+    }).join('');
+  } else if(wrap) {
+    wrap.style.display='none';
   }
+  
   setTimeout(()=>document.getElementById('cobm-importe')?.focus(),100);
+
+  // Mostrar el footer flotante cuando se muestra el paso de cobro
+  const footer = document.getElementById('cobm-fixed-footer');
+  if (footer) footer.style.display = 'block';
 }
 
 // Ver la cuenta corriente del cliente que se está cobrando, sin perder
@@ -2265,19 +3560,27 @@ async function guardarCobMovil(){
     vendedor:usuarioActual?.nombre||'',
     reparto:_cargaActivaHoy?(_cargaActivaHoy.nombre||('Reparto #'+_cargaActivaHoy.id)):'',
     carga_id:_cargaActivaHoy?.id||null,
+    numero_rendicion:_cargaActivaHoy?.numero_rendicion||null,
     observaciones:document.getElementById('cobm-obs')?.value||'',
     imputaciones,saldo_favor:resto>0?resto:0,
     comprobante_url,
     nombre_transferencia:nombreTransf||null
   }).select().single();
   if(cobErr){alert('Error al guardar cobro: '+cobErr.message);reactivar();return;}
+  if(_cobMovilForma==='cheque'){
+    await crearChequeDesdeCobro(cobNuevo, importe, nroCheque, '');
+    await cargarCheques();
+  }
 
   // ⚠️ El saldo del cliente y remitos NO se toca aquí.
   // Se aplica recién cuando un admin valida el cobro (validarCobro).
-  // Si el cobro vino de una carga (no de una hoja de ruta armada a mano),
-  // generar esa hoja de ruta ahora para que en Rendición no quede huérfano
-  // en "Cobros sin hoja de ruta".
-  if(_cargaActivaHoy){await _asegurarHojaRutaParaCobro(_cobMovilCliId,hoyLocal(),usuarioActual?.nombre||'');}
+  // NOTA: ya no auto-generamos hoja_ruta acá. Antes lo hacíamos para que
+  // el cobro apareciera vinculado a la ruta del día, pero tenía un efecto
+  // colateral: creaba una "hoja de ruta fantasma" con 1 solo cliente, que
+  // después el pool de cobranza tomaba como ruta del día y reducía toda la
+  // lista de cobro a ese cliente. Los cobros van igual a "Cobros sin hoja
+  // de ruta" en Rendición, donde el admin los aprueba normalmente (ese
+  // panel ya existe y funciona).
   await Promise.all([cargarCobros(),cargarRemitos(),hrMarcarVisitadoPorCliente(_cobMovilCliId)]);
   renderDash();
   mostrarConfirmacionMovil('cobro', c?.nombre, fmt(importe)+(resto>0?' · Resto a favor: '+fmt(resto):'') + ' — pendiente de validación', cobNuevo?.id);
@@ -2329,6 +3632,93 @@ function _renderComisionCard(){
     </div>`;
 }
 
+// ─── MOSTRAR CLIENTES DE LA RUTA DEL DÍA EN COBRANZA ─────────────────────
+
+async function mostrarClientesDeRutaHoy() {
+  console.log('🔍 mostrarClientesDeRutaHoy() - INICIO');
+  
+  const contenedor = document.getElementById('cobm-clientes-ruta-hoy');
+  if (!contenedor) {
+    console.warn('❌ Contenedor cobm-clientes-ruta-hoy NO ENCONTRADO');
+    return;
+  }
+  
+  console.log('✅ Contenedor encontrado:', contenedor);
+  console.log('📊 _hrClientesHoy:', _hrClientesHoy);
+  console.log('📊 _clientes.length:', _clientes.length);
+  
+  // Verificar si hay clientes en la ruta de hoy
+  if (!_hrClientesHoy || !_hrClientesHoy.length) {
+    console.log('⚠️ No hay clientes en la ruta de hoy');
+    contenedor.innerHTML = '';
+    contenedor.style.display = 'none';
+    return;
+  }
+  
+  // SI EL CLIENTE NO ESTÁ EN _clientes, CARGARLO DESDE SUPABASE
+  let clientesRuta = _clientes.filter(c => _hrClientesHoy.includes(c.id) && c.activo !== false);
+  
+  if (!clientesRuta.length) {
+    console.log('⚠️ Clientes no encontrados en _clientes, buscando en Supabase...');
+    
+    // Buscar los clientes faltantes directamente
+    for (const id of _hrClientesHoy) {
+      const { data, error } = await sb.from('clientes').select('*').eq('id', id).single();
+      if (data && !error) {
+        console.log('✅ Cliente encontrado en Supabase:', data.nombre);
+        // Agregar al array de clientes global
+        _clientes.push(data);
+        clientesRuta.push(data);
+      } else {
+        console.warn('❌ Cliente ID', id, 'no encontrado en Supabase');
+      }
+    }
+  }
+  
+  console.log('👥 clientesRuta encontrados:', clientesRuta.length);
+  
+  if (!clientesRuta.length) {
+    console.log('⚠️ No se encontraron clientes');
+    contenedor.innerHTML = `
+      <div style="padding:12px;text-align:center;color:var(--txt2);font-size:13px;background:var(--bg2);border-radius:8px;margin-top:4px;">
+        ⚠️ El cliente de tu ruta no se encuentra en la base de datos.
+      </div>
+    `;
+    contenedor.style.display = 'block';
+    return;
+  }
+  
+  console.log('✅ Clientes encontrados, mostrando...');
+  
+  // Ordenar por nombre
+  clientesRuta.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
+  
+  // Mostrar los clientes como tarjetas
+  contenedor.innerHTML = `
+    <div style="font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 8px 0;padding-top:8px;border-top:1.5px solid var(--brd);">
+      📋 Clientes de tu ruta de hoy (${clientesRuta.length})
+    </div>
+    ${clientesRuta.map(c => `
+      <div onclick="selClienteCobMovil(${c.id})"
+        style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:var(--PL);border-radius:10px;margin-bottom:6px;border:1.5px solid var(--P);cursor:pointer;-webkit-tap-highlight-color:transparent;transition:all 0.15s;"
+        onmouseover="this.style.borderColor='var(--PD)';this.style.background='#d4f0e0'" 
+        onmouseout="this.style.borderColor='var(--P)';this.style.background='var(--PL)'">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.nombre)}</div>
+          <div style="font-size:12px;color:var(--txt2);margin-top:2px">${esc(c.localidad||'')} ${c.codigo ? '· #' + c.codigo : ''}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;margin-left:10px">
+          <div style="font-size:16px;font-weight:700;color:${(c.saldo||0)>0?'var(--D)':'var(--P)'}">${fmt(c.saldo||0)}</div>
+          <div style="font-size:10px;color:var(--P);font-weight:600;">💰 Cobrar →</div>
+        </div>
+      </div>
+    `).join('')}
+  `;
+  
+  contenedor.style.display = 'block';
+  console.log('✅ Clientes mostrados correctamente');
+}
+
 // ─── TESORERÍA ───────────────────────────────────────────────
 let _pagosProv=[];
 
@@ -2361,12 +3751,18 @@ async function cargarMovBanc(){
 async function initTesoreria(){
   if(!_pagosProv.length)await cargarPagosProv();
   if(!_movBanc.length)await cargarMovBanc();
+  if(!_cheques.length)await cargarCheques();
+  initPagProvChequeListener();
   // Poblar select de proveedores
   const sel=document.getElementById('pag-prov');
   if(sel&&_proveedores.length){
     const cur=sel.value;
     sel.innerHTML='<option value="">Seleccionar...</option>'+
-      _proveedores.map(p=>`<option value="${p.id}">${p.cuit?p.cuit+' — ':''}${p.nombre}</option>`).join('');
+      _proveedores.map(p=>{
+        const cod=p.codigo||p.id||'';
+        const codTxt=cod?'<span style="font-weight:700;color:var(--PD)">'+esc(cod)+'</span> — ':'';
+        return `<option value="${p.id}">${esc(cod)}${cod?' — ':''}${esc(p.nombre)}</option>`;
+      }).join('');
     if(cur)sel.value=cur;
   }
   // Defaults de fecha
@@ -2378,10 +3774,19 @@ async function initTesoreria(){
   if(tcoFh&&!tcoFh.value)tcoFh.value=hoy;
   if(tcoFd&&!tcoFd.value){const d=new Date();tcoFd.value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;}
   tesoTab(_tesoTabActual);
+
+  initDropdownCobMovil();
+    // Inicializar buscador de zonas para cobranza móvil
+  setTimeout(() => {
+    if (document.getElementById('cobm-zona-input')) {
+      initBuscadorZonasCob();
+    }
+  }, 500);
 }
 
 function tesoTab(tab){
   _tesoTabActual=tab;
+  setBreadcrumbSub('teso', tab);
   ['cobros','pagos','caja','concil'].forEach(t=>{
     const tp=document.getElementById('tp-'+t);
     const btn=document.getElementById('tt-'+t);
@@ -2389,7 +3794,7 @@ function tesoTab(tab){
     if(btn){btn.classList.toggle('P',t===tab);}
   });
   if(tab==='cobros')renderTesCobros();
-  else if(tab==='pagos')renderTesPagos();
+  else if(tab==='pagos'){ ocultarFormPago(); renderTesPagos(); }
   else if(tab==='caja'){cajaPeriodo(_cajaPer);}
   else if(tab==='concil')renderTesConcil();
 }
@@ -2420,13 +3825,13 @@ function renderTesCobros(){
   const PP2=25,pg=_tesoPg.cobros,sl=data.slice((pg-1)*PP2,pg*PP2);
   document.getElementById('tco-tbody').innerHTML=sl.length?sl.map(r=>`<tr>
     <td>${r.fecha}</td>
-    <td style="font-weight:500">${r.cliente||'—'}</td>
+    <td style="font-weight:500">${esc(r.cliente||'—')}</td>
     <td style="font-size:11px">${(r.forma||'').split('+').map(f=>f==='efectivo'?'💵 Ef':f==='transf'?'🏦 Tr':f==='cheque'?'📋 Ch':f).join(' · ')||'—'}</td>
     <td style="color:var(--P)">${(r.efectivo||0)>0?fmt(r.efectivo):'—'}</td>
     <td style="color:var(--A)">${(r.transferencia||0)>0?fmt(r.transferencia):'—'}</td>
     <td style="color:var(--W)">${((r.cheque_terceros||0)+(r.cheque_propio||0))>0?fmt((r.cheque_terceros||0)+(r.cheque_propio||0)):'—'}</td>
     <td style="font-weight:700">${fmt(r.importe||0)}</td>
-    <td style="color:var(--txt2);font-size:12px">${r.vendedor||'—'}</td>
+    <td style="color:var(--txt2);font-size:12px">${esc(r.vendedor||'—')}</td>
     <td><button class="btn sm" onclick="imprimirRecibo(${r.id})" title="Ver / imprimir recibo">🧾</button></td>
   </tr>`).join(''):'<tr><td colspan="9"><div class="empty">Sin cobros para el período seleccionado</div></td></tr>';
   pag('tco-pg',data.length,pg,p=>{_tesoPg.cobros=p;renderTesCobros();});
@@ -2445,16 +3850,46 @@ async function guardarPago(){
   const provNom=_proveedores.find(x=>x.id==prov)?.nombre||'?';
   const btn=document.querySelector('#tp-pagos .btn.P');
   if(btn){btn.textContent='Guardando...';btn.disabled=true;}
-  const {error}=await sb.from('pagos_proveedores').insert({
+  const {data:nuevoPago,error}=await sb.from('pagos_proveedores').insert({
     fecha,proveedor_id:parseInt(prov),proveedor:provNom,importe:imp,forma,concepto
-  });
+  }).select().single();
   if(btn){btn.textContent='✓ Registrar';btn.disabled=false;}
   if(error){alert('Error: '+error.message);return;}
+  if(forma==='cheque'&&_chequesSeleccionadosPago.length){
+    await sb.from('cheques')
+      .update({estado:'entregado_a_proveedor',proveedor_id:parseInt(prov),proveedor:provNom,
+               fecha_entrega:fecha,pago_proveedor_id:nuevoPago?.id||null})
+      .in('id',_chequesSeleccionadosPago);
+    _chequesSeleccionadosPago=[];
+    await cargarCheques();
+  }
   await cargarPagosProv();
-  document.getElementById('pag-importe').value='';
-  document.getElementById('pag-concepto').value='';
+  ocultarFormPago();
   renderTesPagos();
   toast('Pago registrado');
+}
+
+function mostrarFormPago(){
+  const form=document.getElementById('pag-form-wrap');
+  const btn=document.getElementById('pag-btn-nuevo');
+  if(form)form.style.display='block';
+  if(btn)btn.style.display='none';
+  // Defaults al abrir
+  const f=document.getElementById('pag-fecha');
+  if(f&&!f.value)f.value=hoyLocal();
+  document.getElementById('pag-prov')?.focus();
+}
+
+function ocultarFormPago(){
+  const form=document.getElementById('pag-form-wrap');
+  const btn=document.getElementById('pag-btn-nuevo');
+  if(form)form.style.display='none';
+  if(btn)btn.style.display='inline-flex';
+  // Limpiar campos y estado
+  ['pag-importe','pag-concepto'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const prov=document.getElementById('pag-prov');if(prov)prov.value='';
+  const forma=document.getElementById('pag-forma');if(forma)forma.value='efectivo';
+  _chequesSeleccionadosPago=[];
 }
 
 function renderTesPagos(){
@@ -2478,8 +3913,8 @@ function renderTesPagos(){
   const PP2=200,pg=_tesoPg.pagos||1,sl=data.slice((pg-1)*PP2,pg*PP2);
   document.getElementById('tpag-tbody').innerHTML=sl.length?sl.map(p=>{const prov=_proveedores.find(x=>x.nombre===p.proveedor);return`<tr>
     <td>${p.fecha}</td>
-    <td style="font-weight:600">${p.proveedor||'—'}${prov?.cuit?`<br><span style="font-size:10px;color:var(--txt2)">${prov.cuit}</span>`:''}</td>
-    <td>${p.concepto||'—'}</td>
+    <td style="font-weight:600">${esc(p.proveedor||'—')}${prov?.cuit?`<br><span style="font-size:10px;color:var(--txt2)">${prov.cuit}</span>`:''}</td>
+    <td>${esc(p.concepto||'—')}</td>
     <td>${p.forma==='efectivo'?'💵 Efectivo':p.forma==='transferencia'?'🏦 Transf.':p.forma==='cheque'?'📋 Cheque':p.forma||'—'}</td>
     <td style="font-weight:700;color:var(--D)">${fmt(p.importe||0)}</td>
     <td><button class="btn sm D" onclick="eliminarPago(${p.id})">🗑</button></td>
@@ -2488,7 +3923,7 @@ function renderTesPagos(){
 }
 
 async function eliminarPago(id){
-  if(!confirm('¿Eliminar este pago?'))return;
+  if(!await _confirmar('¿Eliminar este pago?', {titulo:'Eliminar pago', textoOk:'Eliminar'}))return;
   await sb.from('pagos_proveedores').delete().eq('id',id);
   await cargarPagosProv();renderTesPagos();
   toast('Pago eliminado');
@@ -2594,7 +4029,7 @@ function renderTesConcil(){
   const sisDebPend=_pagosProv.filter(p=>p.forma==='transferencia'&&!conciliadosPagIds.has(p.id));
   // Extracto pendiente
   const itemBanc=(m)=>`<tr>
-    <td>${m.fecha}</td><td style="font-size:11px">${m.descripcion||'—'}</td>
+    <td>${m.fecha}</td><td style="font-size:11px">${esc(m.descripcion||'—')}</td>
     <td>${m.tipo==='credito'?'<span class="b bP">⬆ Crédito</span>':'<span class="b bD">⬇ Débito</span>'}</td>
     <td style="font-weight:700">${fmt(m.importe)}</td>
     <td><button class="btn sm D" title="Eliminar" onclick="eliminarMovBanc(${m.id})">🗑</button></td></tr>`;
@@ -2608,7 +4043,7 @@ function renderTesConcil(){
   ].sort((a,b)=>b.fecha.localeCompare(a.fecha));
   const _compThumb=url=>url?`<a href="${url}" target="_blank" title="Ver comprobante"><img src="${url}" style="height:38px;border-radius:4px;cursor:pointer;object-fit:cover;border:1px solid var(--A)" onerror="this.parentNode.innerHTML='📎'"></a>`:'—';
   document.getElementById('conc-sistema-list').innerHTML=allSis.length
-    ?`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Fecha</th><th>Descripción</th><th>Tipo</th><th>Importe</th><th>Comprobante</th></tr></thead><tbody>${allSis.map(s=>`<tr><td>${s.fecha}</td><td style="font-size:11px">${s.desc}</td><td>${s.tipo==='credito'?'<span class="b bA">⬆ Cobro Tr.</span>':'<span class="b bD">⬇ Pago Tr.</span>'}</td><td style="font-weight:700">${fmt(s.imp)}</td><td>${_compThumb(s.comp)}</td></tr>`).join('')}</tbody></table></div>`
+    ?`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Fecha</th><th>Descripción</th><th>Tipo</th><th>Importe</th><th>Comprobante</th></tr></thead><tbody>${allSis.map(s=>`<tr><td>${s.fecha}</td><td style="font-size:11px">${esc(s.desc)}</td><td>${s.tipo==='credito'?'<span class="b bA">⬆ Cobro Tr.</span>':'<span class="b bD">⬇ Pago Tr.</span>'}</td><td style="font-weight:700">${fmt(s.imp)}</td><td>${_compThumb(s.comp)}</td></tr>`).join('')}</tbody></table></div>`
     :'<div style="font-size:12px;color:var(--P);padding:8px">✅ Sin movimientos pendientes en el sistema</div>';
   // Conciliados
   const cnt=document.getElementById('conc-count');
@@ -2616,9 +4051,9 @@ function renderTesConcil(){
   document.getElementById('conc-conciliados').innerHTML=conciliados.length
     ?`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Fecha banco</th><th>Descripción</th><th>Tipo</th><th>Importe</th><th>Origen sistema</th><th>Comp.</th><th></th></tr></thead><tbody>${conciliados.map(m=>{
       let origen='',comp='';
-      if(m.conciliado_tipo==='cobro'){const c=_cobros.find(x=>x.id===m.conciliado_id);origen=c?`Cobro ${c.cliente} (${c.fecha})`:'?';comp=c?.comprobante_url||'';}
-      else if(m.conciliado_tipo==='pago'){const p=_pagosProv.find(x=>x.id===m.conciliado_id);origen=p?`Pago ${p.proveedor} (${p.fecha})`:'?';}
-      return `<tr><td>${m.fecha}</td><td style="font-size:11px">${m.descripcion||'—'}</td>
+      if(m.conciliado_tipo==='cobro'){const c=_cobros.find(x=>x.id===m.conciliado_id);origen=c?`Cobro ${esc(c.cliente)} (${c.fecha})`:'?';comp=c?.comprobante_url||'';}
+      else if(m.conciliado_tipo==='pago'){const p=_pagosProv.find(x=>x.id===m.conciliado_id);origen=p?`Pago ${esc(p.proveedor)} (${p.fecha})`:'?';}
+      return `<tr><td>${m.fecha}</td><td style="font-size:11px">${esc(m.descripcion||'—')}</td>
         <td>${m.tipo==='credito'?'<span class="b bP">⬆</span>':'<span class="b bD">⬇</span>'}</td>
         <td style="font-weight:700">${fmt(m.importe)}</td>
         <td style="font-size:12px;color:var(--P)">${origen}</td>
@@ -2654,7 +4089,7 @@ async function autoConciliar(){
 }
 
 async function eliminarMovBanc(id){
-  if(!confirm('¿Eliminar este movimiento del extracto?'))return;
+  if(!await _confirmar('¿Eliminar este movimiento del extracto?', {titulo:'Eliminar movimiento', textoOk:'Eliminar'}))return;
   await sb.from('movimientos_bancarios').delete().eq('id',id);
   await cargarMovBanc();renderTesConcil();
   toast('Movimiento eliminado');
@@ -2664,4 +4099,294 @@ async function desconciliar(id){
   await sb.from('movimientos_bancarios').update({conciliado:false,conciliado_id:null,conciliado_tipo:null}).eq('id',id);
   await cargarMovBanc();renderTesConcil();
   toast('Movimiento desconciliado');
+}
+
+// ─── LIMPIAR FILTROS DE CUENTAS CORRIENTES ───
+function limpiarFiltrosCC() {
+  document.getElementById('cc-q').value = '';
+  document.getElementById('cc-f').value = '';
+  document.getElementById('cc-f-zona').value = '';
+  document.getElementById('cc-f-saldo').value = '';
+  document.getElementById('cc-f-dias').value = '';
+  _ccPg = 1;
+  renderCC();
+}
+
+// ─── LIMPIAR FILTROS DE RENDICIÓN ───
+function limpiarFiltrosRendicion() {
+  document.getElementById('rend-hr-q').value = '';
+  document.getElementById('rend-hr-num').value = '';
+  // Reset al estado por defecto: solo hoy. Para ver más días, se cambia
+  // la fecha a mano.
+  document.getElementById('rend-hr-desde').value = hoyLocal();
+  document.getElementById('rend-hr-hasta').value = hoyLocal();
+  renderRendicion();
+}
+
+// ─── SELECCIONAR ZONA (UNIVERSAL: cobranza o pedido móvil) ───────────
+
+function seleccionarZonaUniversal(codigoZona) {
+  const input = document.getElementById('cobm-zona-input');
+  const contenedor = document.getElementById('cobm-zona-sugerencias');
+  
+  // Mostrar la zona seleccionada
+  const zona = _cobZonasCache.find(z => z.codigo === codigoZona);
+  if (zona) {
+    input.value = `${zona.descripcion} (${zona.codigo})`;
+  }
+  
+  // Ocultar sugerencias
+  contenedor.style.display = 'none';
+  
+  // Obtener clientes de la zona
+  const clientes = _clientes.filter(c => c.zona === codigoZona && c.activo !== false);
+  
+  // DETECTAR CONTEXTO: PRIMERO PEDIDO, LUEGO COBRANZA
+  const esPedido = !!document.getElementById('pm-cli-lista');
+  const esCobranza = !!document.getElementById('cobm-clientes-por-zona');
+  
+  if (esPedido) {
+    // ─── MODO PEDIDO MÓVIL ───
+    const listaPedidos = document.getElementById('pm-cli-lista');
+    if (!listaPedidos) return;
+    
+    // Asegurar que el contenedor de cobranza esté oculto
+    const contCobranza = document.getElementById('cobm-clientes-por-zona');
+    if (contCobranza) {
+      contCobranza.innerHTML = '';
+      contCobranza.style.display = 'none';
+    }
+    
+    if (!clientes.length) {
+      listaPedidos.innerHTML = `
+        <div style="padding:20px;text-align:center;color:var(--txt2);font-size:14px;">
+          No hay clientes en esta zona
+        </div>
+      `;
+      return;
+    }
+    
+    // GUARDAR CLIENTES EN LA VARIABLE GLOBAL
+    if (typeof _pmClientesZonaActual !== 'undefined') {
+      _pmClientesZonaActual = clientes;
+    }
+    
+    // Ordenar y mostrar
+    clientes.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
+    
+    // Usar la función de renderizado si existe
+    if (typeof renderizarClientesZona === 'function') {
+      renderizarClientesZona(clientes);
+    } else {
+      // Fallback: renderizado directo
+      listaPedidos.innerHTML = clientes.map(c => `
+        <div onclick="selClienteMovil(${c.id})" 
+          style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--brd);cursor:pointer;background:#fff;active:background:var(--PL);">
+          <div>
+            <div style="font-size:15px;font-weight:600;">[${c.codigo||c.id}] ${esc(c.nombre.toUpperCase())}</div>
+            <div style="font-size:12px;color:var(--txt2);">${esc(c.direccion||'')} ${esc(c.localidad||'')} · Tel: ${esc(c.telefono||'—')}</div>
+          </div>
+          <div style="text-align:right;min-width:80px;">
+            <div style="font-size:14px;font-weight:700;color:${(c.saldo||0)>0?'var(--D)':'var(--P)'}">${fmt(c.saldo||0)}</div>
+            <div style="font-size:10px;color:var(--txt2);">saldo</div>
+          </div>
+        </div>
+      `).join('');
+    }
+    
+    // Mostrar el buscador si hay más de 10 clientes
+    const buscador = document.getElementById('pm-cli-buscador');
+    if (buscador) {
+      buscador.style.display = clientes.length > 10 ? 'block' : 'none';
+    }
+
+    listaPedidos.style.display = 'block';
+    
+  } else if (esCobranza) {
+    // ─── MODO COBRANZA ───
+    const contenedorClientes = document.getElementById('cobm-clientes-por-zona');
+    if (!contenedorClientes) return;
+    
+    // Asegurar que la lista de pedidos esté oculta
+    const listaPedidos = document.getElementById('pm-cli-lista');
+    if (listaPedidos) {
+      listaPedidos.innerHTML = '';
+      listaPedidos.style.display = 'none';
+    }
+    
+    if (!clientes.length) {
+      contenedorClientes.innerHTML = `
+        <div style="padding:20px;text-align:center;color:var(--txt2);font-size:14px;">
+          No hay clientes en esta zona
+        </div>
+      `;
+      contenedorClientes.style.display = 'block';
+      return;
+    }
+    
+    clientes.sort((a,b) => (a.nombre||'').localeCompare(b.nombre||''));
+    contenedorClientes.innerHTML = clientes.map(c => `
+      <div onclick="selClienteCobMovil(${c.id})"
+        style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:#fff;border-radius:10px;margin-bottom:6px;border:1.5px solid var(--brd);cursor:pointer;-webkit-tap-highlight-color:transparent;transition:all 0.15s;"
+        onmouseover="this.style.borderColor='var(--P)';this.style.background='var(--bg2)'" 
+        onmouseout="this.style.borderColor='var(--brd)';this.style.background='#fff'">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.nombre)}</div>
+          <div style="font-size:12px;color:var(--txt2);margin-top:2px">${esc(c.localidad||'')} ${c.codigo ? '· #' + c.codigo : ''}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;margin-left:10px">
+          <div style="font-size:16px;font-weight:700;color:${(c.saldo||0)>0?'var(--D)':'var(--P)'}">${fmt(c.saldo||0)}</div>
+          <div style="font-size:10px;color:var(--txt2);">
+            ${c.ultimo_remito ? (Math.floor((new Date() - new Date(c.ultimo_remito)) / 864e5)) + 'd' : '—'}
+          </div>
+        </div>
+      </div>
+    `).join('');
+    
+    contenedorClientes.style.display = 'block';
+  }
+  
+  // Resetear el filtro de zonas para que no interfiera en futuras búsquedas
+  _cobZonaInput = '';
+}
+
+// ─── POSICIONAR SUGERENCIAS DE ZONAS ──────────────────────────────────
+
+function posicionarSugerenciasZonas() {
+  const input = document.getElementById('cobm-zona-input');
+  const contenedor = document.getElementById('cobm-zona-sugerencias');
+  if (!input || !contenedor || contenedor.style.display === 'none') return;
+  
+  const rect = input.getBoundingClientRect();
+  const viewportHeight = window.innerHeight;
+  const viewportWidth = window.innerWidth;
+  
+  const espacioAbajo = viewportHeight - rect.bottom - 10;
+  const espacioArriba = rect.top - 10;
+  const alturaMax = Math.min(260, Math.max(150, Math.max(espacioAbajo, espacioArriba) - 20));
+  
+  const usarArriba = espacioAbajo < 160 && espacioArriba > espacioAbajo;
+  
+  contenedor.style.position = 'fixed';
+  contenedor.style.top = usarArriba ? 'auto' : (rect.bottom + 6) + 'px';
+  contenedor.style.bottom = usarArriba ? (viewportHeight - rect.top + 8) + 'px' : 'auto';
+  contenedor.style.left = Math.max(10, rect.left) + 'px';
+  contenedor.style.width = Math.min(rect.width, viewportWidth - 20) + 'px';
+  contenedor.style.maxHeight = alturaMax + 'px';
+  contenedor.style.overflowY = 'auto';
+  contenedor.style.zIndex = '99999';
+  contenedor.style.background = '#fff';
+  contenedor.style.border = '2px solid var(--P)';
+  contenedor.style.borderRadius = '12px';
+  contenedor.style.boxShadow = '0 8px 32px rgba(0,0,0,0.18)';
+  contenedor.style.display = 'block';
+  contenedor.style.padding = '4px 0';
+  contenedor.style.WebkitOverflowScrolling = 'touch';
+  
+  // Ajustar laterales
+  const dropRect = contenedor.getBoundingClientRect();
+  if (dropRect.right > viewportWidth - 8) {
+    contenedor.style.left = Math.max(8, viewportWidth - dropRect.width - 8) + 'px';
+  }
+  if (dropRect.left < 8) {
+    contenedor.style.left = '8px';
+  }
+}
+
+// ─── CERRAR SUGERENCIAS DE ZONAS ──────────────────────────────────────
+
+function cerrarSugerenciasZonas() {
+  const contenedor = document.getElementById('cobm-zona-sugerencias');
+  if (contenedor) {
+    contenedor.style.display = 'none';
+    contenedor.innerHTML = '';
+  }
+}
+
+// ─── LIMPIAR BUSCADOR DE ZONAS (versión universal) ────────────────────
+
+function limpiarBuscadorZonasUniversal() {
+  const input = document.getElementById('cobm-zona-input');
+  if (input) input.value = '';
+  
+  cerrarSugerenciasZonas();
+  
+  const clientesPorZona = document.getElementById('cobm-clientes-por-zona');
+  if (clientesPorZona) {
+    clientesPorZona.innerHTML = '';
+    clientesPorZona.style.display = 'none';
+  }
+  
+  const pasoCliente = document.getElementById('cobm-paso-cliente');
+  if (pasoCliente) pasoCliente.style.display = 'block';
+  
+  _cobZonaInput = '';
+}
+
+// Reparte el monto cobrado entre las facturas pendientes, de la más vieja a
+// la más nueva (FIFO). Setea los inputs de imputación y avisa si sobra plata.
+function cobmAutoImputar(){
+  const importe = parseFloat(document.getElementById('cobm-importe')?.value)||0;
+  if(importe<=0){
+    toast('Ingresá primero cuánto cobró','warn');
+    document.getElementById('cobm-importe')?.focus();
+    return;
+  }
+  const inputs = [...document.querySelectorAll('[id^="cobm-imp-"]')];
+  if(!inputs.length){toast('No hay facturas pendientes','warn');return;}
+  let resto = importe;
+  inputs.forEach(inp=>{
+    if(resto<=0){inp.value='';return;}
+    const max = parseFloat(inp.max)||0;
+    const aplicar = Math.min(max, resto);
+    inp.value = aplicar>0?aplicar:'';
+    resto -= aplicar;
+  });
+  calcCobMovil();
+  if(resto>0){
+    toast(`Se imputó todo. Quedan ${fmt(resto)} sin imputar (irán a saldo a favor)`,'warn',4000);
+  } else {
+    toast(`✅ Repartido ${fmt(importe)} en las facturas más viejas`);
+  }
+}
+
+// ─── Accesos directos desde el home del vendedor/repartidor ────────────────
+// Abren la cobranza móvil y saltan directo al sub-panel correspondiente.
+// El setTimeout le da tiempo a go('cobranza') a terminar su init (setear
+// el header, cargar la hoja de ruta, evaluar el badge) antes de abrir el
+// panel de CC o Mis cobranzas. Además seteamos _cobmDesdeHome=true para
+// que el sub-panel oculte su botón volver interno (el header ya lleva al
+// inicio en este caso).
+let _cobmDesdeHome = false;
+
+function irACuentaCorriente(){
+  go('cobranza');
+  setTimeout(()=>{ _cobmDesdeHome = true; cobmAbrirCC(); }, 120);
+}
+
+function irAMisCobranzas(){
+  go('cobranza');
+  setTimeout(()=>{ _cobmDesdeHome = true; cobmAbrirMisCobranzas(); }, 120);
+}
+
+// Swipe derecha en los sub-paneles de cobranza móvil:
+//   · Si el usuario llegó apretando un botón del home → vuelve al home
+//     y limpia el flag.
+//   · Si llegó navegando desde dentro de cobranza → vuelve al paso
+//     cliente con cobmVolverAcciones() (que ya resetea _cobmDesdeHome).
+// Se engancha una sola vez por contenedor (dataset.swipeOn).
+function _initSwipeSubPanelCobranza(){
+  ['cobm-panel-cc', 'cobm-panel-miscobranzas'].forEach(id => {
+    const panel = document.getElementById(id);
+    if (!panel || panel.dataset.swipeOn) return;
+    panel.dataset.swipeOn = '1';
+    habilitarSwipe(
+      panel,
+      () => {},   // swipe izq: no aplica (no hay paso siguiente)
+      () => {     // swipe der: volver
+        if (_cobmDesdeHome) { _cobmDesdeHome = false; go('vendedor-home'); }
+        else cobmVolverAcciones();
+      }
+    );
+  });
 }

@@ -1,16 +1,56 @@
 // ─── LOGÍSTICA: cargas, remitos (despacho), hoja de ruta ───
 let _carNombreSugerido='';
 
-async function cargarRemitos(){const {data}=await sb.from('remitos').select('*').order('created_at',{ascending:false});_remitos=data||[];}
+async function cargarRemitos() {
+  let all = [];
+  let from = 0;
+  const pageSize = 1000;
+  let hasMore = true;
+
+  while (hasMore) {
+    const result = await q(
+      sb
+        .from('remitos')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(from, from + pageSize - 1),
+      'remitos (página ' + (Math.floor(from / pageSize) + 1) + ')'
+    );
+
+    if (result === null) {
+      _remitos = [];
+      return;
+    }
+
+    if (result.length === 0) {
+      hasMore = false;
+      break;
+    }
+
+    all = all.concat(result);
+    from += pageSize;
+    if (result.length < pageSize) hasMore = false;
+  }
+
+  _remitos = all;
+}
 
 async function cargarCargas(){const {data}=await sb.from('cargas').select('*').order('created_at',{ascending:false});_cargas=data||[];}
 
 // ─── CARGAS ───
 function mostrarNuevaCarga(){
   document.getElementById('carga-vista-lista').style.display='none';
-  document.getElementById('carga-vista-nueva').style.display='block';
+  document.getElementById('carga-vista-nueva').style.display='flex';
+  // Mostrar el botón de refresco (solo aplica a la vista nueva)
+  actualizarVisibilidadBotonRefresco('carga');
   const fecha=document.getElementById('car-fecha');
   if(fecha)fecha.value=hoyLocal();
+  // Por defecto, mostrar solo los pedidos cargados HOY. Si quieren ver los de
+  // días anteriores, cambian las fechas o tocan "Ver todos".
+  const fFd=document.getElementById('car-fil-fd');
+  const fFh=document.getElementById('car-fil-fh');
+  if(fFd&&!fFd.value)fFd.value=hoyLocal();
+  if(fFh&&!fFh.value)fFh.value=hoyLocal();
   const nomEl=document.getElementById('car-nombre');
   if(nomEl)nomEl.value='';
   _carNombreSugerido='';
@@ -28,8 +68,10 @@ function mostrarNuevaCarga(){
 }
 
 function ocultarNuevaCarga(){
-  document.getElementById('carga-vista-lista').style.display='block';
+  document.getElementById('carga-vista-lista').style.display='flex';
   document.getElementById('carga-vista-nueva').style.display='none';
+  // Ocultar el botón de refresco (la lista de cargas no auto-refresca)
+  actualizarVisibilidadBotonRefresco('carga');
 }
 
 async function abrirCarga(){ mostrarNuevaCarga(); }
@@ -58,11 +100,15 @@ async function loadPedsCarga(){
   const zona=document.getElementById('car-fil-zona')?.value||'';
   const loc=document.getElementById('car-fil-loc')?.value||'';
   const ven=document.getElementById('car-fil-ven')?.value||'';
+  const fd=document.getElementById('car-fil-fd')?.value||'';
+  const fh=document.getElementById('car-fil-fh')?.value||'';
   const pends=_pedidos.filter(p=>
     p.estado==='pendiente'&&
     (!zona||p.zona===zona)&&
     (!loc||(p.localidad||'')=== loc)&&
-    (!ven||(p.vendedor||'').toLowerCase()===(ven).toLowerCase())
+    (!ven||(p.vendedor||'').toLowerCase()===(ven).toLowerCase())&&
+    (!fd||(p.fecha||'')>=fd)&&
+    (!fh||(p.fecha||'')<=fh)
   ).sort((a,b)=>(a.zona||'').localeCompare(b.zona||'')||(a.localidad||'').localeCompare(b.localidad||''));
   const el=document.getElementById('car-items-lista');
   if(!el)return;
@@ -72,14 +118,37 @@ async function loadPedsCarga(){
     return `<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-bottom:1px solid var(--brd);font-size:12px">
       <input type="checkbox" id="chk-${p.id}" value="${p.id}" checked onchange="actualizarResumenCarga()" style="width:18px;height:18px;cursor:pointer;flex-shrink:0">
       <label for="chk-${p.id}" style="flex:1;cursor:pointer;line-height:1.3">
-        <span style="font-weight:600">${p.cliente}</span>
-        <span style="color:var(--txt2);font-size:11px;margin-left:8px">${p.localidad||''} · ${(_zonas.find(z=>z.codigo===p.zona)?.descripcion||p.zona)||''} · ${p.vendedor||'—'} · ${p.fecha}</span>
-        ${c?.direccion?`<span style="color:var(--txt2);font-size:11px;margin-left:8px">📍 ${c.direccion}</span>`:''}
+        <span style="font-weight:600">${esc(p.cliente)}</span>
+        <span style="color:var(--txt2);font-size:11px;margin-left:8px">${esc(p.localidad||'')} · ${(_zonas.find(z=>z.codigo===p.zona)?.descripcion||p.zona)||''} · ${esc(p.vendedor||'—')} · ${p.fecha}</span>
+        ${c?.direccion?`<span style="color:var(--txt2);font-size:11px;margin-left:8px">📍 ${esc(c.direccion)}</span>`:''}
       </label>
     </div>`;
   }).join('');
   actualizarResumenCarga();
 }
+
+// Actualización en vivo: cuando se arma una carga nueva, cada 25s (o al
+// tocar 🔄) se vuelven a pedir los pedidos pendientes a Supabase para ver
+// en tiempo real los que van llegando desde los vendedores.
+// Preserva los checkboxes que el usuario ya marcó/desmarcó manualmente.
+registrarRefresco('carga', async()=>{
+  const vistaNueva = document.getElementById('carga-vista-nueva');
+  if(!vistaNueva || vistaNueva.style.display === 'none') return;
+  // Guardar estado actual de los checkboxes (marcados y desmarcados).
+  const estadoPrevio = {};
+  document.querySelectorAll('#car-items-lista input[type=checkbox]').forEach(c=>{
+    estadoPrevio[c.value] = c.checked;
+  });
+  // Recargar pedidos desde Supabase y re-renderizar la lista.
+  await cargarPedidos();
+  await loadPedsCarga();
+  // Restaurar el estado previo a los pedidos que ya existían (los nuevos
+  // que aparezcan después del refresh vienen marcados por defecto).
+  document.querySelectorAll('#car-items-lista input[type=checkbox]').forEach(c=>{
+    if(c.value in estadoPrevio) c.checked = estadoPrevio[c.value];
+  });
+  actualizarResumenCarga();
+});
 
 async function guardarCarga(){
   const chks=[...document.querySelectorAll('#car-items-lista input[type=checkbox]:checked')];
@@ -91,10 +160,25 @@ async function guardarCarga(){
   const fecha=document.getElementById('car-fecha')?.value||hoyLocal();
   const nombre=document.getElementById('car-nombre')?.value.trim()||ven||'';
   ocultarNuevaCarga();
-  const {data:carga,error}=await sb.from('cargas').insert({fecha,vendedor:ven,pedidos:pedIds,total:tot,estado:'armando',nombre}).select().single();
+  
+  const {data:carga,error}=await sb.from('cargas').insert({
+    fecha,vendedor:ven,pedidos:pedIds,total:tot,estado:'armando',nombre
+  }).select().single();
   if(error){alert('Error: '+error.message);return;}
-  for(const pid of pedIds){await sb.from('pedidos').update({estado:'en_carga',carga_id:carga.id}).eq('id',pid);}
-  cerrar('m-carga');await Promise.all([cargarCargas(),cargarPedidos()]);renderCargas();renderPedidos();renderDash();
+  
+  //ACTUALIZAR PEDIDOS CON carga_id (número entero)
+  for(const pid of pedIds){
+    await sb.from('pedidos').update({ 
+      estado: 'en_carga',
+      carga_id: carga.id   // carga.id es INTEGER
+    }).eq('id', pid);
+  }
+  
+  cerrar('m-carga');
+  await Promise.all([cargarCargas(),cargarPedidos()]);
+  renderCargas();
+  renderPedidos();
+  renderDash();
 }
 
 function renderCargas(){
@@ -119,39 +203,71 @@ function renderCargas(){
     }
     return true;
   }).sort((a,b)=>b.id-a.id);
-  if(!cargas.length){el.innerHTML='<div class="empty">Sin cargas'+(q||fd||fh||ven||est?' para los filtros seleccionados':'')+'</div>';return;}
+  if(!cargas.length){
+    const esSoloHoy = fd===hoyLocal() && fh===hoyLocal() && !q && !ven && !est;
+    el.innerHTML='<div class="empty">'+(esSoloHoy
+      ? 'Sin cargas para hoy.<br><span style="font-size:11px;color:var(--txt2)">Cambiá las fechas para ver otros días, o creá una con "+ Nueva carga".</span>'
+      : 'Sin cargas'+(q||fd||fh||ven||est?' para los filtros seleccionados':'')
+    )+'</div>';
+    return;
+  }
   el.innerHTML=cargas.map(cg=>{
     const peds=_pedidos.filter(p=>(cg.pedidos||[]).includes(p.id));
     const fechaFmt=cg.fecha?cg.fecha.split('-').reverse().join('/'):'—';
     // Detectar si hay remitos vinculados a esta carga
+    // Detectar si hay remitos vinculados a esta carga
     const pedIds=(cg.pedidos||[]);
     const remsCarga=_remitos.filter(r=>pedIds.includes(r.pedido_id)||r.carga_id===cg.id);
     // Fallback: remitos del mismo día y vendedor si no hay por pedido_id
-    const remsDisp=remsCarga.length>0?remsCarga:
+    let remsDisp=remsCarga.length>0?remsCarga:
       (cg.fecha&&cg.vendedor?_remitos.filter(r=>r.fecha===cg.fecha&&(r.vendedor||'').toLowerCase()===(cg.vendedor||'').toLowerCase()):[]);
+    // Deduplicar por pedido_id (conservar el más viejo). Los remitos sin
+    // pedido_id (emitidos sueltos) se conservan todos con clave única.
+    {
+      const porPedido={};
+      remsDisp.forEach(r=>{
+        if(r.pedido_id==null){porPedido['_'+r.id]=r;return;}
+        if(!porPedido[r.pedido_id]||r.id<porPedido[r.pedido_id].id){porPedido[r.pedido_id]=r;}
+      });
+      remsDisp=Object.values(porPedido);
+    }
     const tieneRemitos=remsDisp.length>0;
+    // Avance de la facturación: cuántos pedidos de la carga ya tienen remito.
+    // Sirve para retomar una carga que quedó a la mitad (corte de luz, etc.):
+    // "Facturar con pesaje" sigue solo con los pendientes.
+    const pedsCarga=_pedidosDeCarga(cg.id);
+    const nRemitados=pedsCarga.filter(p=>p.estado==='remitado'||p.remito_id).length;
+    const nPend=pedsCarga.length-nRemitados;
+    const aMedias=cg.estado==='lista'&&nRemitados>0&&nPend>0;
     return `<div class="ccard">
       <div class="ccard-h">
         <div>
-          <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap">
-            <span class="ccard-num">Carga #${cg.id}</span>
-            <span class="ccard-fecha">📅 ${fechaFmt}</span>
-            ${cg.nombre?`<span class="ccard-nm">${cg.nombre}</span>`:''}
-            ${cg.vendedor?`<span class="ccard-nm">— ${cg.vendedor}</span>`:''}
+          <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+            <span class="ccard-num" style="font-size:16px">Carga #${cg.id}</span>
+            <span class="ccard-fecha" style="font-size:16px">📅 ${fechaFmt}</span>
+            ${cg.nombre?`<span class="ccard-nm" style="font-size:16px">${esc(cg.nombre)}</span>`:''}
+            ${cg.vendedor?`<span class="ccard-nm" style="font-size:16px">— ${esc(cg.vendedor)}</span>`:''}
           </div>
-          <div class="ccard-sub">${(cg.pedidos||[]).length} pedidos · ${peds.slice(0,6).map(p=>p.cliente).join(' · ')}${peds.length>6?` · +${peds.length-6} más`:''}</div>
+          <div class="ccard-sub">${(cg.pedidos||[]).length} pedidos · ${esc(peds.slice(0,6).map(p=>p.cliente).join(' · '))}${peds.length>6?` · +${peds.length-6} más`:''}</div>
         </div>
-        <div style="text-align:right"><div class="ccard-tot">${fmt(cg.total)}</div><span class="b ${cg.estado==='armando'?'bW':cg.estado==='lista'?'bA':cg.estado==='emitida'?'bP':'bP'}">${cg.estado}</span></div>
+        <div style="text-align:right"><div class="ccard-tot">${fmt(cg.total)}</div><span class="b ${cg.estado==='armando'?'bW':cg.estado==='lista'?'bA':cg.estado==='emitida'?'bP':'bP'}">${cg.estado}</span>${aMedias?`<div style="margin-top:4px"><span class="b bW" title="Quedó a la mitad: tocá 'Seguir facturando' para continuar con los pendientes">⏸ ${nRemitados} de ${pedsCarga.length} remitidos</span></div>`:''}</div>
       </div>
       <div class="ccard-acts">
-        ${cg.estado==='armando'?`<button class="btn P sm" onclick="marcarLista(${cg.id})">✓ Marcar lista</button>`:''}
-        ${cg.estado==='lista'?`<button class="btn A sm" onclick="emitirRemitos(${cg.id})">📄 Emitir remitos</button>`:''}
-        ${cg.estado==='lista'?`<button class="btn P sm" onclick="facturarCargaConPesaje(${cg.id})" title="Cargar el peso real de cada cajón y emitir el remito uno por uno">⚖️ Facturar con pesaje real</button>`:''}
-        <button class="btn sm" onclick="editarCarga(${cg.id})">✏️</button>
+        ${(cg.estado==='armando' || cg.estado==='lista') ? `<button class="btn P sm" onclick="editarCarga(${cg.id})">✏️ Editar</button>` : `<button class="btn sm" style="opacity:0.5;cursor:default;" disabled>✏️ Editar</button>`}
+        
+        ${cg.estado==='armando' ? `<button class="btn P sm" onclick="marcarLista(${cg.id})">✓ Marcar lista</button>` : `<button class="btn sm" style="opacity:0.5;cursor:default;" disabled>✓ Marcar lista</button>`}
+        
+        ${cg.estado==='lista' ? `<button class="btn A sm" onclick="emitirRemitos(${cg.id})">📄 Emitir remitos</button>` : `<button class="btn sm" style="opacity:0.5;cursor:default;" disabled>📄 Emitir remitos</button>`}
+        
+        ${cg.estado==='lista' ? `<button class="btn P sm" onclick="facturarCargaConPesaje(${cg.id})" title="${aMedias?'Retoma con los pedidos que todavía no tienen remito':'Cargar el peso real de cada cajón y emitir el remito uno por uno'}">⚖️ ${aMedias?`Seguir facturando (${nPend} pendiente${nPend!==1?'s':''})`:'Facturar con pesaje'}</button>` : `<button class="btn sm" style="opacity:0.5;cursor:default;" disabled>⚖️ Facturar con pesaje</button>`}
+        
         <button class="btn sm" onclick="resumenCarga(${cg.id})">📋 Resumen</button>
-        ${tieneRemitos?`<button class="btn A sm" onclick="imprimirRemitosCarga(${cg.id})">🖨️ Remitos (${remsDisp.length})</button>`:''}
-        ${cg.estado==='emitida'?`<button class="btn sm" onclick="_generarHojaRutaParaCarga(${cg.id}).then(()=>toast('✅ Hoja de ruta regenerada para esta carga.'))" title="Crea/completa la hoja de ruta con todos los pedidos de esta carga (útil si algunos no aparecían en Rendición)">🔗 Hoja de ruta</button>`:''}
-        ${cg.estado==='armando'?`<button class="btn D sm" onclick="eliminarCarga(${cg.id})" title="Eliminar carga y devolver pedidos">🗑</button>`:''}
+        
+        ${tieneRemitos ? `<button class="btn A sm" onclick="imprimirRemitosCarga(${cg.id})">🖨️ Remitos (${remsDisp.length})</button>` : `<button class="btn sm" style="opacity:0.5;cursor:default;" disabled>🖨️ Remitos (0)</button>`}
+        
+        ${cg.estado==='emitida' ? `<button class="btn sm" onclick="_generarHojaRutaParaCarga(${cg.id}).then(()=>toast('✅ Hoja de ruta regenerada para esta carga.'))" title="Crea/completa la hoja de ruta con todos los pedidos de esta carga (útil si algunos no aparecían en Rendición)">🔗 Hoja de ruta</button>` : `<button class="btn sm" style="opacity:0.5;cursor:default;" disabled>🔗 Hoja de ruta</button>`}
+        
+        ${cg.estado==='armando' ? `<button class="btn D sm" onclick="eliminarCarga(${cg.id})" title="Eliminar carga y devolver pedidos">🗑 Eliminar</button>` : `<button class="btn sm" style="opacity:0.5;cursor:default;" disabled>🗑 Eliminar</button>`}
       </div>
     </div>`;
   }).join('');
@@ -164,6 +280,16 @@ function imprimirRemitosCarga(cargaId){
   // Fallback: misma fecha y vendedor
   if(!rems.length&&cg.fecha&&cg.vendedor){
     rems=_remitos.filter(r=>r.fecha===cg.fecha&&(r.vendedor||'').toLowerCase()===(cg.vendedor||'').toLowerCase());
+  }
+  // Deduplicar: por id (por si acaso) y por pedido_id (conservar el más viejo).
+  rems=[...new Map(rems.map(r=>[r.id,r])).values()];
+  {
+    const porPedido={};
+    rems.forEach(r=>{
+      if(r.pedido_id==null){porPedido['_'+r.id]=r;return;}
+      if(!porPedido[r.pedido_id]||r.id<porPedido[r.pedido_id].id){porPedido[r.pedido_id]=r;}
+    });
+    rems=Object.values(porPedido);
   }
   if(!rems.length){alert('No hay remitos emitidos para esta carga todavía.');return;}
 
@@ -178,9 +304,15 @@ function imprimirRemitosCarga(cargaId){
     let tot=0;
     const filas=(r.items||[]).map(it=>{
       const neto=it.precio*it.cant*(1-(it.dto||0)/100);tot+=neto;
+      // Mismo criterio que el remito individual y el resumen de carga:
+      // separar Kg de Cant. El peso real está en it.peso; fallback a it.cant
+      // para items viejos sin it.peso cargado.
+      const esKg = it.esPeso || (it.un||'').toLowerCase()==='kg';
+      const peso = esKg ? (it.peso || it.cant || 0) : 0;
       return '<tr>'
-        +'<td style="padding:4px 7px;border:1px solid #ccc">'+it.nom+'</td>'
-        +'<td style="padding:4px 7px;border:1px solid #ccc;text-align:center">'+it.cant+' '+(it.un||'')+'</td>'
+        +'<td style="padding:4px 7px;border:1px solid #ccc">'+esc(it.nom)+'</td>'
+        +'<td style="padding:4px 7px;border:1px solid #ccc;text-align:center">'+it.cant+'</td>'
+        +'<td style="padding:4px 7px;border:1px solid #ccc;text-align:center">'+(esKg?fmtN(peso,2):'—')+'</td>'
         +'<td style="padding:4px 7px;border:1px solid #ccc;text-align:right">'+fmt(it.precio)+'</td>'
         +((it.dto||0)>0?'<td style="padding:4px 7px;border:1px solid #ccc;text-align:center">'+it.dto+'%</td>':'<td style="padding:4px 7px;border:1px solid #ccc;text-align:center">—</td>')
         +'<td style="padding:4px 7px;border:1px solid #ccc;text-align:right;font-weight:600">'+fmt(neto)+'</td>'
@@ -188,13 +320,14 @@ function imprimirRemitosCarga(cargaId){
     }).join('');
     return '<div style="margin-bottom:16px;page-break-inside:avoid;border:1px solid #ccc;border-radius:4px;overflow:hidden">'
       +'<div style="background:#1a7a52;color:#fff;padding:6px 10px;display:flex;justify-content:space-between;align-items:center">'
-        +'<span style="font-weight:700;font-size:13px">'+(i+1)+'. R-'+String(r.id).padStart(4,'0')+' — '+r.cliente+'</span>'
-        +'<span style="font-size:11px;font-weight:400">'+(dir?dir+' · ':'')+r.localidad+(tel?' · 📞 '+tel:'')+'</span>'
+        +'<span style="font-weight:700;font-size:13px">'+(i+1)+'. R-'+String(r.id).padStart(4,'0')+' — '+esc(r.cliente)+'</span>'
+        +'<span style="font-size:11px;font-weight:400">'+(dir?esc(dir)+' · ':'')+esc(r.localidad)+(tel?' · 📞 '+esc(tel):'')+'</span>'
       +'</div>'
       +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
         +'<thead><tr style="background:#e8f5e9">'
           +'<th style="padding:4px 7px;border:1px solid #ccc;text-align:left">Producto</th>'
-          +'<th style="padding:4px 7px;border:1px solid #ccc;text-align:center;width:80px">Cant.</th>'
+          +'<th style="padding:4px 7px;border:1px solid #ccc;text-align:center;width:60px">Cant.</th>'
+          +'<th style="padding:4px 7px;border:1px solid #ccc;text-align:center;width:60px">Kg</th>'
           +'<th style="padding:4px 7px;border:1px solid #ccc;text-align:right;width:80px">P.Unit</th>'
           +'<th style="padding:4px 7px;border:1px solid #ccc;text-align:center;width:45px">Dto</th>'
           +'<th style="padding:4px 7px;border:1px solid #ccc;text-align:right;width:90px">Total</th>'
@@ -202,7 +335,7 @@ function imprimirRemitosCarga(cargaId){
         +'<tbody>'+filas+'</tbody>'
       +'</table>'
       +'<div style="display:flex;justify-content:space-between;padding:5px 10px;background:#fafafa;border-top:1px solid #ccc;font-size:12px">'
-        +(r.observaciones?'<span style="color:#555">Obs: '+r.observaciones+'</span>':'<span></span>')
+        +(r.observaciones?'<span style="color:#555">Obs: '+esc(r.observaciones)+'</span>':'<span></span>')
         +'<span style="font-weight:700;color:#1a7a52">Total: '+fmt(tot)+'</span>'
       +'</div>'
     +'</div>';
@@ -214,9 +347,9 @@ function imprimirRemitosCarga(cargaId){
     return '<tr style="'+(i%2===0?'':'background:#f9f9f9')+'">'
       +'<td style="padding:5px 7px;border:1px solid #ccc;text-align:center;color:#777;font-size:11px">'+(i+1)+'</td>'
       +'<td style="padding:5px 7px;border:1px solid #ccc;font-size:11px;color:#555">R-'+String(r.id).padStart(4,'0')+'</td>'
-      +'<td style="padding:5px 7px;border:1px solid #ccc;font-weight:600">'+r.cliente+'</td>'
-      +'<td style="padding:5px 7px;border:1px solid #ccc;font-size:11px;color:#555">'+dir+'</td>'
-      +'<td style="padding:5px 7px;border:1px solid #ccc;font-size:11px">'+r.localidad+'</td>'
+      +'<td style="padding:5px 7px;border:1px solid #ccc;font-weight:600">'+esc(r.cliente)+'</td>'
+      +'<td style="padding:5px 7px;border:1px solid #ccc;font-size:11px;color:#555">'+esc(dir)+'</td>'
+      +'<td style="padding:5px 7px;border:1px solid #ccc;font-size:11px">'+esc(r.localidad)+'</td>'
       +'<td style="padding:5px 7px;border:1px solid #ccc;text-align:right;font-weight:600">'+fmt(r.total)+'</td>'
       +'<td style="padding:5px 7px;border:1px solid #ccc;text-align:center">☐</td>'
     +'</tr>';
@@ -229,7 +362,7 @@ function imprimirRemitosCarga(cargaId){
     +'</style></head><body>'
     +'<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1a7a52;padding-bottom:8px;margin-bottom:14px">'
       +'<div>'
-        +'<div style="font-size:16px;font-weight:700;color:#1a7a52">🌸 DISTRIBUIDORA LILA</div>'
+        +'<div style="font-size:16px;font-weight:700;color:#1a7a52">DISTRIBUIDORA LILA</div>'
         +'<div style="font-size:13px;font-weight:600;margin-top:2px">'+titulo+'</div>'
         +'<div style="font-size:12px;margin-top:2px"><b>Fecha:</b> '+cg.fecha+' &nbsp;&nbsp; <b>Vendedor:</b> '+(cg.vendedor||'—')+'</div>'
       +'</div>'
@@ -258,9 +391,6 @@ function imprimirRemitosCarga(cargaId){
     +'</table>'
     +'<div style="font-weight:600;font-size:13px;margin-bottom:8px;color:#1a7a52">📄 Detalle por cliente</div>'
     +bloques
-    +'<div class="no-print" style="text-align:center;margin-top:16px">'
-      +'<button onclick="window.print()" style="padding:8px 24px;background:#1a7a52;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨️ Imprimir</button>'
-    +'</div>'
     +'</body></html>');
   w.document.close();
 }
@@ -292,7 +422,7 @@ async function marcarLista(id){
 async function eliminarCarga(id){
   const cg=_cargas.find(x=>x.id===id);if(!cg)return;
   if(cg.estado!=='armando'){toast('Solo se pueden eliminar cargas en estado "armando"');return;}
-  if(!confirm('¿Eliminar esta carga? Los pedidos vuelven a estado pendiente.'))return;
+  if(!await _confirmar('¿Eliminar esta carga? Los pedidos vuelven a estado pendiente.', {titulo:'Eliminar carga', textoOk:'Eliminar'}))return;
   for(const pid of (cg.pedidos||[])){await sb.from('pedidos').update({estado:'pendiente',carga_id:null}).eq('id',pid);}
   await sb.from('cargas').delete().eq('id',id);
   await Promise.all([cargarCargas(),cargarPedidos()]);
@@ -300,50 +430,101 @@ async function eliminarCarga(id){
   toast('Carga eliminada — pedidos devueltos a pendiente');
 }
 
+let _emitiendoRemitos=false;
+
 async function emitirRemitos(cargaId){
+  // Guard antidoble-toque: si ya está corriendo, no arranca de nuevo.
+  if(_emitiendoRemitos){toast('Ya se están emitiendo remitos para esta carga...','warn');return;}
   const cg=_cargas.find(x=>x.id===cargaId);if(!cg)return;
-  const peds=_pedidos.filter(p=>(cg.pedidos||[]).includes(p.id)&&p.estado!=='remitado'&&!p.remito_id);
-  if(!peds.length){toast('Todos los pedidos de esta carga ya tienen remito.');return;}
-  const hoy=hoyLocal();
-  // Acumular totales por cliente antes de actualizar para evitar sobrescritura con múltiples pedidos del mismo cliente
-  const acumCliente={};
-  for(const p of peds){acumCliente[p.cliente_id]=(acumCliente[p.cliente_id]||{total:0,comprado:0,fecha:hoy});acumCliente[p.cliente_id].total+=p.total;acumCliente[p.cliente_id].comprado+=p.total;}
-  for(const p of peds){
-    const c=_clientes.find(x=>x.id===p.cliente_id);
-    const {data:rem}=await sb.from('remitos').insert({
-      pedido_id:p.id,cliente_id:p.cliente_id,cliente:p.cliente,localidad:p.localidad,
-      zona:p.zona,vendedor:p.vendedor,fecha:hoy,
-      items:p.items,total:p.total,cobrado:false,
-      direccion:c?.direccion||c?.domicilio||'',telefono:c?.telefono||''
-    }).select().single();
-    await sb.from('pedidos').update({estado:'remitado',remito_id:rem.id}).eq('id',p.id);
-    await descontarStock(p.items||[]);
-    // Asiento contable
-    const totDesc=(p.items||[]).reduce((a,it)=>{const bruto=it.precio*it.cant;return a+(bruto-bruto*(1-(it.dto||0)/100));},0);
-    const {data:asiento}=await sb.from('asientos').insert({
-      fecha:rem.fecha,descripcion:`Remito R-${String(rem.id).padStart(4,'0')} - ${p.cliente}`,
-      tipo:'VENTA',referencia_id:rem.id,referencia_tipo:'remito'
-    }).select().single();
-    if(asiento){
-      const det=[
-        {asiento_id:asiento.id,cuenta_cod:'11201',cuenta_nom:'Deudores por Ventas',debe:p.total,haber:0},
-        {asiento_id:asiento.id,cuenta_cod:'40100',cuenta_nom:'Ventas',debe:0,haber:p.total+(totDesc||0)},
-      ];
-      if(totDesc>0)det.push({asiento_id:asiento.id,cuenta_cod:'50305',cuenta_nom:'Descuentos Concedidos',debe:totDesc,haber:0});
-      await sb.from('asientos_detalle').insert(det);
+  _emitiendoRemitos=true;
+
+  // Feedback visual: deshabilitar y cambiar el texto del botón mientras corre
+  document.querySelectorAll(`button[onclick*="emitirRemitos(${cargaId})"]`).forEach(b=>{
+    b.dataset.txtOriginal=b.textContent;
+    b.textContent='⏳ Emitiendo...';
+    b.disabled=true;
+  });
+
+  try{
+    const peds=_pedidos.filter(p=>(cg.pedidos||[]).includes(p.id)&&p.estado!=='remitado'&&!p.remito_id);
+    if(!peds.length){toast('Todos los pedidos de esta carga ya tienen remito.');return;}
+    const hoy=hoyLocal();
+
+    // Acumular totales por cliente
+    const acumCliente={};
+    for(const p of peds){acumCliente[p.cliente_id]=(acumCliente[p.cliente_id]||{total:0,comprado:0,fecha:hoy});acumCliente[p.cliente_id].total+=p.total;acumCliente[p.cliente_id].comprado+=p.total;}
+
+    for(const p of peds){
+      // IDEMPOTENCIA: consultar la base. Si este pedido ya tiene remito (por
+      // doble toque, pesaje + lote, o cualquier otra vía), salteamos la
+      // creación y nos aseguramos de que el pedido quede marcado como remitado.
+      const {data:yaExiste}=await sb.from('remitos').select('id').eq('pedido_id',p.id).maybeSingle();
+      if(yaExiste){
+        await sb.from('pedidos').update({estado:'remitado',remito_id:yaExiste.id}).eq('id',p.id);
+        // No sumar al acumCliente: el saldo ya se sumó cuando se creó el remito original
+        delete acumCliente[p.cliente_id];
+        continue;
+      }
+
+      const c=_clientes.find(x=>x.id===p.cliente_id);
+      const {data:rem,error:errRem}=await sb.from('remitos').insert({
+        pedido_id:p.id,cliente_id:p.cliente_id,cliente:p.cliente,localidad:p.localidad,
+        zona:p.zona,vendedor:p.vendedor,fecha:hoy,
+        items:p.items,total:p.total,cobrado:false,saldo_pendiente:p.total,
+        direccion:c?.direccion||c?.domicilio||'',telefono:c?.telefono||'',
+        carga_id:cg.id
+      }).select().single();
+
+      if(errRem){
+        console.error('[emitirRemitos] Error al insertar remito para pedido',p.id,errRem);
+        delete acumCliente[p.cliente_id];
+        continue;
+      }
+
+      // Actualizar pedido
+      await sb.from('pedidos').update({
+        estado:'remitado',
+        remito_id:rem.id
+      }).eq('id',p.id);
+
+      await descontarStock(p.items||[]);
+
+      // Asiento contable
+      const totDesc=(p.items||[]).reduce((a,it)=>{const bruto=it.precio*it.cant;return a+(bruto-bruto*(1-(it.dto||0)/100));},0);
+      const {data:asiento}=await sb.from('asientos').insert({
+        fecha:rem.fecha,descripcion:`Remito R-${String(rem.id).padStart(4,'0')} - ${esc(p.cliente)}`,
+        tipo:'VENTA',referencia_id:rem.id,referencia_tipo:'remito'
+      }).select().single();
+      if(asiento){
+        const det=[
+          {asiento_id:asiento.id,cuenta_cod:'11201',cuenta_nom:'Deudores por Ventas',debe:p.total,haber:0},
+          {asiento_id:asiento.id,cuenta_cod:'40100',cuenta_nom:'Ventas',debe:0,haber:p.total+(totDesc||0)},
+        ];
+        if(totDesc>0)det.push({asiento_id:asiento.id,cuenta_cod:'50305',cuenta_nom:'Descuentos Concedidos',debe:totDesc,haber:0});
+        await sb.from('asientos_detalle').insert(det);
+      }
     }
+
+    // Actualizar saldo de cada cliente — solo de los que efectivamente
+    // recibieron remito nuevo (los salteados se borraron del acumulador).
+    for(const [cliId,ac] of Object.entries(acumCliente)){
+      const c=_clientes.find(x=>x.id==cliId);
+      if(c)await sb.from('clientes').update({saldo:(c.saldo||0)+ac.total,total_comprado:(c.total_comprado||0)+ac.comprado,ultimo_remito:hoy}).eq('id',c.id);
+    }
+
+    // Marcar carga como emitida
+    await sb.from('cargas').update({estado:'emitida'}).eq('id',cargaId);
+    await cargarTodo();
+    await _generarHojaRutaParaCarga(cargaId);
+    renderCargas();renderRemitos();renderDash();
+    toast(`${peds.length} remito(s) procesado(s).`);go('remitos');
+  } finally {
+    _emitiendoRemitos=false;
+    document.querySelectorAll(`button[onclick*="emitirRemitos(${cargaId})"]`).forEach(b=>{
+      if(b.dataset.txtOriginal){b.textContent=b.dataset.txtOriginal;delete b.dataset.txtOriginal;}
+      b.disabled=false;
+    });
   }
-  // Actualizar saldo de cada cliente una sola vez (acumulando todos sus pedidos)
-  for(const [cliId,ac] of Object.entries(acumCliente)){
-    const c=_clientes.find(x=>x.id==cliId);
-    if(c)await sb.from('clientes').update({saldo:(c.saldo||0)+ac.total,total_comprado:(c.total_comprado||0)+ac.comprado,ultimo_remito:hoy}).eq('id',c.id);
-  }
-  // Marcar carga como emitida
-  await sb.from('cargas').update({estado:'emitida'}).eq('id',cargaId);
-  await cargarTodo();
-  await _generarHojaRutaParaCarga(cargaId);
-  renderCargas();renderRemitos();renderDash();
-  toast(`${peds.length} remito(s) emitido(s).`);go('remitos');
 }
 
 // ─── Facturación secuencial de una carga con peso real ────────────────────
@@ -380,8 +561,10 @@ function _facturarSiguientePedidoCarga(){
     // flujo en lote. Sin esto, el celu del repartidor (que solo busca
     // cargas con estado 'emitida') nunca la encontraba.
     sb.from('cargas').update({estado:'emitida'}).eq('id',cg.id).then(async()=>{
+      await cargarPedidos();
       await cargarCargas();
       await _generarHojaRutaParaCarga(cg.id);
+      renderPedidos();
       renderCargas();
     });
     go('carga');
@@ -393,6 +576,10 @@ function _facturarSiguientePedidoCarga(){
   selCliRR(ped.cliente_id);
   cargarItemsDePedido(ped.id);
   _renderCargaSidebar(ped.id);
+    // Si la carga ya tiene número de rendición asignado, precargarlo para que
+  // el remito quede vinculado automáticamente. Si no, queda vacío (manual).
+  const rrn=document.getElementById('rr-rend-num');
+  if(rrn && cg.numero_rendicion) rrn.value = cg.numero_rendicion;
   // Foco al primer campo de peso a completar (o al primero de la lista si
   // no hay ninguno por kg) — único punto que mueve el foco en este modo.
   setTimeout(()=>{
@@ -422,7 +609,7 @@ function _renderCargaSidebar(pedidoActualId){
   if(limpiarBtn)limpiarBtn.style.display='none';
   if(cargaNumWrap)cargaNumWrap.style.display='none';
   const fechaFmt=cg.fecha?cg.fecha.split('-').reverse().join('/'):'';
-  document.getElementById('rr-carga-sidebar-titulo').textContent=`🚚 Carga Nº ${cg.id}${cg.nombre?' · '+cg.nombre:''}${fechaFmt?' · '+fechaFmt:''}`;
+  document.getElementById('rr-carga-sidebar-titulo').textContent=`🚚 Carga Nº ${cg.id}${esc(cg.nombre?' · '+cg.nombre:'')}${fechaFmt?' · '+fechaFmt:''}`;
   const peds=_pedidosDeCarga(cg.id);
   const lista=document.getElementById('rr-carga-sidebar-lista');
   let totalAcum=0;
@@ -437,8 +624,8 @@ function _renderCargaSidebar(pedidoActualId){
     const clickAttr=remitado?` onclick="verRemito(${p.remito_id})" style="cursor:pointer"`:'';
     return `<div${clickAttr} style="display:flex;gap:4px;align-items:center;padding:4px 4px;border-radius:6px;font-size:11px;margin-bottom:1px;${esActual?'background:var(--PL);font-weight:700':''}">
       <span style="width:14px;flex-shrink:0;text-align:center">${icono}</span>
-      <span style="width:34px;flex-shrink:0;color:var(--txt2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c?.codigo||p.cliente_id||''}</span>
-      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${remitado?'color:var(--txt2)':''}">${p.cliente}</span>
+      <span style="width:34px;flex-shrink:0;color:var(--txt2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c?.codigo||p.cliente_id||'')}</span>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${remitado?'color:var(--txt2)':''}">${esc(p.cliente)}</span>
       <span style="width:48px;text-align:center;font-size:10px;color:var(--P);flex-shrink:0">${remitado?'R-'+String(p.remito_id).padStart(4,'0'):''}</span>
       <span style="width:56px;text-align:right;flex-shrink:0">${importe!=null?fmt(importe):''}</span>
     </div>`;
@@ -447,9 +634,14 @@ function _renderCargaSidebar(pedidoActualId){
   if(totalEl)totalEl.innerHTML=`<span>Total facturado</span><span>${fmt(totalAcum)}</span>`;
 }
 
-function cancelarFacturarCarga(){
+async function cancelarFacturarCarga(){
   _facturandoCargaId=null;
   _renderCargaSidebar();
+  // Refrescar el estado de los pedidos: si quedaron algunos remitados en la
+  // base por el pesaje parcial, que _pedidos lo refleje antes de la próxima
+  // acción (evita que un "Emitir remitos" posterior vea pendientes viejos).
+  await cargarPedidos();
+  renderPedidos();
   toast('Facturación por carga cancelada — podés seguir emitiendo remitos sueltos.');
 }
 
@@ -466,7 +658,7 @@ function resumenCarga(id){
   const _anu=document.getElementById('m-ver-anular');if(_anu)_anu.style.display='none';
   document.getElementById('m-ver-body').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-      <div style="font-size:12px;color:var(--txt2)">${cg.fecha} · ${peds.length} paradas · Vendedor: <b>${cg.vendedor||'—'}</b></div>
+      <div style="font-size:12px;color:var(--txt2)">${cg.fecha} · ${peds.length} paradas · Vendedor: <b>${esc(cg.vendedor||'—')}</b></div>
       <div style="font-size:18px;font-weight:700;color:var(--P)">${fmt(totalGeneral)}</div>
     </div>
 
@@ -478,9 +670,9 @@ function resumenCarga(id){
       <div style="border:1px solid var(--brd);border-radius:8px;margin-bottom:12px;overflow:hidden">
         <div style="background:var(--PL);padding:8px 12px;display:flex;justify-content:space-between;align-items:center">
           <div>
-            <span style="font-weight:700;font-size:14px">${i+1}. ${p.cliente}</span>
-            <span style="color:var(--PD);font-size:11px;margin-left:6px;font-weight:600">Cód: ${c?.codigo||p.cliente_id||'—'}</span>
-            <span style="color:var(--txt2);font-size:12px;margin-left:8px">${c?.direccion||'—'} · ${p.localidad||''}</span>
+            <span style="font-weight:700;font-size:14px">${i+1}. ${esc(p.cliente)}</span>
+            <span style="color:var(--PD);font-size:11px;margin-left:6px;font-weight:600">Cód: ${esc(c?.codigo||p.cliente_id||'—')}</span>
+            <span style="color:var(--txt2);font-size:12px;margin-left:8px">${c?.direccion||'—'} · ${esc(p.localidad||'')}</span>
           </div>
           <span style="font-weight:700;color:var(--PD)">${fmt(p.total)}</span>
         </div>
@@ -489,13 +681,21 @@ function resumenCarga(id){
             <th style="padding:6px 10px;text-align:left;border-bottom:1px solid var(--brd)">Producto</th>
             <th style="padding:6px 10px;text-align:right;border-bottom:1px solid var(--brd)">Cant.</th>
             <th style="padding:6px 10px;text-align:left;border-bottom:1px solid var(--brd)">Unidad</th>
+            <th style="padding:6px 10px;text-align:right;border-bottom:1px solid var(--brd)">Kg</th>
           </tr></thead>
           <tbody>
-            ${(p.items||[]).map(it=>`<tr>
-              <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd)">${it.nom}</td>
-              <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);text-align:right;font-weight:700">${fmtN(it.cant,2)}</td>
-              <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);color:var(--txt2)">${it.un||''}</td>
-            </tr>`).join('')}
+            ${(p.items||[]).map(it=>{
+              // Peso real del item (solo aplica a productos por kg). Fallback
+              // a it.cant para items viejos sin it.peso.
+              const esKg = it.esPeso || (it.un||'').toLowerCase()==='kg';
+              const peso = esKg ? (it.peso || it.cant || 0) : 0;
+              return `<tr>
+                <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd)">${esc(it.nom)}</td>
+                <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);text-align:right;font-weight:700">${fmtN(it.cant,2)}</td>
+                <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);color:var(--txt2)">${it.un||''}</td>
+                <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);text-align:right;font-weight:600">${esKg?fmtN(peso,2):'—'}</td>
+              </tr>`;
+            }).join('')}
           </tbody>
         </table>
       </div>`;
@@ -516,9 +716,9 @@ function resumenCarga(id){
           const c=_clientes.find(x=>x.id===p.cliente_id);
           return `<tr style="${i%2===0?'':'background:var(--bg2)'}">
             <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);text-align:center;font-weight:700;color:var(--txt2)">${i+1}</td>
-            <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);font-weight:600">${p.cliente}</td>
+            <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);font-weight:600">${esc(p.cliente)}</td>
             <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);color:var(--txt2);font-size:12px">${c?.direccion||'—'}</td>
-            <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);color:var(--txt2)">${p.localidad||''}</td>
+            <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);color:var(--txt2)">${esc(p.localidad||'')}</td>
             <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);text-align:right;font-weight:600;color:var(--P)">${fmt(p.total)}</td>
             <td style="padding:7px 10px;border-bottom:0.5px solid var(--brd);text-align:center">☐</td>
           </tr>`;
@@ -569,7 +769,7 @@ function renderRemitos(){
     const cobBadge=r.cobrado?'<span class="b bP">Cobrado</span>':parcial?`<span class="b bW" title="Saldo: ${fmt(r.saldo_pendiente)}">Parcial</span>`:'<span class="b" style="background:var(--bg2);color:var(--txt2)">Pendiente</span>';
     return `<tr>
     <td style="font-weight:600;color:var(--P)">R-${String(r.id).padStart(4,'0')}</td>
-    <td>${r.fecha}</td><td style="font-weight:500">${r.cliente}</td><td>${r.localidad||''}</td>
+    <td>${r.fecha}</td><td style="font-weight:500">${esc(r.cliente)}</td><td>${esc(r.localidad||'')}</td>
     <td>${(r.items||[]).length}</td><td style="font-weight:600">${fmt(r.total)}</td>
     <td>${cobBadge}</td>
     <td>${r.factura_arca?`<span class="b bA" title="${r.nro_arca||''}" style="cursor:pointer">✅ ${r.nro_arca||'ARCA'}</span>`:`<button class="btn sm" style="font-size:11px" onclick="marcarARCA(${r.id})">+ ARCA</button>`}</td>
@@ -602,7 +802,7 @@ function verRemito(id){
   document.getElementById('m-ver-title').textContent='Remito R-'+String(r.id).padStart(4,'0')+' — '+r.cliente;
   const _p2=document.getElementById('m-ver-print2');if(_p2){_p2.style.display='none';}
   const _p=document.getElementById('m-ver-print');
-  if(_p){_p.textContent='🖨️ Imprimir remito';_p.onclick=imprimirRemito;_p.style.display='inline-flex';}
+  if(_p){_p.textContent='🖨️ Imprimir remito';_p.onclick=()=>imprimirRemito();_p.style.display='inline-flex';}
   const _an=document.getElementById('m-ver-anular');
   if(_an){_an.style.display=(!r.cobrado&&!r.anulado)?'inline-flex':'none';}
   document.getElementById('m-ver-body').innerHTML=detalleHTML(r,true);
@@ -613,7 +813,7 @@ async function anularRemito(){
   if(!_remActual)return;
   const r=_remActual;
   if(r.cobrado){toast('No se puede anular un remito ya cobrado','err');return;}
-  if(!confirm(`¿Anular Remito R-${String(r.id).padStart(4,'0')} de ${r.cliente}?\nSe revertirá el saldo del cliente.`))return;
+  if(!confirm(`¿Anular Remito R-${String(r.id).padStart(4,'0')} de ${esc(r.cliente)}?\nSe revertirá el saldo del cliente.`))return;
   await sb.from('remitos').update({anulado:true}).eq('id',r.id);
   const c=_clientes.find(x=>x.id===r.cliente_id);
   if(c){const ns=Math.max(0,(c.saldo||0)-r.total);const nc=Math.max(0,(c.total_comprado||0)-r.total);await sb.from('clientes').update({saldo:ns,total_comprado:nc}).eq('id',c.id);}
@@ -634,23 +834,38 @@ function imprimirHojaCarga(){
   const vendedor=cg.vendedor||'—';
   const zonasTxt=[...new Set(peds.map(p=>p.localidad||nombreZona(p.zona)||'').filter(Boolean))].join(', ')||'—';
 
-  const bloques=peds.map((p,i)=>{
-    const c=_clientes.find(x=>x.id==p.cliente_id)||{};
-    const codCliente=c.codigo||p.cliente_id||'';
-    const filasProd=(p.items||[]).map((it,j)=>{
-      const esPeso=(it.un||'').toLowerCase()==='kg';
-      return '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid #000">'
-        +'<span style="flex:1">'+(j+1)+'. '+it.cant+' × '+it.nom+'</span>'
-        +(esPeso?'<span style="border:1px solid #000;width:50px;height:16px;display:inline-block;flex-shrink:0"></span>':'')
-      +'</div>';
+  const bloques = peds.map((p,i)=>{
+    const c = _clientes.find(x=>x.id==p.cliente_id)||{};
+    const codCliente = c.codigo||p.cliente_id||'';
+    const filasProd = (p.items || []).map((it, j) => {
+      const esPeso = (it.un || '').toLowerCase() === 'kg';
+      const peso = it.peso || (esPeso ? it.cant : 0);
+      return `
+        <tr style="border-bottom:1px solid #000;">
+          <td style="padding:10px 8px;text-align:center;width:40px;">${j + 1}</td>
+          <td style="padding:10px 8px;text-align:center;width:60px;">${fmtN(it.cant, 2)}</td>
+          <td style="padding:10px 8px;text-align:left;">${esc(it.nom)}</td>
+          <td style="padding:10px 8px;text-align:center;width:90px;">${esPeso ? fmtN(peso, 2) + ' kg' : ''}</td>
+        </tr>
+      `;
     }).join('');
 
     return '<div style="margin-bottom:12px;page-break-inside:avoid;border:1.5px solid #000;padding:5px 7px">'
-      +'<div style="font-weight:900;font-size:13px;border-bottom:1.5px solid #000;padding-bottom:3px;margin-bottom:3px">'+(i+1)+'. Cliente: '+p.cliente+'</div>'
-      +'<div style="font-size:11px;margin-bottom:1px">Código: '+codCliente+'</div>'
-      +'<div style="font-size:11px;margin-bottom:1px">Localidad: '+(p.localidad||c.localidad||'—')+'</div>'
-      +'<div style="font-size:11px;font-weight:700;margin-bottom:4px">Vendedor: '+vendedor+'</div>'
-      +filasProd
+      +'<div style="font-weight:900;font-size:13px;border-bottom:1.5px solid #000;padding-bottom:3px;margin-bottom:1px">'+(i+1)+' — '+esc(p.cliente)+' ('+codCliente+') — '+esc(p.localidad||c.localidad||'—')+'</div>'
+      +'<div style="font-size:10px;margin-bottom:4px">Vendedor: '+esc(vendedor)+'&nbsp;&nbsp;&nbsp;&nbsp;Carga #'+cg.id+'</div>'
+      + '<table style="width:100%;border-collapse:collapse;font-size:11px;margin-top:4px;">'
+      +   '<thead>'
+      +     '<tr style="background:#f0f0f0;border-bottom:2px solid #000;">'
+      +       '<th style="padding:4px 8px;text-align:center;width:40px;">Nro</th>'
+      +       '<th style="padding:4px 8px;text-align:center;width:60px;">Cant.</th>'
+      +       '<th style="padding:4px 8px;text-align:left;">Producto</th>'
+      +       '<th style="padding:4px 8px;text-align:center;width:70px;">Peso</th>'
+      +     '</tr>'
+      +   '</thead>'
+      +   '<tbody>'
+      +     filasProd
+      +   '</tbody>'
+      + '</table>'
     +'</div>';
   }).join('');
 
@@ -666,7 +881,7 @@ function imprimirHojaCarga(){
     +'</style></head><body>'
     +'<div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid #000;padding-bottom:5px;margin-bottom:8px">'
       +'<div style="font-size:14px;font-weight:900">DISTRIBUIDORA LILA — Hoja de Carga #'+cg.id+(cg.nombre?' · '+cg.nombre:'')+'</div>'
-      +'<div style="font-size:11px"><b>Repartidor:</b> '+vendedor+' &nbsp; <b>Fecha de reparto:</b> '+fecha+' &nbsp; <b>Zona/localidad:</b> '+zonasTxt+' &nbsp; <b>'+peds.length+' parada'+(peds.length===1?'':'s')+'</b></div>'
+      +'<div style="font-size:11px"><b>Repartidor:</b> '+esc(vendedor)+' &nbsp; <b>Fecha de reparto:</b> '+fecha+' &nbsp; <b>Zona/localidad:</b> '+zonasTxt+' &nbsp; <b>'+peds.length+' parada'+(peds.length===1?'':'s')+'</b></div>'
     +'</div>'
     +'<div class="hc-grid">'+bloques+'</div>'
     +'<div class="no-print" style="text-align:center;margin-top:16px">'
@@ -694,11 +909,11 @@ function imprimirHojaRuta(){
     return '<tr style="'+(i%2===0?'':'background:#f9f9f9')+'">'
       +'<td style="padding:5px 7px;border:1px solid #ccc;text-align:center;font-size:11px;color:#777">'+(i+1)+'</td>'
       +'<td style="padding:5px 7px;border:1px solid #ccc;font-weight:600">'+(c.codigo||p.cliente_id||'')+'</td>'
-      +'<td style="padding:5px 7px;border:1px solid #ccc;font-weight:600">'+p.cliente
-        +'<div style="font-size:10px;color:#555;font-weight:400">'+(tel?'📞 '+tel:'')+'</div></td>'
+      +'<td style="padding:5px 7px;border:1px solid #ccc;font-weight:600">'+esc(p.cliente)
+        +'<div style="font-size:10px;color:#555;font-weight:400">'+(tel?'📞 '+esc(tel):'')+'</div></td>'
       +'<td style="padding:5px 7px;border:1px solid #ccc;font-weight:700;color:#1a7a52;text-align:center">'+nroRem+'</td>'
-      +'<td style="padding:5px 7px;border:1px solid #ccc;font-size:11px;color:#555">'+dir+'</td>'
-      +'<td style="padding:5px 7px;border:1px solid #ccc;font-size:11px">'+loc+'</td>'
+      +'<td style="padding:5px 7px;border:1px solid #ccc;font-size:11px;color:#555">'+esc(dir)+'</td>'
+      +'<td style="padding:5px 7px;border:1px solid #ccc;font-size:11px">'+esc(loc)+'</td>'
       +'<td style="padding:5px 7px;border:1px solid #ccc;text-align:center;font-size:11px">'+((c.zona||p.zona)?nombreZona(c.zona||p.zona):'')+'</td>'
       +'<td style="padding:5px 7px;border:1px solid #ccc;text-align:right;font-weight:600">'+fmt(p.total)+'</td>'
       +'<td style="padding:5px 7px;border:1px solid #ccc;text-align:center">☐</td>'
@@ -718,8 +933,8 @@ function imprimirHojaRuta(){
     // Header
     +'<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1a7a52;padding-bottom:8px;margin-bottom:10px">'
       +'<div>'
-        +'<div style="font-size:16px;font-weight:700;color:#1a7a52">🌸 DISTRIBUIDORA LILA</div>'
-        +'<div style="font-size:12px;margin-top:3px"><b>Repartidor:</b> '+vendedor+'</div>'
+        +'<div style="font-size:16px;font-weight:700;color:#1a7a52">DISTRIBUIDORA LILA</div>'
+        +'<div style="font-size:12px;margin-top:3px"><b>Repartidor:</b> '+esc(vendedor)+'</div>'
         +'<div style="font-size:12px"><b>Fecha de reparto:</b> '+fecha+' &nbsp;&nbsp; <b>Carga #:</b> '+cg.id+'</div>'
       +'</div>'
       +'<div style="text-align:right;font-size:12px">'
@@ -756,7 +971,8 @@ function imprimirHojaRuta(){
   w.document.close();
 }
 
-function imprimirRemito(){
+function imprimirRemito(autoPrint){
+  autoPrint = autoPrint === true;
   const d=_remActual;
   if(!d){alert('No hay remito activo');return;}
   const num='R-'+String(d.id).padStart(4,'0');
@@ -767,27 +983,31 @@ function imprimirRemito(){
   const condPago=d.condicion_pago??cli.condicion_pago;
   const condTexto=condPago?condPago+' días':'Contado';
   let sub=0,dtoT=0,tot=0;
-  const rows=(d.items||[]).map(it=>{
+  const rows = (d.items||[]).map(it=>{
     const prod=_productos.find(p=>p.id===it.id||p.nombre===it.nom)||{};
-    const base=it.precio*it.cant,dtoA=base*((it.dto||0)/100),neto=base-dtoA;
-    sub+=base;dtoT+=dtoA;tot+=neto;
-    const esKg=(it.un||'').toLowerCase()==='kg';
+    const base=it.precio*it.cant, dtoA=base*((it.dto||0)/100), neto=base-dtoA;
+    sub+=base; dtoT+=dtoA; tot+=neto;
+    // Detectar si es por kg por dos vías: el flag explícito it.esPeso (nuevo)
+    // o la unidad it.un (fallback para items viejos). El peso real está en
+    // it.peso; si por algún motivo no está cargado, caemos a it.cant.
+    const esKg = it.esPeso || (it.un||'').toLowerCase()==='kg';
+    const peso = esKg ? (it.peso || it.cant || 0) : 0;
     return '<tr>'
-      +'<td style="padding:5px 6px;border:1px solid #ccc;text-align:center;font-size:11px;white-space:nowrap">'+fmtN(it.cant,2)+' '+(it.un||'')+'</td>'
-      +'<td style="padding:5px 6px;border:1px solid #ccc;font-size:11px">'+it.nom+'</td>'
-      +'<td style="padding:5px 6px;border:1px solid #ccc;text-align:center;font-size:10px;color:#666">'+(prod.codigo||'—')+'</td>'
-      +'<td style="padding:5px 6px;border:1px solid #ccc;text-align:center;font-size:11px">'+(esKg?fmtN(it.cant,2):'—')+'</td>'
-      +'<td style="padding:5px 6px;border:1px solid #ccc;text-align:right;font-size:11px">'+fmt(it.precio)+'</td>'
-      +'<td style="padding:5px 6px;border:1px solid #ccc;text-align:center;font-size:11px">'+((it.dto||0)||'—')+(it.dto?'%':'')+'</td>'
-      +'<td style="padding:5px 6px;border:1px solid #ccc;text-align:right;font-weight:600;font-size:11px">'+fmt(neto)+'</td>'
-      +'</tr>';
+      + '<td style="padding:5px 6px;border:1px solid #ccc;text-align:center;font-size:10px;color:#666">'+(prod.codigo||'—')+'</td>'
+      + '<td style="padding:5px 6px;border:1px solid #ccc;font-size:11px">'+esc(it.nom)+'</td>' 
+      + '<td style="padding:5px 6px;border:1px solid #ccc;text-align:center;font-size:11px;white-space:nowrap">'+fmtN(it.cant,2)+'</td>'
+      + '<td style="padding:5px 6px;border:1px solid #ccc;text-align:center;font-size:11px">'+(esKg?fmtN(peso,2):'—')+'</td>'
+      + '<td style="padding:5px 6px;border:1px solid #ccc;text-align:right;font-size:11px">'+fmt(it.precio)+'</td>'
+      + '<td style="padding:5px 6px;border:1px solid #ccc;text-align:center;font-size:11px">'+((it.dto||0)||'—')+(it.dto?'%':'')+'</td>'
+      + '<td style="padding:5px 6px;border:1px solid #ccc;text-align:right;font-weight:600;font-size:11px">'+fmt(neto)+'</td>'
+      + '</tr>';
   }).join('');
 
   const bloque=(etiqueta)=>`
     <div style="padding:10px 0 8px 0;min-height:48%">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2.5px solid #1a7a52;padding-bottom:8px;margin-bottom:10px">
         <div>
-          <div style="font-size:15px;font-weight:800;color:#1a7a52">🌸 Distribuidora Lila</div>
+          <div style="font-size:15px;font-weight:800;color:#1a7a52">Distribuidora Lila</div>
           <div style="font-size:9px;color:#888;margin-top:2px">Distribución mayorista</div>
         </div>
         <div style="text-align:center;flex:1;padding:0 10px">
@@ -796,24 +1016,24 @@ function imprimirRemito(){
         </div>
         <div style="text-align:right;min-width:110px">
           <div style="font-size:12px;font-weight:700">${d.fecha}</div>
-          ${d.vendedor?`<div style="font-size:11px;color:#1a7a52;font-weight:600;margin-top:2px">Vendedor: ${d.vendedor}</div>`:''}
+          ${d.vendedor?`<div style="font-size:11px;color:#1a7a52;font-weight:600;margin-top:2px">Vendedor: ${esc(d.vendedor)}</div>`:''}
           <div style="font-size:10px;color:#555;margin-top:2px">Cond.: <b>${condTexto}</b></div>
         </div>
       </div>
       <div style="background:#f4f8f6;border:1.5px solid #c8e6d5;border-radius:5px;padding:8px 12px;margin-bottom:10px">
-        <div style="font-weight:700;font-size:13px;color:#1a1a1a">${d.cliente}</div>
-        ${dir?'<div style="color:#555;font-size:10px;margin-top:3px">📍 '+dir+'</div>':''}
-        <div style="color:#666;font-size:10px;margin-top:2px">${d.localidad||''}${d.zona?' · Zona '+(_zonas.find(z=>z.codigo===d.zona)?.descripcion||d.zona):''}${tel?' · Tel: '+tel:''}</div>
+        <div style="font-weight:700;font-size:13px;color:#1a1a1a">${esc(d.cliente)}</div>
+        ${dir?'<div style="color:#555;font-size:10px;margin-top:3px">📍 '+esc(dir)+'</div>':''}
+        <div style="color:#666;font-size:10px;margin-top:2px">${esc(d.localidad||'')}${d.zona?' · Zona '+(_zonas.find(z=>z.codigo===d.zona)?.descripcion||d.zona):''}${tel?' · Tel: '+esc(tel):''}</div>
       </div>
       <table style="width:100%;border-collapse:collapse;margin-bottom:8px;table-layout:fixed">
         <colgroup>
-          <col style="width:58px"><col><col style="width:46px"><col style="width:44px"><col style="width:70px"><col style="width:42px"><col style="width:74px">
+          <col style="width:46px"><col><col style="width:58px"><col style="width:44px"><col style="width:70px"><col style="width:42px"><col style="width:74px">
         </colgroup>
         <thead><tr style="background:#e8f5ef">
-          <th style="padding:5px 6px;border:1px solid #b2d8c4;font-size:10px;text-align:center">Cant.</th>
-          <th style="padding:5px 6px;border:1px solid #b2d8c4;font-size:10px;text-align:left">Producto</th>
           <th style="padding:5px 6px;border:1px solid #b2d8c4;font-size:10px;text-align:center">Código</th>
-          <th style="padding:5px 6px;border:1px solid #b2d8c4;font-size:10px;text-align:center">Kilos</th>
+          <th style="padding:5px 6px;border:1px solid #b2d8c4;font-size:10px;text-align:left">Producto</th>
+          <th style="padding:5px 6px;border:1px solid #b2d8c4;font-size:10px;text-align:center">Cant.</th>
+          <th style="padding:5px 6px;border:1px solid #b2d8c4;font-size:10px;text-align:center">Kg</th>
           <th style="padding:5px 6px;border:1px solid #b2d8c4;font-size:10px;text-align:right">P.Unit</th>
           <th style="padding:5px 6px;border:1px solid #b2d8c4;font-size:10px;text-align:center">Dto %</th>
           <th style="padding:5px 6px;border:1px solid #b2d8c4;font-size:10px;text-align:right">Total</th>
@@ -825,12 +1045,19 @@ function imprimirRemito(){
         ${dtoT>0?'<div style="font-size:11px;color:#b05000">Descuento: <b>− '+fmt(dtoT)+'</b></div>':''}
         <div style="font-size:16px;font-weight:800;color:#1a7a52;margin-top:4px">Neto a pagar: ${fmt(tot)}</div>
       </div>
-      ${(d.observaciones||d.obs)?'<div style="font-size:10px;color:#555;border-top:1px solid #ddd;padding-top:5px;margin-top:6px">Obs: '+(d.observaciones||d.obs)+'</div>':''}
+      ${esc((d.observaciones||d.obs)?'<div style="font-size:10px;color:#555;border-top:1px solid #ddd;padding-top:5px;margin-top:6px">Obs: '+(d.observaciones||d.obs)+'</div>':'')}
       <div style="margin-top:10px;display:flex;justify-content:space-between;font-size:10px;color:#555;border-top:1px solid #ddd;padding-top:8px">
         <span>Firma: ___________________________</span>
         <span>Aclaración: ___________________________</span>
       </div>
     </div>`;
+
+  // Si autoPrint=true (F8 → Grabar e imprimir), la ventana dispara el
+  // print automáticamente al terminar de cargar. Si no, queda el botón
+  // "🖨️ Imprimir" para que el usuario decida.
+  const autoScript = autoPrint
+    ? '<script>window.addEventListener("load",function(){setTimeout(function(){try{window.print();}catch(e){}},300);});<\/script>'
+    : '';
 
   const w=window.open('','_blank');
   w.document.write(`<!DOCTYPE html><html><head><title>${num}</title>
@@ -850,6 +1077,7 @@ function imprimirRemito(){
     <div class="no-print" style="text-align:center;margin-top:14px">
       <button onclick="window.print()" style="padding:9px 28px;background:#1a7a52;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">🖨️ Imprimir</button>
     </div>
+    ${autoScript}
     </body></html>`);
   w.document.close();
 }
@@ -879,7 +1107,7 @@ function imprimirHojaRutaGrupal(){
     const filas=(r.items||[]).map(it=>{
       const neto=it.precio*it.cant*(1-(it.dto||0)/100);tot+=neto;
       return '<tr>'
-        +'<td style="padding:3px 6px;border:1px solid #ccc;font-size:11px">'+it.nom+'</td>'
+        +'<td style="padding:3px 6px;border:1px solid #ccc;font-size:11px">'+esc(it.nom)+'</td>'
         +'<td style="padding:3px 6px;border:1px solid #ccc;text-align:center;font-size:11px;white-space:nowrap">'+it.cant+' '+(it.un||'')+'</td>'
         +'<td style="padding:3px 6px;border:1px solid #ccc;text-align:right;font-size:11px">'+fmt(it.precio)+'</td>'
         +((it.dto||0)>0?'<td style="padding:3px 6px;border:1px solid #ccc;text-align:center;font-size:11px">'+it.dto+'%</td>':'<td style="padding:3px 6px;border:1px solid #ccc;text-align:center;color:#aaa;font-size:11px">—</td>')
@@ -889,8 +1117,8 @@ function imprimirHojaRutaGrupal(){
     const obs=r.observaciones||'';
     return '<div style="margin-bottom:12px;page-break-inside:avoid;border:1.5px solid #ccc;border-radius:4px;overflow:hidden">'
       +'<div style="background:#1a7a52;color:#fff;padding:5px 9px;display:flex;justify-content:space-between;align-items:center">'
-        +'<span style="font-weight:700;font-size:12px">'+(i+1)+'. R-'+String(r.id).padStart(4,'0')+' — '+r.cliente+'</span>'
-        +'<span style="font-size:10px;font-weight:400;opacity:0.9">'+(dir?dir+' · ':'')+r.localidad+(tel?' · '+tel:'')+'</span>'
+        +'<span style="font-weight:700;font-size:12px">'+(i+1)+'. R-'+String(r.id).padStart(4,'0')+' — '+esc(r.cliente)+'</span>'
+        +'<span style="font-size:10px;font-weight:400;opacity:0.9">'+(dir?esc(dir)+' · ':'')+esc(r.localidad)+(tel?' · '+esc(tel):'')+'</span>'
       +'</div>'
       +'<table style="width:100%;border-collapse:collapse;table-layout:fixed">'
         +'<colgroup><col><col style="width:70px"><col style="width:68px"><col style="width:34px"><col style="width:72px"></colgroup>'
@@ -904,7 +1132,7 @@ function imprimirHojaRutaGrupal(){
         +'<tbody>'+filas+'</tbody>'
       +'</table>'
       +'<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 9px;background:#fafafa;border-top:1px solid #ccc;font-size:11px;gap:12px">'
-        +'<span style="color:#444;flex:1">Obs: '+(obs||'<span style="color:#bbb">___________________________________</span>')+'</span>'
+        +'<span style="color:#444;flex:1">Obs: '+(obs?esc(obs):'<span style="color:#bbb">___________________________________</span>')+'</span>'
         +'<span style="white-space:nowrap">Cobrado: <b>$_______________</b></span>'
         +'<span style="font-weight:700;color:#1a7a52;white-space:nowrap">Total: '+fmt(tot)+'</span>'
       +'</div>'
@@ -918,9 +1146,9 @@ function imprimirHojaRutaGrupal(){
     return '<tr style="'+(i%2===0?'':'background:#f9f9f9')+'">'
       +'<td style="padding:4px 6px;border:1px solid #ccc;text-align:center;color:#777;font-size:10px">'+(i+1)+'</td>'
       +'<td style="padding:4px 6px;border:1px solid #ccc;font-size:10px;color:#555;white-space:nowrap">R-'+String(r.id).padStart(4,'0')+'</td>'
-      +'<td style="padding:4px 6px;border:1px solid #ccc;font-weight:600;font-size:11px">'+r.cliente+'</td>'
-      +'<td style="padding:4px 6px;border:1px solid #ccc;font-size:10px;color:#555">'+dir+'</td>'
-      +'<td style="padding:4px 6px;border:1px solid #ccc;font-size:10px">'+r.localidad+'</td>'
+      +'<td style="padding:4px 6px;border:1px solid #ccc;font-weight:600;font-size:11px">'+esc(r.cliente)+'</td>'
+      +'<td style="padding:4px 6px;border:1px solid #ccc;font-size:10px;color:#555">'+esc(dir)+'</td>'
+      +'<td style="padding:4px 6px;border:1px solid #ccc;font-size:10px">'+esc(r.localidad)+'</td>'
       +'<td style="padding:4px 6px;border:1px solid #ccc;text-align:right;font-weight:600;font-size:11px">'+fmt(r.total)+'</td>'
       +'<td style="padding:4px 6px;border:1px solid #ccc;font-size:11px">$___________</td>'
     +'</tr>';
@@ -978,12 +1206,9 @@ let _hrClientesHoy = null;
 
 // Carga/reparto activo del repartidor para hoy (o null si no tiene ninguna carga emitida hoy)
 let _cargaActivaHoy = null;
-// Si ya se tocó una carga en "Mi ruta" para ver sus clientes (se resetea al
-// re-entrar a la pestaña, para siempre arrancar mostrando el/los nombres).
-let _hrCargaExpandida = false;
 
  // null = no cargado, [] = cargado sin ruta, [ids] = ruta del día
-async function cargarHojaRutaRepartidor(){
+async function cargarHojaRutaRepartidor(fechaSel){
   if(usuarioActual?.rol!=='repartidor'&&usuarioActual?.rol!=='vendedor'){_hrClientesHoy=null;_cargaActivaHoy=null;return;}
   const hoy=hoyLocal();
   const nombre=usuarioActual.nombre||'';
@@ -991,13 +1216,20 @@ async function cargarHojaRutaRepartidor(){
   const ids=(data||[]).map(r=>r.cliente_id).filter(Boolean);
   _hrClientesHoy=ids.length?ids:[];
 
-  // Carga/reparto activo: no siempre reparte la misma persona, así que no
-  // se filtra por nombre de chofer — se muestran las cargas emitidas de los
-  // últimos días (no solo las de HOY, para no perderlas de vista apenas
-  // pasa la medianoche mientras todavía se está cobrando) y, si hay más de
-  // una, el repartidor elige cuál está haciendo.
-  const desdeCarga=hoyLocalOffset(-3);
-  _cargasHoyCandidatas=(_cargas||[]).filter(c=>c.estado==='emitida'&&c.fecha>=desdeCarga).sort((a,b)=>b.id-a.id);
+  // Cargas candidatas filtradas por la FECHA QUE EL USUARIO TIENE SELECCIONADA
+  // en "Mi ruta", no por el día real de hoy. Si la fecha seleccionada es HOY,
+  // además incluimos las emitidas de los últimos 3 días (para no perder de vista
+  // la carga de anoche apenas pasa la medianoche mientras se sigue cobrando).
+  // Si es otra fecha (pasada o futura), solo las exactas de ese día.
+  const fecha = fechaSel || document.getElementById('hr-fecha-mia')?.value || hoy;
+  let cargasFiltradas;
+  if(fecha === hoy){
+    const desdeCarga = hoyLocalOffset(-3);
+    cargasFiltradas = (_cargas||[]).filter(c=>c.estado==='emitida' && c.fecha>=desdeCarga && c.fecha<=hoy);
+  } else {
+    cargasFiltradas = (_cargas||[]).filter(c=>c.estado==='emitida' && c.fecha===fecha);
+  }
+  _cargasHoyCandidatas = cargasFiltradas.sort((a,b)=>b.id-a.id);
   if(_cargasHoyCandidatas.length===1) _cargaActivaHoy=_cargasHoyCandidatas[0];
   else if(!_cargasHoyCandidatas.some(c=>c.id===_cargaActivaHoy?.id)) _cargaActivaHoy=null;
 
@@ -1009,22 +1241,31 @@ let _cargasHoyCandidatas=[];
 function _renderRutaBadge(cantClientesRuta){
   const badge=document.getElementById('cobm-ruta-badge');
   if(!badge)return;
-  const rutaTxt=cantClientesRuta?`📍 Ruta del día: ${cantClientesRuta} cliente${cantClientesRuta>1?'s':''}`:'⚠️ Sin hoja de ruta hoy — mostrando todos tus clientes';
-  if(_cargasHoyCandidatas.length>1&&!_cargaActivaHoy){
-    // Varias cargas emitidas hoy y ninguna elegida todavía: elegir.
-    badge.innerHTML=`<div style="margin-bottom:6px">${rutaTxt}</div>
-      <div style="font-weight:700;margin-bottom:4px">🚚 ¿Qué carga estás repartiendo?</div>
-      <div style="display:flex;flex-direction:column;gap:5px">
-        ${_cargasHoyCandidatas.map(c=>`<button onclick="elegirCargaActiva(${c.id})" style="text-align:left;padding:7px 10px;border-radius:6px;border:1.5px solid var(--P);background:#fff;color:var(--P);font-weight:600;font-family:inherit;cursor:pointer">Carga #${c.id}${c.nombre?' · '+c.nombre:''}</button>`).join('')}
-      </div>`;
-    badge.style.display='block';
+
+  // El badge solo se muestra cuando es imprescindible: 2 o más cargas
+  // emitidas hoy y el usuario todavía no eligió cuál está repartiendo.
+  // Sin este selector, los cobros quedarían vinculados a la carga
+  // equivocada o sin carga_id.
+  //
+  // En los demás casos se oculta por completo:
+  //   · 0 cargas → el cobro va con carga_id null, es normal
+  //   · 1 carga  → cargarHojaRutaRepartidor() ya la auto-asigna
+  //   · 2+ pero ya elegida → no hay nada que preguntar
+  if (_cargasHoyCandidatas.length < 2 || _cargaActivaHoy) {
+    badge.style.display = 'none';
+    badge.innerHTML = '';
+    if (typeof mostrarClientesDeRutaHoy === 'function') mostrarClientesDeRutaHoy();
     return;
   }
-  const partes=[rutaTxt];
-  if(_cargaActivaHoy)partes.push(`🚚 ${_cargaActivaHoy.nombre||'Reparto #'+_cargaActivaHoy.id}${_cargasHoyCandidatas.length>1?' <a href="#" onclick="event.preventDefault();_cargaActivaHoy=null;_renderRutaBadge('+cantClientesRuta+')" style="color:inherit;text-decoration:underline">(cambiar)</a>':''}`);
-  else partes.push('⚠️ Sin reparto emitido hoy — el cobro no quedará vinculado a una carga');
-  badge.innerHTML=partes.join(' · ');
-  badge.style.display='block';
+
+  badge.innerHTML = `
+    <div style="font-weight:700;margin-bottom:6px;font-size:13px">🚚 ¿Qué carga estás repartiendo?</div>
+    <div style="display:flex;flex-direction:column;gap:5px">
+      ${_cargasHoyCandidatas.map(c=>`<button onclick="elegirCargaActiva(${c.id})" style="text-align:left;padding:8px 12px;border-radius:8px;border:1.5px solid var(--P);background:#fff;color:var(--P);font-weight:600;font-family:inherit;cursor:pointer;font-size:13px">Carga #${c.id}${esc(c.nombre?' · '+c.nombre:'')}</button>`).join('')}
+    </div>`;
+  badge.style.display = 'block';
+
+  if (typeof mostrarClientesDeRutaHoy === 'function') mostrarClientesDeRutaHoy();
 }
 
 function elegirCargaActiva(cargaId){
@@ -1053,7 +1294,7 @@ async function hrGuardarGasto(concepto){
   const prov=document.getElementById('hrg-prov')?.value.trim()||'';
   const fecha=document.getElementById('hr-fecha-mia')?.value||hoyLocal();
   const vendedor=usuarioActual?.nombre||'';
-  const {error}=await sb.from('gastos_reparto').insert({fecha,vendedor,concepto,proveedor:prov,importe:imp});
+  const {error}=await sb.from('gastos_reparto').insert({fecha,vendedor,concepto,proveedor:prov,importe:imp,carga_id:_cargaActivaHoy?.id||null});
   document.getElementById('detalle-popup')?.remove();
   if(error){alert('Error al guardar: '+error.message);return;}
   await cargarGastosReparto();
@@ -1061,7 +1302,7 @@ async function hrGuardarGasto(concepto){
 }
 
 async function hrEliminarGasto(id){
-  if(!confirm('¿Eliminar este gasto?'))return;
+  if(!await _confirmar('¿Eliminar este gasto?', {titulo:'Eliminar gasto', textoOk:'Eliminar'}))return;
   await sb.from('gastos_reparto').delete().eq('id',id);
   await cargarGastosReparto();
   _renderGastosHoy();
@@ -1072,15 +1313,140 @@ function _renderGastosHoy(){
   const vendedor=usuarioActual?.nombre||'';
   const gastos=(_gastosReparto||[]).filter(g=>g.fecha===fecha&&(g.vendedor||'').toLowerCase()===vendedor.toLowerCase());
   const total=gastos.reduce((a,g)=>a+(g.importe||0),0);
+
+  // Total dentro del bloque colapsable
   const totalEl=document.getElementById('hr-mia-gastos-total');
   if(totalEl)totalEl.textContent=fmt(total);
+
+  // Texto del botón: siempre lleva el total si hay gastos, y el verbo "cerrar" según estado
+  const btn=document.getElementById('hr-mia-btn-gastos');
+  if(btn){
+    const abierto=document.getElementById('hr-mia-gastos-body')?.style.display==='block';
+    const totalTxt=total>0?` (${fmt(total)})`:'';
+    btn.textContent = abierto
+      ? `✕ Cerrar gastos${totalTxt}`
+      : `⛽ Gastos de hoy${totalTxt}`;
+  }
+
+  // Lista de gastos del día (dentro del bloque)
   const listaEl=document.getElementById('hr-mia-gastos-lista');
   if(listaEl){
     listaEl.innerHTML=gastos.map(g=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px;color:var(--txt2)">
-      <span>${g.concepto}${g.proveedor?' · '+g.proveedor:''}</span>
+      <span>${esc(g.concepto)}${esc(g.proveedor?' · '+g.proveedor:'')}</span>
       <span style="display:flex;align-items:center;gap:6px"><b style="color:var(--txt)">${fmt(g.importe)}</b><button onclick="hrEliminarGasto(${g.id})" style="background:none;border:none;color:var(--D);cursor:pointer;font-size:14px;padding:2px 4px">✕</button></span>
     </div>`).join('');
   }
+}
+
+// ─── Hoja de ruta móvil: acordeones de cargas + buscador ──────────────────
+
+// HTML de la lista de paradas de una carga (reutilizado por el acordeón y por
+// la vista de carga única elegida).
+function _hrPedidosDeCargaHTML(cargaId){
+  const peds = _pedidosDeCarga(cargaId);
+  if(!peds.length) return '<div style="padding:20px;text-align:center;color:var(--txt2);font-size:13px">Sin paradas cargadas</div>';
+  return peds.map((p,i)=>{
+    const rem = p.remito_id ? _remitos.find(r=>r.id===p.remito_id) : null;
+    const cobrado = rem?.cobrado;
+    const cli = _clientes.find(x=>x.id===p.cliente_id);
+    return `<div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:${cobrado?'var(--PL)':'var(--bg)'};border-bottom:1px solid var(--brd)">
+      <div style="font-size:20px;font-weight:700;min-width:36px;text-align:center;color:${cobrado?'var(--P)':'var(--txt2)'}">${cobrado?'✓':i+1}</div>
+      <div onclick="hrIrACobrar(${p.cliente_id})" style="flex:1;min-width:0;cursor:pointer">
+        <div style="font-weight:700;font-size:14px;${cobrado?'text-decoration:line-through;color:var(--txt2)':''}">${esc(p.cliente)}</div>
+        ${(cli?.direccion||p.localidad) ? `<div style="font-size:11px;color:var(--txt2);margin-top:2px">${esc([cli?.direccion,p.localidad].filter(Boolean).join(' · '))}</div>` : ''}
+        ${cli?.telefono ? `<a href="tel:${esc(cli.telefono.replace(/\D/g,''))}" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;font-size:12px;color:var(--P);font-weight:600;text-decoration:none">📞 ${esc(cli.telefono)}</a>` : ''}
+      </div>
+      <div onclick="hrIrACobrar(${p.cliente_id})" style="font-size:12px;color:var(--P);text-align:right;flex-shrink:0;font-weight:700;cursor:pointer;padding:6px 4px">${cobrado?'Cobrar<br>de nuevo':'💵 Cobrar'}</div>
+    </div>`;
+  }).join('');
+}
+
+// Acordeón de UNA carga: header clickeable + lista de paradas (colapsable).
+function _hrAcordeonCargaHTML(c, abierto){
+  const peds = _pedidosDeCarga(c.id);
+  const total = peds.length;
+  const fechaFmt = c.fecha ? c.fecha.split('-').reverse().join('/') : '';
+  const titulo = `🚚 Carga #${c.id}${c.nombre ? ' · '+esc(c.nombre) : ''}`;
+  const subtitulo = `${total} parada${total!==1?'s':''}${fechaFmt?' · '+fechaFmt:''}`;
+  return `<div class="carga-acordeon" data-carga-id="${c.id}" style="border:1.5px solid var(--brd);border-radius:12px;margin-bottom:8px;overflow:hidden;background:#fff">
+    <div onclick="hrToggleCargaAcordeon(${c.id})" style="display:flex;justify-content:space-between;align-items:center;padding:14px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:15px">${titulo}</div>
+        <div style="font-size:12px;color:var(--txt2);margin-top:2px">${subtitulo}</div>
+      </div>
+      <span class="carga-chevron" style="font-size:16px;color:var(--txt2);transition:transform 0.2s;transform:${abierto?'rotate(90deg)':'rotate(0deg)'}">▶</span>
+    </div>
+    <div class="carga-pedidos" style="display:${abierto?'block':'none'};border-top:1px solid var(--brd)">${_hrPedidosDeCargaHTML(c.id)}</div>
+  </div>`;
+}
+
+// Abrir/cerrar acordeón. Single-open: al abrir uno se cierran los otros.
+// Al abrir, se setea _cargaActivaHoy para que un cobro quede vinculado a esta carga.
+function hrToggleCargaAcordeon(cargaId){
+  const cont = document.querySelector(`.carga-acordeon[data-carga-id="${cargaId}"]`);
+  if(!cont) return;
+  const pedidos = cont.querySelector('.carga-pedidos');
+  const chev = cont.querySelector('.carga-chevron');
+  if(!pedidos) return;
+
+  const abierto = pedidos.style.display !== 'none';
+  if(abierto){
+    pedidos.style.display = 'none';
+    if(chev) chev.style.transform = 'rotate(0deg)';
+    return;
+  }
+  // Cerrar todos los demás
+  document.querySelectorAll('.carga-acordeon .carga-pedidos').forEach(p=>{p.style.display='none';});
+  document.querySelectorAll('.carga-acordeon .carga-chevron').forEach(ch=>{ch.style.transform='rotate(0deg)';});
+  // Abrir este
+  pedidos.style.display = 'block';
+  if(chev) chev.style.transform = 'rotate(90deg)';
+  // Setear como carga activa: si el usuario cobra desde acá, queda vinculado bien.
+  _cargaActivaHoy = _cargasHoyCandidatas.find(c=>c.id===cargaId) || null;
+}
+
+// Filtro del buscador: filtra las cargas candidatas por nombre o número.
+// Si queda 1 sola, la muestra abierta directo. Si no hay coincidencias, avisa.
+function hrFiltrarCargas(){
+  const input = document.getElementById('hr-mia-carga-busq');
+  const lista = document.getElementById('hr-mia-cargas-lista');
+  if(!input || !lista) return;
+  const q = (input.value||'').toLowerCase().trim();
+
+  let cargas = _cargasHoyCandidatas;
+  if(q){
+    cargas = cargas.filter(c=>{
+      const nombre = (c.nombre||'').toLowerCase();
+      const num = String(c.id);
+      return nombre.includes(q) || num.includes(q);
+    });
+  }
+
+  if(!cargas.length){
+    lista.innerHTML = '<div style="padding:20px;text-align:center;color:var(--txt2);font-size:14px">❌ Sin coincidencias</div>';
+    return;
+  }
+
+  // Un solo resultado: mostrarlo ya abierto, para no pedir otro toque.
+  if(q && cargas.length === 1){
+    _cargaActivaHoy = cargas[0];
+    lista.innerHTML = _hrAcordeonCargaHTML(cargas[0], true);
+    return;
+  }
+
+  lista.innerHTML = cargas.map(c=>_hrAcordeonCargaHTML(c,false)).join('');
+}
+
+// Vista de "una carga ya elegida": header con botón cambiar + lista de paradas.
+function _hrRenderPedidosDeCargaActiva(){
+  const c = _cargaActivaHoy;
+  if(!c) return '';
+  const hayMasDeUna = _cargasHoyCandidatas.length > 1;
+  const header = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px">
+    <div style="font-size:13px;color:var(--txt2);font-weight:600">🚚 Carga #${c.id}${c.nombre?' · '+esc(c.nombre):''}</div>
+    ${hayMasDeUna?`<button onclick="_cargaActivaHoy=null;hrVerMiRuta()" style="background:none;border:none;color:var(--P);font-size:13px;cursor:pointer;font-weight:600;padding:4px 8px;font-family:inherit;-webkit-tap-highlight-color:transparent">‹ cambiar carga</button>`:''}
+  </div>`;
+  return header + _hrPedidosDeCargaHTML(c.id);
 }
 
 // ─── HOJA DE RUTA ──────────────────────────────────────────────
@@ -1099,24 +1465,65 @@ function hrTab(tab){
 }
 
 function hrInit(){
-  _hrCargaExpandida=false;
   const hoy = hoyLocal();
   document.getElementById('hr-fecha').value = hoy;
   document.getElementById('hr-fecha-mia').value = hoy;
-  // Poblar vendedores
-  const sel = document.getElementById('hr-vendedor');
-  const vens = [...new Set(_clientes.map(c=>c.vendedor||'').filter(Boolean))].sort();
-  sel.innerHTML = '<option value="">— Todos —</option>' + vens.map(v=>`<option value="${v}">${v}</option>`).join('');
-  // Si soy vendedor o repartidor, pre-seleccionar mi nombre y mostrar botón volver
+
+  // Resetear bloques colapsables (arrancan cerrados al entrar)
+  const buscador=document.getElementById('hr-mia-buscador');
+  if(buscador) buscador.style.display='none';
+  const btnAgregar=document.getElementById('hr-mia-btn-agregar');
+  if(btnAgregar) btnAgregar.textContent='+ Agregar cliente sobre la marcha';
+  const gastosBody=document.getElementById('hr-mia-gastos-body');
+  if(gastosBody) gastosBody.style.display='none';
+
+  // DETECTAR ROL
+  const esAdmin = usuarioActual?.esAdmin || usuarioActual?.rol === 'admin' || usuarioActual?.rol_original === 'admin';
+  const esMovil = usuarioActual?.vista === 'movil' || usuarioActual?.rol === 'vendedor' || usuarioActual?.rol === 'repartidor';
+  
+  const panelAdmin = document.getElementById('hr-panel-admin');
+  const panelMia = document.getElementById('hr-panel-mia');
   const btnVolver = document.getElementById('hr-btn-volver');
-  if(usuarioActual?.rol==='vendedor'||usuarioActual?.rol==='repartidor'){
-    sel.value=usuarioActual.nombre||'';sel.disabled=true;
-    if(btnVolver){btnVolver.style.display='flex';btnVolver.style.alignItems='center';}
-    hrTab('mia');
-  } else {
-    if(btnVolver) btnVolver.style.display='none';
-    hrCargarRuta();
+  
+  // Si es repartidor o vendedor en móvil → mostrar "Mi ruta"
+  if (usuarioActual?.rol === 'repartidor' || (usuarioActual?.rol === 'vendedor' && esMovil)) {
+    if (panelAdmin) panelAdmin.style.display = 'none';
+    if (panelMia) panelMia.style.display = 'block';
+    
+    if (btnVolver) {
+      btnVolver.style.display = 'flex';
+      btnVolver.style.alignItems = 'center';
+    }
+    
+    // Swipe derecha → vuelve a vendedor-home (engancha una sola vez)
+    _initSwipeVolverHome('p-hoja-ruta');
+    
+    hrVerMiRuta();
+    return;
   }
+  
+  // Si es admin (escritorio) → mostrar "Armar ruta"
+  if (esAdmin && !esMovil) {
+    if (panelAdmin) panelAdmin.style.display = 'block';
+    if (panelMia) panelMia.style.display = 'none';
+    if (btnVolver) btnVolver.style.display = 'none';
+    
+    // Poblar vendedores
+    const sel = document.getElementById('hr-vendedor');
+    const vens = [...new Set(_clientes.map(c => c.vendedor || '').filter(Boolean))].sort();
+    sel.innerHTML = '<option value="">— Todos —</option>' + vens.map(v => `<option value="${v}">${v}</option>`).join('');
+    
+    hrCargarRuta();
+    return;
+  }
+
+  _initSwipeVolverHome('p-hoja-ruta');
+  
+  //  Fallback: mostrar admin por defecto
+  if (panelAdmin) panelAdmin.style.display = 'block';
+  if (panelMia) panelMia.style.display = 'none';
+  if (btnVolver) btnVolver.style.display = 'none';
+  hrCargarRuta();
 }
 
 async function hrCargarRuta(){
@@ -1144,16 +1551,21 @@ function hrRenderLista(){
     <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg2);border-radius:10px;margin-bottom:6px;${r.visitado?'opacity:0.5':''}">
       <span style="font-size:18px;font-weight:700;color:var(--txt2);min-width:24px">${i+1}</span>
       <div style="flex:1;min-width:0">
-        <div style="font-weight:600;font-size:14px">${r.nombre}</div>
-        <div style="font-size:11px;color:var(--txt2)">${r.direccion||''}${r.localidad?' · '+r.localidad:''}${r.zona?' · '+(_zonas.find(z=>z.codigo===r.zona)?.descripcion||r.zona):''}</div>
-        ${r.telefono?`<div style="font-size:11px;color:var(--P)">${r.telefono}</div>`:''}
+        <div style="font-weight:600;font-size:14px">${esc(r.nombre)}</div>
+        <div style="font-size:11px;color:var(--txt2)">${esc(r.direccion||'')}${esc(r.localidad?' · '+r.localidad:'')}${r.zona?' · '+(_zonas.find(z=>z.codigo===r.zona)?.descripcion||r.zona):''}</div>
+        ${r.telefono?`<div style="font-size:11px;color:var(--P)">${esc(r.telefono)}</div>`:''}
       </div>
       <div style="display:flex;gap:4px;flex-shrink:0">
-        ${i>0?`<button class="btn sm" onclick="hrMover(${i},-1)">↑</button>`:'<span style="width:28px"></span>'}
-        ${i<_hrRuta.length-1?`<button class="btn sm" onclick="hrMover(${i},1)">↓</button>`:'<span style="width:28px"></span>'}
+        <!-- Botón Subir: siempre visible, deshabilitado si es el primero -->
+        <button class="btn sm" onclick="hrMover(${i},-1)" ${i===0?'disabled':''} title="${i===0?'Ya está en el primer lugar':'Mover hacia arriba'}">↑</button>
+        
+        <!-- Botón Bajar: siempre visible, deshabilitado si es el último -->
+        <button class="btn sm" onclick="hrMover(${i},1)" ${i===_hrRuta.length-1?'disabled':''} title="${i===_hrRuta.length-1?'Ya está en el último lugar':'Mover hacia abajo'}">↓</button>
+        
         <button class="btn D sm" onclick="hrEliminar(${i})">✕</button>
       </div>
-    </div>`).join('');
+    </div>
+  `).join('');
 }
 
 function hrAgregarCliente(){
@@ -1170,8 +1582,8 @@ function hrFiltrarClientes(){
   drop.style.display = 'block';
   drop.innerHTML = res.length ? res.map(c=>`
     <div style="padding:8px 12px;cursor:pointer;border-bottom:0.5px solid var(--brd)" onmousedown="hrSelCli(${c.id})">
-      <div style="font-weight:600;font-size:13px">${c.nombre}</div>
-      <div style="font-size:11px;color:var(--txt2)">${c.direccion||''}${c.localidad?' · '+c.localidad:''}${c.zona?' · '+(_zonas.find(z=>z.codigo===c.zona)?.descripcion||c.zona):''} ${c.telefono?'· '+c.telefono:''}</div>
+      <div style="font-weight:600;font-size:13px">${esc(c.nombre)}</div>
+      <div style="font-size:11px;color:var(--txt2)">${esc(c.direccion||'')}${esc(c.localidad?' · '+c.localidad:'')}${c.zona?' · '+(_zonas.find(z=>z.codigo===c.zona)?.descripcion||c.zona):''} ${esc(c.telefono?'· '+c.telefono:'')}</div>
     </div>`).join('') : '<div style="padding:10px;color:var(--txt2);font-size:13px">Sin resultados</div>';
 }
 
@@ -1230,9 +1642,40 @@ async function hrCerrarYGenerarRendicion(){
   const gq=sb.from('gastos_reparto').update({numero_rendicion:num}).eq('fecha',fecha).is('numero_rendicion',null);
   if(vend)gq.eq('vendedor',vend);
   await gq;
-  await Promise.all([cargarCobros(),cargarGastosReparto()]);
+  // Las cargas de esa fecha (y vendedor, si se especificó) también quedan
+  // vinculadas a la rendición. Se usa LOWER() para evitar que un cambio de
+  // mayúsculas en el nombre del vendedor rompa el match.
+  let cq = sb.from('cargas').update({numero_rendicion:num}).eq('fecha',fecha).is('numero_rendicion',null);
+  if(vend) cq = cq.ilike('vendedor', vend);
+  await cq;
+  await Promise.all([cargarCobros(),cargarGastosReparto(),cargarCargas()]);
   alert(`✅ Hoja de ruta cerrada — Rendición #${num} generada.`);
   hrCargarRuta();
+}
+
+// Devuelve el mensaje correcto según si la fecha seleccionada es hoy o no.
+// Un mismo texto ("Sin clientes asignados para hoy") no aplica si el usuario
+// está parado en otra fecha del calendario.
+function _hrMensajeVacio(fecha){
+  const hoy = hoyLocal();
+  if(fecha === hoy) return 'Sin clientes asignados para hoy';
+  return 'Sin cargas ni clientes para esa fecha';
+}
+
+// Avanza (delta=+1) o retrocede (delta=-1) un día la fecha de "Mi ruta"
+// y recarga la vista. Parsea el valor del input manualmente en vez de usar
+// new Date('YYYY-MM-DD') para evitar el corrimiento de zona horaria (UTC vs
+// local) que haría cambiar de día en algunos navegadores.
+function hrCambiarDia(delta){
+  const inp = document.getElementById('hr-fecha-mia');
+  if(!inp || !inp.value) return;
+  const [y,m,d] = inp.value.split('-').map(Number);
+  if(!y || !m || !d) return;
+  const fecha = new Date(y, m-1, d);
+  fecha.setDate(fecha.getDate() + delta);
+  const pad = n => String(n).padStart(2,'0');
+  inp.value = `${fecha.getFullYear()}-${pad(fecha.getMonth()+1)}-${pad(fecha.getDate())}`;
+  hrVerMiRuta();
 }
 
 let _hrMiaRutaActual = [];
@@ -1241,12 +1684,18 @@ async function hrVerMiRuta(){
   const fecha = document.getElementById('hr-fecha-mia').value;
   const vend = usuarioActual?.nombre||'';
   if(!fecha) return;
+
+  // Gastos de reparto
   _renderGastosHoy();
-  const q = sb.from('hoja_ruta').select('*').eq('fecha',fecha);
-  if(vend) q.eq('vendedor',vend);
+
+  // Obtener la hoja de ruta del día
+  const q = sb.from('hoja_ruta').select('*').eq('fecha', fecha);
+  if(vend) q.eq('vendedor', vend);
   const {data} = await q.order('orden');
   const ruta = data||[];
   _hrMiaRutaActual = ruta;
+
+  // Verificar si está cerrada
   const cerrada = ruta.length>0 && ruta.every(r=>r.cerrada);
   const btnAgregar = document.getElementById('hr-mia-btn-agregar');
   if(btnAgregar) btnAgregar.style.display = cerrada?'none':'';
@@ -1254,66 +1703,192 @@ async function hrVerMiRuta(){
     const buscador=document.getElementById('hr-mia-buscador');
     if(buscador) buscador.style.display='none';
   }
+
   const el = document.getElementById('hr-mia-lista');
-  if(!ruta.length){
-    // No hay hoja de ruta armada a mano — ofrecer la carga del día como
-    // alternativa (misma carga que se usa en Cobranza → Facturar con pesaje).
-    // Siempre se muestra primero la carga (con su nombre) para elegirla, aun
-    // si hay una sola — así queda claro qué reparto es antes de desplegar
-    // los clientes, y es más fácil ubicarse si hubiera 2 repartos el mismo día.
-    await cargarHojaRutaRepartidor();
-    if(!_hrCargaExpandida){
-      if(!_cargasHoyCandidatas.length){
-        el.innerHTML='<div class="empty">Sin clientes asignados para hoy</div>';
-        return;
-      }
-      el.innerHTML=`<div class="empty" style="margin-bottom:10px">Sin hoja de ruta armada para hoy</div>
-        <div style="font-weight:700;margin-bottom:6px">🚚 ¿Qué carga estás repartiendo?</div>
-        <div style="display:flex;flex-direction:column;gap:6px">
-          ${_cargasHoyCandidatas.map(c=>`<button onclick="elegirCargaActiva(${c.id});_hrCargaExpandida=true;hrVerMiRuta()" style="text-align:left;padding:14px 16px;border-radius:14px;border:2px solid var(--P);background:#fff;color:var(--P);font-weight:700;font-size:16px;font-family:inherit;cursor:pointer">🚚 Carga #${c.id}${c.nombre?' · '+c.nombre:''}</button>`).join('')}
-        </div>`;
-      return;
-    }
-    if(_cargaActivaHoy){
-      const peds=_pedidosDeCarga(_cargaActivaHoy.id);
-      el.innerHTML=`<div style="font-size:12px;color:var(--txt2);margin-bottom:8px">🚚 Carga #${_cargaActivaHoy.id}${_cargaActivaHoy.nombre?' · '+_cargaActivaHoy.nombre:''} — sin hoja de ruta armada, mostrando sus clientes`
-        +` · <a href="#" onclick="event.preventDefault();_hrCargaExpandida=false;hrVerMiRuta()" style="color:var(--P)">‹ cambiar carga</a></div>`
-        +peds.map((p,i)=>{
-          const rem=p.remito_id?_remitos.find(r=>r.id===p.remito_id):null;
-          const cobrado=rem?.cobrado;
-          const c=_clientes.find(x=>x.id===p.cliente_id);
-          return `<div style="display:flex;align-items:center;gap:10px;padding:14px 16px;background:${cobrado?'var(--PL)':'var(--bg)'};border-radius:14px;margin-bottom:8px;border:2px solid ${cobrado?'var(--P)':'var(--brd)'}">
-            <div style="font-size:24px;font-weight:700;min-width:44px;text-align:center;color:${cobrado?'var(--P)':'var(--txt2)'}">${cobrado?'✓':i+1}</div>
-            <div onclick="hrIrACobrar(${p.cliente_id})" style="flex:1;min-width:0;cursor:pointer">
-              <div style="font-weight:700;font-size:16px;${cobrado?'text-decoration:line-through;color:var(--txt2)':''}">${p.cliente}</div>
-              ${c?.direccion||p.localidad?`<div style="font-size:12px;color:var(--txt2);margin-top:2px">${[c?.direccion,p.localidad].filter(Boolean).join(' · ')}</div>`:''}
-              ${c?.telefono?`<a href="tel:${c.telefono.replace(/\D/g,'')}" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;margin-top:5px;font-size:13px;color:var(--P);font-weight:600;text-decoration:none;padding:4px 10px;background:var(--PL);border-radius:8px">📞 ${c.telefono}</a>`:''}
-            </div>
-            <div onclick="hrIrACobrar(${p.cliente_id})" style="font-size:12px;color:var(--P);text-align:right;flex-shrink:0;font-weight:700;cursor:pointer;min-width:58px;padding:8px 4px">${cobrado?'Cobrar<br>de nuevo':'💵 Cobrar'}</div>
-          </div>`;
-        }).join('');
-      return;
-    }
-    el.innerHTML='<div class="empty">Sin clientes asignados para hoy</div>';
+
+  // FILTRO: ocultar visitados (por defecto activado)
+  const ocultarVisitados = document.getElementById('hr-ocultar-visitados')?.checked !== false;
+  let rutaFiltrada = ruta;
+  if (ocultarVisitados) rutaFiltrada = ruta.filter(r => !r.visitado);
+
+  // Traer cargas emitidas con esa fecha (una sola vez, se usa en varios casos)
+  await cargarHojaRutaRepartidor(fecha);
+  const cargasDelDia = _cargasHoyCandidatas;
+  const headerCerrada = cerrada?'<div style="font-size:12px;color:var(--txt2);margin-bottom:8px">🔒 Ruta cerrada — ya se generó su rendición</div>':'';
+
+  // Caso A: NO hay ruta NI cargas
+  if(!ruta.length && !cargasDelDia.length){
+    el.innerHTML=`<div class="empty">${_hrMensajeVacio(fecha)}</div>`;
     return;
   }
-  el.innerHTML = (cerrada?'<div style="font-size:12px;color:var(--txt2);margin-bottom:8px">🔒 Ruta cerrada — ya se generó su rendición</div>':'') + ruta.map((r,i)=>`
-    <div style="display:flex;align-items:center;gap:10px;padding:14px 16px;background:${r.visitado?'var(--PL)':'var(--bg)'};border-radius:14px;margin-bottom:8px;border:2px solid ${r.visitado?'var(--P)':'var(--brd)'};transition:background .15s">
-      <div onclick="hrMarcarVisitado(${r.id},${!r.visitado})" title="Tocar para marcar visitado sin cobrar"
-        style="font-size:24px;font-weight:700;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;text-align:center;color:${r.visitado?'var(--P)':'var(--txt2)'};cursor:pointer;-webkit-tap-highlight-color:transparent">
-        ${r.visitado?'✓':i+1}
+
+  // Caso B: NO hay ruta pero SÍ hay cargas (comportamiento actual, sin cambios)
+  if(!ruta.length && cargasDelDia.length){
+    if(cargasDelDia.length===1 && !_cargaActivaHoy) _cargaActivaHoy = cargasDelDia[0];
+    if(_cargaActivaHoy){
+      el.innerHTML = _hrRenderPedidosDeCargaActiva();
+      return;
+    }
+    el.innerHTML = `
+      <div style="margin-bottom:10px">
+        <input type="text" id="hr-mia-carga-busq" placeholder="🔍 Buscar carga por nombre o número..."
+          style="width:100%;padding:12px 14px;border:2px solid var(--P);border-radius:10px;font-size:15px;font-family:inherit;box-sizing:border-box"
+          oninput="hrFiltrarCargas()">
       </div>
-      <div onclick="hrIrACobrar(${r.cliente_id})" style="flex:1;min-width:0;cursor:pointer">
-        <div style="font-weight:700;font-size:16px;${r.visitado?'text-decoration:line-through;color:var(--txt2)':''}">${r.nombre}</div>
-        ${r.direccion||r.localidad?`<div style="font-size:12px;color:var(--txt2);margin-top:2px">${[r.direccion,r.localidad].filter(Boolean).join(' · ')}</div>`:''}
-        ${r.telefono?`<a href="tel:${r.telefono.replace(/\D/g,'')}" onclick="event.stopPropagation()"
-          style="display:inline-flex;align-items:center;gap:4px;margin-top:5px;font-size:13px;color:var(--P);font-weight:600;text-decoration:none;padding:4px 10px;background:var(--PL);border-radius:8px">
-          📞 ${r.telefono}</a>`:''}
+      <div id="hr-mia-cargas-lista">${cargasDelDia.map(c=>_hrAcordeonCargaHTML(c,false)).join('')}</div>`;
+    return;
+  }
+
+  // Caso C: hay ruta pero TODOS visitados (filtro activado)
+  if(ocultarVisitados && rutaFiltrada.length === 0 && ruta.length > 0){
+    const msgFecha = fecha === hoyLocal() ? 'de hoy' : 'de esa fecha';
+    el.innerHTML = `<div class="empty">✅ Todos los clientes ${msgFecha} ya fueron visitados.</div>`;
+    return;
+  }
+
+  // Caso D: hay ruta con clientes pendientes.
+
+  // Sub-caso D1: NO hay cargas emitidas con esa fecha → lista plana como antes.
+  if(!cargasDelDia.length){
+    el.innerHTML = headerCerrada + rutaFiltrada.map(_hrRenderClienteRuta).join('');
+    return;
+  }
+
+  // Sub-caso D2: SÍ hay cargas → agrupar clientes de la hoja por carga.
+  // Cada cliente se asigna a la carga que tiene un pedido suyo. Los que no
+  // pertenecen a ninguna van al bloque "Sin carga asignada".
+  const clienteACarga = {};
+  cargasDelDia.forEach(c=>{
+    (_pedidosDeCarga(c.id)||[]).forEach(p=>{ clienteACarga[p.cliente_id] = c.id; });
+  });
+  const porCarga = {};
+  const sueltos = [];
+  cargasDelDia.forEach(c=>{ porCarga[c.id] = []; });
+  rutaFiltrada.forEach(r=>{
+    const cid = clienteACarga[r.cliente_id];
+    if(cid && porCarga[cid]) porCarga[cid].push(r);
+    else sueltos.push(r);
+  });
+
+  // 1 sola carga: acordeón abierto por defecto. El header es clickeable, así
+  // el usuario puede colapsarlo y ver el bloque "Sin carga asignada" sin
+  // tener que scrollear. Seteamos _cargaActivaHoy para vincular cobros.
+  if(cargasDelDia.length===1){
+    const c = cargasDelDia[0];
+    _cargaActivaHoy = c;
+    // Si hay clientes sueltos, arranca cerrada para que el bloque "Sin carga"
+    // quede visible sin scrollear. Si no hay sueltos, abierta como antes.
+    const abrirPorDefecto = sueltos.length === 0;
+    el.innerHTML = headerCerrada
+      + _hrAcordeonConClientes(c, porCarga[c.id]||[], abrirPorDefecto)
+      + (sueltos.length ? _hrRenderBloqueSueltos(sueltos) : '');
+    return;
+  }
+
+  // 2+ cargas: si el usuario ya eligió una, mostrar sus clientes + el botón
+  // "‹ cambiar carga" para volver al listado de acordeones.
+  if(_cargaActivaHoy){
+    const cAct = _cargaActivaHoy;
+    const clientesAct = porCarga[cAct.id] || [];
+    el.innerHTML = headerCerrada
+      + `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px">
+          <div style="font-size:13px;color:var(--txt2);font-weight:600">🚚 Carga #${cAct.id}${cAct.nombre?' · '+esc(cAct.nombre):''}</div>
+          <button onclick="_cargaActivaHoy=null;hrVerMiRuta()" style="background:none;border:none;color:var(--P);font-size:13px;cursor:pointer;font-weight:600;padding:4px 8px;font-family:inherit;-webkit-tap-highlight-color:transparent">‹ cambiar carga</button>
+        </div>`
+      + (clientesAct.length ? clientesAct.map(_hrRenderClienteRuta).join('') : '<div style="padding:20px;text-align:center;color:var(--txt2);font-size:13px">Sin clientes pendientes en esta carga</div>')
+      + (sueltos.length ? _hrRenderBloqueSueltos(sueltos) : '');
+    return;
+  }
+
+  // 2+ cargas sin elegir: acordeones cerrados + buscador + bloque de sueltos al final.
+  el.innerHTML = headerCerrada + `
+    <div style="margin-bottom:10px">
+      <input type="text" id="hr-mia-carga-busq" placeholder="🔍 Buscar carga por nombre o número..."
+        style="width:100%;padding:12px 14px;border:2px solid var(--P);border-radius:10px;font-size:15px;font-family:inherit;box-sizing:border-box"
+        oninput="hrFiltrarCargas()">
+    </div>
+    <div id="hr-mia-cargas-lista">
+      ${cargasDelDia.map(c=>_hrAcordeonConClientes(c, porCarga[c.id]||[], false)).join('')}
+      ${sueltos.length ? _hrRenderBloqueSueltos(sueltos) : ''}
+    </div>`;
+}
+
+// ─── Helpers del render de Mi Ruta ────────────────────────────────────────
+
+// Render de UN cliente de la hoja de ruta. Estilo de lista compacta: sin
+// esquinas redondeadas ni margen entre filas, separadas por una línea fina.
+// Pensado para que los clientes queden "todos juntos" dentro del acordeón.
+function _hrRenderClienteRuta(r, i){
+  const idx = (typeof i === 'number') ? i : '';
+  return `<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:${r.visitado?'var(--PL)':'#fff'};border-bottom:1px solid var(--brd)">
+    <div onclick="hrMarcarVisitado(${r.id},${!r.visitado})" title="Tocar para marcar visitado sin cobrar"
+      style="font-size:20px;font-weight:700;min-width:36px;min-height:36px;display:flex;align-items:center;justify-content:center;text-align:center;color:${r.visitado?'var(--P)':'var(--txt2)'};cursor:pointer;-webkit-tap-highlight-color:transparent">
+      ${r.visitado?'✓':idx}
+    </div>
+    <div onclick="hrIrACobrar(${r.cliente_id})" style="flex:1;min-width:0;cursor:pointer">
+      <div style="font-weight:700;font-size:15px;${r.visitado?'text-decoration:line-through;color:var(--txt2)':''}">${esc(r.nombre)}</div>
+      ${r.direccion||r.localidad?`<div style="font-size:12px;color:var(--txt2);margin-top:2px">${esc([r.direccion,r.localidad].filter(Boolean).join(' · '))}</div>`:''}
+      ${r.telefono?`<a href="tel:${esc(r.telefono.replace(/\D/g,''))}" onclick="event.stopPropagation()"
+        style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;font-size:12px;color:var(--P);font-weight:600;text-decoration:none">
+        📞 ${esc(r.telefono)}</a>`:''}
+    </div>
+    <div onclick="hrIrACobrar(${r.cliente_id})" style="font-size:12px;color:var(--P);text-align:right;flex-shrink:0;font-weight:700;cursor:pointer;padding:6px 4px">
+      ${r.visitado?'Cobrar<br>de nuevo':'💵 Cobrar'}
+    </div>
+  </div>`;
+}
+
+// Bloque "Sin carga asignada": clientes de la hoja que no pertenecen a ninguna
+// carga emitida. Mismo estilo de lista plana que el resto.
+function _hrRenderBloqueSueltos(sueltos){
+  return `<div style="margin-top:14px;border:1.5px solid var(--brd);border-radius:12px;overflow:hidden;background:#fff">
+    <div style="background:var(--bg2);padding:10px 14px;border-bottom:1px solid var(--brd)">
+      <div style="font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px">📦 Sin carga asignada</div>
+    </div>
+    ${sueltos.map(_hrRenderClienteRuta).join('')}
+  </div>`;
+}
+
+// Acordeón de carga con clientes explícitos (los de la hoja de ruta ya
+// filtrados). Se usa solo en el caso D2 (hoja + cargas). Es primo del
+// _hrAcordeonCargaHTML que ya existe (ese busca los pedidos directo).
+function _hrAcordeonConClientes(c, clientes, abierto){
+  const total = clientes.length;
+  const titulo = `🚚 Carga #${c.id}${c.nombre ? ' · '+esc(c.nombre) : ''}`;
+  const subtitulo = `${total} parada${total!==1?'s':''}`;
+  return `<div class="carga-acordeon" data-carga-id="${c.id}" style="border:1.5px solid var(--brd);border-radius:12px;margin-bottom:8px;overflow:hidden;background:#fff">
+    <div onclick="hrToggleCargaAcordeonConClientes(${c.id})" style="display:flex;justify-content:space-between;align-items:center;padding:14px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;background:var(--bg2)">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:15px">${titulo}</div>
+        <div style="font-size:12px;color:var(--txt2);margin-top:2px">${subtitulo}</div>
       </div>
-      <div onclick="hrIrACobrar(${r.cliente_id})" style="font-size:12px;color:var(--P);text-align:right;flex-shrink:0;font-weight:700;cursor:pointer;min-width:58px;padding:8px 4px">
-        ${r.visitado?'Cobrar<br>de nuevo':'💵 Cobrar'}
-      </div>
-    </div>`).join('');
+      <span class="carga-chevron" style="font-size:16px;color:var(--txt2);transition:transform 0.2s;transform:${abierto?'rotate(90deg)':'rotate(0deg)'}">▶</span>
+    </div>
+    <div class="carga-pedidos" style="display:${abierto?'block':'none'}">
+      ${clientes.length ? clientes.map(_hrRenderClienteRuta).join('') : '<div style="padding:16px;text-align:center;color:var(--txt2);font-size:13px">Sin clientes pendientes</div>'}
+    </div>
+  </div>`;
+}
+
+// Toggle para el acordeón con clientes explícitos. Mismo comportamiento que
+// hrToggleCargaAcordeon (single-open, setea _cargaActivaHoy).
+function hrToggleCargaAcordeonConClientes(cargaId){
+  const cont = document.querySelector(`.carga-acordeon[data-carga-id="${cargaId}"]`);
+  if(!cont) return;
+  const pedidos = cont.querySelector('.carga-pedidos');
+  const chev = cont.querySelector('.carga-chevron');
+  if(!pedidos) return;
+  const abierto = pedidos.style.display !== 'none';
+  if(abierto){
+    pedidos.style.display = 'none';
+    if(chev) chev.style.transform = 'rotate(0deg)';
+    return;
+  }
+  document.querySelectorAll('.carga-acordeon .carga-pedidos').forEach(p=>{p.style.display='none';});
+  document.querySelectorAll('.carga-acordeon .carga-chevron').forEach(ch=>{ch.style.transform='rotate(0deg)';});
+  pedidos.style.display = 'block';
+  if(chev) chev.style.transform = 'rotate(90deg)';
+  _cargaActivaHoy = _cargasHoyCandidatas.find(c=>c.id===cargaId) || null;
 }
 
 async function hrMarcarVisitado(id, visitado){
@@ -1373,13 +1948,24 @@ async function _generarHojaRutaParaCarga(cargaId){
 // ─── Agregar cliente sobre la marcha (vista móvil del repartidor/vendedor) ──
 function hrMiRutaAgregarToggle(){
   const w=document.getElementById('hr-mia-buscador');if(!w)return;
+  const btn=document.getElementById('hr-mia-btn-agregar');
   const abrir=w.style.display==='none';
   w.style.display=abrir?'block':'none';
+  if(btn) btn.textContent = abrir ? '✕ Cerrar buscador' : '+ Agregar cliente sobre la marcha';
   if(abrir){
     document.getElementById('hr-mia-cli-q').value='';
     hrMiRutaFiltrar();
     setTimeout(()=>document.getElementById('hr-mia-cli-q')?.focus(),100);
   }
+}
+
+// ─── Gastos de hoy: toggle colapsable ──────────────────────────────────────
+function hrMiRutaGastosToggle(){
+  const body=document.getElementById('hr-mia-gastos-body');if(!body)return;
+  const abrir=body.style.display==='none';
+  body.style.display=abrir?'block':'none';
+  // Actualizar el texto del botón con el estado actual (y el total si hay)
+  _renderGastosHoy();
 }
 
 function hrMiRutaFiltrar(){
@@ -1390,8 +1976,8 @@ function hrMiRutaFiltrar(){
   const res=_clientes.filter(c=>!idsEnRuta.has(c.id)&&(c.nombre||'').toLowerCase().includes(q)).slice(0,15);
   drop.innerHTML=res.length?res.map(c=>`
     <div onmousedown="hrMiRutaAgregarCliente(${c.id})" style="padding:12px 14px;cursor:pointer;border-bottom:0.5px solid var(--brd)">
-      <div style="font-weight:600;font-size:14px">${c.nombre}</div>
-      <div style="font-size:12px;color:var(--txt2)">${c.direccion||''}${c.localidad?' · '+c.localidad:''}</div>
+      <div style="font-weight:600;font-size:14px">${esc(c.nombre)}</div>
+      <div style="font-size:12px;color:var(--txt2)">${esc(c.direccion||'')}${esc(c.localidad?' · '+c.localidad:'')}</div>
     </div>`).join(''):'<div style="padding:12px;color:var(--txt2);font-size:13px">Sin resultados</div>';
   drop.style.display='block';
 }
@@ -1413,4 +1999,13 @@ async function hrMiRutaAgregarCliente(clienteId){
   document.getElementById('hr-mia-cli-drop').style.display='none';
   document.getElementById('hr-mia-buscador').style.display='none';
   hrVerMiRuta();
+}
+
+/**
+ * Botón "+ Agregar producto" en la vista de nueva carga (Cargas)
+ * Actualmente los productos se agregan seleccionando pedidos, no manualmente.
+ * Esta función muestra un mensaje informativo.
+ */
+function carAgregarItem() {
+  toast('📋 Los productos se agregan seleccionando pedidos de la lista superior.', 'info', 3000);
 }
