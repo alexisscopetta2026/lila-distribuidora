@@ -270,6 +270,25 @@ async function _subirComprobante(file, suffix){
   return urlData?.publicUrl||'';
 }
 
+// A partir del link guardado (viejo o nuevo), pide a Supabase un link temporal
+// (válido 1 hora, solo para usuarios logueados) para mostrar/abrir la foto.
+async function _urlComprobante(urlGuardada){
+  if(!urlGuardada) return '';
+  const marca='/comprobantes/';
+  const i=urlGuardada.indexOf(marca);
+  const path=i>=0 ? urlGuardada.slice(i+marca.length) : urlGuardada;
+  const {data,error}=await sb.storage.from('comprobantes').createSignedUrl(path,3600);
+  if(error||!data?.signedUrl) return '';
+  return data.signedUrl;
+}
+
+// Usado en los botones "Ver comprobante": pide el link temporal y lo abre en una pestaña nueva.
+async function abrirComprobante(urlGuardada){
+  const link=await _urlComprobante(urlGuardada);
+  if(!link){toast('No se pudo abrir el comprobante','err');return;}
+  window.open(link,'_blank');
+}
+
 function prevComprobante(input){
   const file=input.files[0];if(!file)return;
   document.getElementById('cob-comp-nombre').textContent=file.name;
@@ -444,7 +463,7 @@ function verCobroDetalle(id){
       <tbody>${impRows}</tbody>
     </table>`:''}
     ${r.observaciones?`<div style="font-size:12px;color:var(--txt2);margin-bottom:8px">Obs: ${esc(r.observaciones)}</div>`:''}
-    ${r.comprobante_url?`<div style="margin-bottom:8px"><a href="${r.comprobante_url}" target="_blank">📎 Ver comprobante adjunto</a></div>`:''}
+    ${r.comprobante_url?`<div style="margin-bottom:8px"><a href="#" onclick="abrirComprobante('${esc(r.comprobante_url)}');return false;">📎 Ver comprobante adjunto</a></div>`:''}
     <div style="text-align:right;font-size:16px;font-weight:700;color:var(--PD);border-top:2px solid var(--brd);padding-top:10px">Total: ${fmt(r.importe)}</div>
     ${usuarioActual?.vista==='movil' ? '' : `<button class="btn P" style="width:100%;margin-top:12px" onclick="imprimirRecibo(${r.id})">🧾 Ver / imprimir recibo</button>`}
   `;
@@ -699,7 +718,7 @@ function renderCobros(){
     const estTransf=r.estado_transferencia||'pendiente';
     const transfBadge=!tieneTransf?'—':estTransf==='validado'?'<span class="b bP">✅ Val.</span>':estTransf==='rechazado'?'<span class="b bD">❌ Rech.</span>':'<span class="b bW">⏳ Pend.</span>';
     const transfAcciones=tieneTransf&&estTransf==='pendiente'?`<button class="btn sm" style="background:var(--G);color:#fff;font-size:10px" onclick="validarTransf(${r.id})">✅</button><button class="btn sm D" style="font-size:10px" onclick="rechazarTransf(${r.id})">❌</button>`:'';
-    const compLink=r.comprobante_url?`<a href="${r.comprobante_url}" target="_blank" title="Ver comprobante" style="font-size:16px">📎</a>`:'';
+    const compLink=r.comprobante_url?`<a href="#" onclick="abrirComprobante('${esc(r.comprobante_url)}');return false;" title="Ver comprobante" style="font-size:16px">📎</a>`:'';
     const esAdmin=usuarioActual?.esAdmin||usuarioActual?.rol_original==='admin';
     const estRend=r.estado_rendicion||'pendiente';
     const rendBadge=estRend==='validado'?'<span class="b bP">✅ Validado</span>':estRend==='rechazado'?'<span class="b bD">❌ Rechazado</span>':'<span class="b bW">⏳ Pendiente</span>';
@@ -4019,7 +4038,7 @@ async function guardarMovBanc(){
   toast('Movimiento del extracto agregado');
 }
 
-function renderTesConcil(){
+async function renderTesConcil(){
   const pendBanc=_movBanc.filter(m=>!m.conciliado);
   const conciliados=_movBanc.filter(m=>m.conciliado);
   // Movimientos del sistema pendientes de conciliar
@@ -4041,6 +4060,7 @@ function renderTesConcil(){
     ...sisCredPend.map(c=>({fecha:c.fecha,desc:c.cliente||'?',tipo:'credito',imp:c.transferencia,comp:c.comprobante_url||''})),
     ...sisDebPend.map(p=>({fecha:p.fecha,desc:p.proveedor||'?',tipo:'debito',imp:p.importe,comp:''}))
   ].sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  for(const s of allSis){ if(s.comp) s.comp=await _urlComprobante(s.comp); }
   const _compThumb=url=>url?`<a href="${url}" target="_blank" title="Ver comprobante"><img src="${url}" style="height:38px;border-radius:4px;cursor:pointer;object-fit:cover;border:1px solid var(--A)" onerror="this.parentNode.innerHTML='📎'"></a>`:'—';
   document.getElementById('conc-sistema-list').innerHTML=allSis.length
     ?`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Fecha</th><th>Descripción</th><th>Tipo</th><th>Importe</th><th>Comprobante</th></tr></thead><tbody>${allSis.map(s=>`<tr><td>${s.fecha}</td><td style="font-size:11px">${esc(s.desc)}</td><td>${s.tipo==='credito'?'<span class="b bA">⬆ Cobro Tr.</span>':'<span class="b bD">⬇ Pago Tr.</span>'}</td><td style="font-weight:700">${fmt(s.imp)}</td><td>${_compThumb(s.comp)}</td></tr>`).join('')}</tbody></table></div>`
@@ -4048,11 +4068,15 @@ function renderTesConcil(){
   // Conciliados
   const cnt=document.getElementById('conc-count');
   if(cnt)cnt.textContent=conciliados.length;
-  document.getElementById('conc-conciliados').innerHTML=conciliados.length
-    ?`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Fecha banco</th><th>Descripción</th><th>Tipo</th><th>Importe</th><th>Origen sistema</th><th>Comp.</th><th></th></tr></thead><tbody>${conciliados.map(m=>{
-      let origen='',comp='';
-      if(m.conciliado_tipo==='cobro'){const c=_cobros.find(x=>x.id===m.conciliado_id);origen=c?`Cobro ${esc(c.cliente)} (${c.fecha})`:'?';comp=c?.comprobante_url||'';}
-      else if(m.conciliado_tipo==='pago'){const p=_pagosProv.find(x=>x.id===m.conciliado_id);origen=p?`Pago ${esc(p.proveedor)} (${p.fecha})`:'?';}
+  const conciliadosFilas=[];
+  for(const m of conciliados){
+    let origen='',comp='';
+    if(m.conciliado_tipo==='cobro'){const c=_cobros.find(x=>x.id===m.conciliado_id);origen=c?`Cobro ${esc(c.cliente)} (${c.fecha})`:'?';comp=c?.comprobante_url?await _urlComprobante(c.comprobante_url):'';}
+    else if(m.conciliado_tipo==='pago'){const p=_pagosProv.find(x=>x.id===m.conciliado_id);origen=p?`Pago ${esc(p.proveedor)} (${p.fecha})`:'?';}
+    conciliadosFilas.push({m,origen,comp});
+  }
+  document.getElementById('conc-conciliados').innerHTML=conciliadosFilas.length
+    ?`<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Fecha banco</th><th>Descripción</th><th>Tipo</th><th>Importe</th><th>Origen sistema</th><th>Comp.</th><th></th></tr></thead><tbody>${conciliadosFilas.map(({m,origen,comp})=>{
       return `<tr><td>${m.fecha}</td><td style="font-size:11px">${esc(m.descripcion||'—')}</td>
         <td>${m.tipo==='credito'?'<span class="b bP">⬆</span>':'<span class="b bD">⬇</span>'}</td>
         <td style="font-weight:700">${fmt(m.importe)}</td>
