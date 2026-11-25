@@ -102,9 +102,11 @@ let _gerCharts = {};
 function procesarGerencial() {
   const status = document.getElementById('ger-status');
   status.textContent = 'Procesando archivos...';
+  const avisosMes = [];
 
-  // Helper para detectar mes desde nombre de archivo
-  function detectarMes(nombre) {
+  // Helper para detectar mes desde el NOMBRE del archivo (respaldo, solo si
+  // no se pudo leer la fecha real de adentro — ver detectarMesDesdeContenido).
+  function detectarMesPorNombre(nombre) {
     const n = nombre.toLowerCase();
     if(n.includes('enero') || n.includes('_01_') || n.includes('31-01') || n.includes('31_01')) return 'Ene';
     if(n.includes('febrero') || n.includes('_02_') || n.includes('28-02') || n.includes('29-02')) return 'Feb';
@@ -112,6 +114,29 @@ function procesarGerencial() {
     if(n.includes('abril') || n.includes('_04_') || n.includes('30-04')) return 'Abr';
     if(n.includes('mayo') || n.includes('_05_') || n.includes('31-05')) return 'May';
     if(n.includes('junio') || n.includes('_06_') || n.includes('13-06') || n.includes('30-06')) return 'Jun';
+    return null;
+  }
+
+  // Detecta el mes leyendo la fecha real que imprime el propio reporte de
+  // FoxPro en sus primeras filas (ej. "Desde Fecha 01/01/2026 Hasta Fecha..."
+  // o "DESDE 01/02/2026 HASTA..."). Mucho más confiable que el nombre del
+  // archivo: FoxPro nombra los archivos como "resultado 2026 01.xlsx" (con
+  // espacios, sin "enero" ni guiones), que antes no matcheaba ningún patrón
+  // del nombre y todo caía mal etiquetado como "Jun" sin ningún aviso.
+  const MESES3 = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  function detectarMesDesdeContenido(data) {
+    const texto = data.slice(0,15).map(r=>r.join(' ')).join(' ');
+    const fechas = texto.match(/\d\d\/\d\d\/\d{4}/g);
+    if (!fechas || !fechas.length) return null;
+    const mm = parseInt(fechas[0].split('/')[1]);
+    return MESES3[mm-1] || null;
+  }
+  function detectarMes(nombre, data) {
+    const porContenido = detectarMesDesdeContenido(data);
+    if (porContenido) return porContenido;
+    const porNombre = detectarMesPorNombre(nombre);
+    if (porNombre) return porNombre;
+    avisosMes.push(nombre);
     return 'Jun';
   }
 
@@ -148,7 +173,7 @@ function procesarGerencial() {
     // Procesar resultados (productos) — filas útiles desde fila 11 (índice 10)
     // Estructura: col0=cod, col1=articulo, col2=cant, col3=kilos, col4=ventaNeta, col5=costo, col6=diferencia
     resultFiles.forEach(f => {
-      const mesKey = detectarMes(f.name);
+      const mesKey = detectarMes(f.name, f.data);
       if(!_gerData.meses[mesKey]) _gerData.meses[mesKey] = {venta:0,costo:0,margen:0};
       f.data.forEach((row,i) => {
         if(i < 10) return; // saltear encabezados
@@ -171,7 +196,7 @@ function procesarGerencial() {
     // Procesar ventas por cliente — filas útiles desde fila 7 (índice 6)
     // Estructura: col0=codigo, col1=cliente, col2=venta
     ventasFiles.forEach(f => {
-      const mesKey = detectarMes(f.name);
+      const mesKey = detectarMes(f.name, f.data);
       f.data.forEach((row,i) => {
         if(i < 6) return;
         const cod = parseInt(row[0]);
@@ -187,7 +212,7 @@ function procesarGerencial() {
     // Procesar saldos — filas útiles desde fila 5 (índice 4)
     // Estructura: col0=codigo, col1=cliente, col2=direccion, col3=localidad, col4=saldo
     saldosFiles.forEach(f => {
-      const mesKey = detectarMes(f.name);
+      const mesKey = detectarMes(f.name, f.data);
       f.data.forEach((row,i) => {
         if(i < 4) return;
         const cod = parseInt(row[0]);
@@ -200,10 +225,11 @@ function procesarGerencial() {
       });
     });
 
-    status.textContent = `✓ Procesado: ${resultFiles.length} archivos de resultados, ${ventasFiles.length} de ventas, ${saldosFiles.length} de saldos. Guardando en base de datos...`;
+    const avisoMes = avisosMes.length ? ` ⚠️ No se pudo leer el mes de: ${avisosMes.join(', ')} — se asumió Junio, revisar.` : '';
+    status.textContent = `✓ Procesado: ${resultFiles.length} archivos de resultados, ${ventasFiles.length} de ventas, ${saldosFiles.length} de saldos. Guardando en base de datos...${avisoMes}`;
     renderGerencial();
     guardarGerencialSupabase(_gerData).then(() => {
-      status.textContent = `✓ Procesado y guardado en base de datos. ${resultFiles.length} resultados, ${ventasFiles.length} ventas, ${saldosFiles.length} saldos.`;
+      status.textContent = `✓ Procesado y guardado en base de datos. ${resultFiles.length} resultados, ${ventasFiles.length} ventas, ${saldosFiles.length} saldos.${avisoMes}`;
     }).catch(e => {
       status.textContent = `✓ Procesado. Error al guardar: ${e.message}`;
     });
