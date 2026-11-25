@@ -3542,6 +3542,44 @@ input.no-spin {
 
     <div class="card" style="margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-weight:600">🧑‍🤝‍🧑 Clientes por mes</div>
+        <button class="btn sm" onclick="tabExportarExcel('resumenClientes')">📥 Exportar</button>
+      </div>
+      <div id="tab-tabla-resumen-clientes"></div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-weight:600">🏭 Proveedores por mes</div>
+        <button class="btn sm" onclick="tabExportarExcel('resumenProveedores')">📥 Exportar</button>
+      </div>
+      <div id="tab-tabla-resumen-proveedores"></div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-weight:600">🏦 Caja y Banco por mes</div>
+        <button class="btn sm" onclick="tabExportarExcel('cajaBancoMes')">📥 Exportar</button>
+      </div>
+      <p style="font-size:11px;color:var(--txt2);margin-bottom:8px">Sin transferencias internas entre Caja/Banco/Valores (para no duplicar movimiento).</p>
+      <div id="tab-tabla-caja-banco"></div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px;border-top:3px solid var(--brd);padding-top:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <div style="font-weight:600">📦 Kilos, Unidades y Clientes por mes</div>
+        <button class="btn sm" onclick="tabExportarExcel('resultadoProducto')">📥 Exportar</button>
+      </div>
+      <p style="font-size:11px;color:var(--txt2);margin-bottom:10px">Margen de gestión (costo con impuestos incluidos) — se muestra tal cual viene del archivo "Resultado por Producto", sin recalcular.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
+        <div style="height:220px"><canvas id="tab-chart-kilos"></canvas></div>
+        <div style="height:220px"><canvas id="tab-chart-unidades"></canvas></div>
+      </div>
+      <div id="tab-tabla-resultado"></div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <div style="font-weight:600">💰 Caja y banco por categoría</div>
         <button class="btn sm" onclick="tabExportarExcel('fondos')">📥 Exportar</button>
       </div>
@@ -5525,18 +5563,18 @@ input.no-spin {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="js/app.js?v=20261125-01"></script>
-<script src="js/maestros.js?v=20261125-01"></script>
-<script src="js/ventas.js?v=20261125-01"></script>
-<script src="js/tesoreria.js?v=20261125-01"></script>
-<script src="js/contabilidad.js?v=20261125-01"></script>
-<script src="js/informes.js?v=20261125-01"></script>
-<script src="js/inf_productos.js?v=20261125-01"></script>
-<script src="js/logistica.js?v=20261125-01"></script>
-<script src="js/movil_header_observer.js?v=20261125-01"></script>
-<script src="js/instalar_app.js?v=20261125-01"></script>
-<script src="js/informe_fondos.js?v=20261125-01"></script>
-<script src="js/foxpro.js?v=20261125-01"></script>
+<script src="js/app.js?v=20261125-02"></script>
+<script src="js/maestros.js?v=20261125-02"></script>
+<script src="js/ventas.js?v=20261125-02"></script>
+<script src="js/tesoreria.js?v=20261125-02"></script>
+<script src="js/contabilidad.js?v=20261125-02"></script>
+<script src="js/informes.js?v=20261125-02"></script>
+<script src="js/inf_productos.js?v=20261125-02"></script>
+<script src="js/logistica.js?v=20261125-02"></script>
+<script src="js/movil_header_observer.js?v=20261125-02"></script>
+<script src="js/instalar_app.js?v=20261125-02"></script>
+<script src="js/informe_fondos.js?v=20261125-02"></script>
+<script src="js/foxpro.js?v=20261125-02"></script>
 
 <!-- ── Bottom sheet: edición de pedido móvil ── -->
 <div id="epm-backdrop"

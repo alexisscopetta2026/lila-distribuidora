@@ -653,6 +653,7 @@ function _fxRenderComparacionBalance(idx, comparacion){
 // con el cliente/zona real del ERP — eso es la Fase 4, pendiente.
 // ═══════════════════════════════════════════════════════════════════════
 let _tabData = null;
+let _tabResultadoProducto = [];
 let _tabCharts = {};
 
 function _tabDestruir(nombre){ if(_tabCharts[nombre]){ try{_tabCharts[nombre].destroy();}catch(e){} delete _tabCharts[nombre]; } }
@@ -668,9 +669,14 @@ function _tabOrdenPeriodos(a,b){
 async function fxCargarTablero(){
   const el = document.getElementById('tab-status');
   if(el){el.style.display='block';el.textContent='Cargando...';}
-  const { data, error } = await sb.rpc('fx_tablero');
+  const [{ data, error }, resultProd] = await Promise.all([
+    sb.rpc('fx_tablero'),
+    sb.from('resultado_producto').select('*')
+  ]);
   if (error) { if(el)el.textContent='❌ Error: '+error.message; console.error(error); return; }
   _tabData = data || {};
+  _tabResultadoProducto = resultProd.data || [];
+  if (resultProd.error) console.error(resultProd.error);
   if(el){el.style.display='none';el.textContent='';}
   _tabPoblarFiltroMes();
   tabRenderTodo();
@@ -691,8 +697,98 @@ function _tabPoblarFiltroMes(){
 function tabRenderTodo(){
   if (!_tabData) return;
   tabRenderResumen();
+  tabRenderResumenClientes();
+  tabRenderResumenProveedores();
+  tabRenderCajaBancoMes();
+  tabRenderResultadoProducto();
   tabRenderFondos();
   tabRenderFaltantes();
+}
+
+// ─── Kilos, Unidades y Clientes por mes (desde public.resultado_producto) ───
+// Todo con IVA incluido (costo y venta) — Lila carga el costo con todos los
+// impuestos y arma el precio sobre ese costo, así que margen $ y % se
+// muestran tal cual vienen del archivo, sin recalcular nada ("Margen de
+// gestión"). Los meses sin ningún registro en resultado_producto se marcan
+// "sin dato", nunca como 0 (0 significaría "se cargó y no vendió nada").
+function _tabCalcularResultadoProducto(){
+  const porMes = {};
+  _tabResultadoProducto.forEach(r => {
+    if (!porMes[r.periodo]) porMes[r.periodo] = { kilos:0, ventaPeso:0, unidades:0, ventaUnidad:0, ventaTotal:0, costo:0, margen:0 };
+    const m = porMes[r.periodo];
+    const kilos = parseFloat(r.kilos)||0, cantidad = parseFloat(r.cantidad)||0, venta = parseFloat(r.venta_neta)||0;
+    if (kilos > 0) { m.kilos += kilos; m.ventaPeso += venta; }
+    else { m.unidades += cantidad; m.ventaUnidad += venta; }
+    m.ventaTotal += venta;
+    m.costo += parseFloat(r.costo)||0;
+    m.margen += parseFloat(r.margen)||0;
+  });
+  // Meses esperados = unión de lo que trae el Mayor (resumen_mes) y lo que
+  // trae Resultado, así se ve "sin dato" incluso en un mes que el Mayor sí
+  // tiene pero Resultado no (o viceversa).
+  const periodos = new Set([...(_tabData?.resumen_mes||[]).map(r=>r.periodo), ...Object.keys(porMes)]);
+  const clientesPorMes = {};
+  (_tabData?.resumen_mes||[]).forEach(r => { clientesPorMes[r.periodo] = r.clientes_activos; });
+  return Array.from(periodos).sort(_tabOrdenPeriodos).map(periodo => {
+    const m = porMes[periodo];
+    return {
+      periodo, hayDato: !!m,
+      kilos: m?.kilos ?? null, ventaPeso: m?.ventaPeso ?? null, xKilo: m && m.kilos>0 ? m.ventaPeso/m.kilos : null,
+      unidades: m?.unidades ?? null, ventaUnidad: m?.ventaUnidad ?? null, xUnidad: m && m.unidades>0 ? m.ventaUnidad/m.unidades : null,
+      ventaTotal: m?.ventaTotal ?? null, costo: m?.costo ?? null,
+      margen: m?.margen ?? null, pctMargen: m && m.ventaTotal>0 ? m.margen/m.ventaTotal*100 : null,
+      clientesActivos: clientesPorMes[periodo] ?? null
+    };
+  });
+}
+
+function tabRenderResultadoProducto(){
+  const filtro = document.getElementById('tab-filtro-mes')?.value || '';
+  const todas = _tabCalcularResultadoProducto();
+  const filas = todas.filter(f=>!filtro||f.periodo===filtro);
+  const {grid,texto} = _tabColores();
+
+  _tabDestruir('kilos');
+  const ctxK = document.getElementById('tab-chart-kilos');
+  if (ctxK) {
+    _tabCharts.kilos = new Chart(ctxK, {
+      type:'bar',
+      data:{ labels: filas.map(f=>f.periodo), datasets:[{label:'Kilos vendidos', data: filas.map(f=>f.kilos), backgroundColor:'#378ADD'}] },
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false},title:{display:true,text:'Kilos por mes',color:texto,font:{size:11}}},
+        scales:{x:{ticks:{color:texto,font:{size:10}},grid:{display:false}}, y:{ticks:{color:texto,font:{size:10}},grid:{color:grid}}}}
+    });
+  }
+  _tabDestruir('unidades');
+  const ctxU = document.getElementById('tab-chart-unidades');
+  if (ctxU) {
+    _tabCharts.unidades = new Chart(ctxU, {
+      type:'bar',
+      data:{ labels: filas.map(f=>f.periodo), datasets:[{label:'Unidades vendidas', data: filas.map(f=>f.unidades), backgroundColor:'#D85A30'}] },
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false},title:{display:true,text:'Unidades por mes',color:texto,font:{size:11}}},
+        scales:{x:{ticks:{color:texto,font:{size:10}},grid:{display:false}}, y:{ticks:{color:texto,font:{size:10}},grid:{color:grid}}}}
+    });
+  }
+
+  const sd = v => v===null||v===undefined ? '<span style="color:var(--txt2)">sin dato</span>' : _fxFmt(v);
+  const tbl = document.getElementById('tab-tabla-resultado');
+  if (tbl) tbl.innerHTML = `<div class="tbl-wrap"><table class="tbl"><thead><tr>
+      <th>Mes</th>
+      <th style="text-align:right">Kilos vend.</th><th style="text-align:right">Venta (peso)</th><th style="text-align:right">$/kilo</th>
+      <th style="text-align:right">Unid. vend.</th><th style="text-align:right">Venta (unidad)</th><th style="text-align:right">$/unidad</th>
+      <th style="text-align:right">Venta total</th><th style="text-align:right">Costo</th><th style="text-align:right">Margen $</th><th style="text-align:right">Margen %</th>
+      <th style="text-align:right">Clientes activos</th>
+    </tr></thead><tbody>
+    ${filas.map(f=>!f.hayDato
+      ? `<tr><td>${esc(f.periodo)}</td><td colspan="10" style="text-align:center;color:var(--txt2)">sin dato — no se cargó el Resultado por Producto de este mes</td><td style="text-align:right">${sd(f.clientesActivos)}</td></tr>`
+      : `<tr><td>${esc(f.periodo)}</td>
+          <td style="text-align:right">${sd(f.kilos)}</td><td style="text-align:right">${sd(f.ventaPeso)}</td><td style="text-align:right">${sd(f.xKilo)}</td>
+          <td style="text-align:right">${sd(f.unidades)}</td><td style="text-align:right">${sd(f.ventaUnidad)}</td><td style="text-align:right">${sd(f.xUnidad)}</td>
+          <td style="text-align:right;font-weight:600">${sd(f.ventaTotal)}</td><td style="text-align:right">${sd(f.costo)}</td><td style="text-align:right">${sd(f.margen)}</td><td style="text-align:right">${f.pctMargen==null?'sin dato':f.pctMargen.toFixed(1)+'%'}</td>
+          <td style="text-align:right">${sd(f.clientesActivos)}</td></tr>`
+    ).join('') || `<tr><td colspan="12" style="text-align:center;color:var(--txt2)">Sin datos</td></tr>`}
+  </tbody></table></div>`;
 }
 
 function tabRenderResumen(){
@@ -767,15 +863,127 @@ function tabRenderFaltantes(){
   `;
 }
 
+// ─── Clientes por mes (desde analisis.v_clientes_mes, suma de todos los clientes) ───
+function _tabCalcularClientesMes(){
+  const porMes = {};
+  (_tabData.clientes_mes||[]).forEach(r => {
+    if (!porMes[r.periodo]) porMes[r.periodo] = { ventas:0, caja:0, banco:0, cheques:0, cobros:0 };
+    const m = porMes[r.periodo];
+    m.ventas += parseFloat(r.ventas)||0;
+    m.caja += parseFloat(r.cobro_caja)||0;
+    m.banco += parseFloat(r.cobro_banco)||0;
+    m.cheques += parseFloat(r.cobro_cheques)||0;
+    m.cobros += parseFloat(r.cobros)||0;
+  });
+  return Object.keys(porMes).sort(_tabOrdenPeriodos).map(periodo => {
+    const m = porMes[periodo];
+    return { periodo, ventas:m.ventas, caja:m.caja, banco:m.banco, cheques:m.cheques, otros: m.cobros-m.caja-m.banco-m.cheques, totalCobrado:m.cobros, neto: m.cobros-m.ventas };
+  });
+}
+
+function tabRenderResumenClientes(){
+  const filtro = document.getElementById('tab-filtro-mes')?.value || '';
+  const filas = _tabCalcularClientesMes().filter(f=>!filtro||f.periodo===filtro);
+  const tbl = document.getElementById('tab-tabla-resumen-clientes');
+  if (!tbl) return;
+  tbl.innerHTML = `<div class="tbl-wrap"><table class="tbl"><thead><tr>
+    <th>Mes</th><th style="text-align:right">Ventas</th><th style="text-align:right">Cobrado efectivo</th><th style="text-align:right">Cobrado banco</th><th style="text-align:right">Cobrado cheques</th><th style="text-align:right">Otros</th><th style="text-align:right">Total cobrado</th><th style="text-align:right">Neto</th>
+  </tr></thead><tbody>
+  ${filas.map(f=>`<tr><td>${esc(f.periodo)}</td><td style="text-align:right">${_fxFmt(f.ventas)}</td><td style="text-align:right">${_fxFmt(f.caja)}</td><td style="text-align:right">${_fxFmt(f.banco)}</td><td style="text-align:right">${_fxFmt(f.cheques)}</td><td style="text-align:right">${_fxFmt(f.otros)}</td><td style="text-align:right;font-weight:600">${_fxFmt(f.totalCobrado)}</td><td style="text-align:right;font-weight:700;color:${f.neto>=0?'var(--P)':'var(--D)'}">${_fxFmt(f.neto)}</td></tr>`).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--txt2)">Sin datos — cargá el Mayor</td></tr>'}
+  </tbody></table></div>`;
+}
+
+// ─── Proveedores por mes (desde analisis.v_proveedores_mes) ───
+// Si ese mes la cuenta Proveedores no vino en el Mayor, Compras y Neto van
+// "sin dato" (nunca 0) — los Pagos siguen siendo reales, vienen de Caja/Banco.
+function _tabCalcularProveedoresMes(){
+  const porMes = {};
+  (_tabData.proveedores_mes||[]).forEach(r => {
+    if (!porMes[r.periodo]) porMes[r.periodo] = { compras:0, comprasNull:false, efectivo:0, banco:0, cheques:0, pagos:0 };
+    const m = porMes[r.periodo];
+    if (r.compras === null || r.compras === undefined) m.comprasNull = true;
+    else m.compras += parseFloat(r.compras)||0;
+    m.efectivo += parseFloat(r.pago_efectivo)||0;
+    m.banco += parseFloat(r.pago_banco)||0;
+    m.cheques += parseFloat(r.pago_cheques)||0;
+    m.pagos += parseFloat(r.pagos)||0;
+  });
+  return Object.keys(porMes).sort(_tabOrdenPeriodos).map(periodo => {
+    const m = porMes[periodo];
+    return {
+      periodo, compras: m.comprasNull ? null : m.compras,
+      efectivo:m.efectivo, banco:m.banco, cheques:m.cheques, totalPagado:m.pagos,
+      neto: m.comprasNull ? null : m.pagos - m.compras
+    };
+  });
+}
+
+function tabRenderResumenProveedores(){
+  const filtro = document.getElementById('tab-filtro-mes')?.value || '';
+  const filas = _tabCalcularProveedoresMes().filter(f=>!filtro||f.periodo===filtro);
+  const tbl = document.getElementById('tab-tabla-resumen-proveedores');
+  if (!tbl) return;
+  const sd = v => v===null ? '<span style="color:var(--txt2)">sin dato</span>' : _fxFmt(v);
+  tbl.innerHTML = `<div class="tbl-wrap"><table class="tbl"><thead><tr>
+    <th>Mes</th><th style="text-align:right">Compras</th><th style="text-align:right">Pagado efectivo</th><th style="text-align:right">Pagado banco</th><th style="text-align:right">Pagado cheques</th><th style="text-align:right">Total pagado</th><th style="text-align:right">Neto</th>
+  </tr></thead><tbody>
+  ${filas.map(f=>`<tr><td>${esc(f.periodo)}</td><td style="text-align:right">${sd(f.compras)}</td><td style="text-align:right">${_fxFmt(f.efectivo)}</td><td style="text-align:right">${_fxFmt(f.banco)}</td><td style="text-align:right">${_fxFmt(f.cheques)}</td><td style="text-align:right;font-weight:600">${_fxFmt(f.totalPagado)}</td><td style="text-align:right;font-weight:700;color:${f.neto===null?'var(--txt2)':f.neto>=0?'var(--P)':'var(--D)'}">${sd(f.neto)}</td></tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--txt2)">Sin datos — cargá el Mayor</td></tr>'}
+  </tbody></table></div>`;
+}
+
+// ─── Caja y Banco por mes (desde analisis.v_fondos, sin transferencias internas) ───
+function _tabCalcularCajaBancoMes(){
+  const porMesMedio = {};
+  (_tabData.fondos||[]).forEach(r => {
+    if (r.categoria === 'Transferencia interna') return;
+    if (!porMesMedio[r.periodo]) porMesMedio[r.periodo] = {};
+    if (!porMesMedio[r.periodo][r.medio]) porMesMedio[r.periodo][r.medio] = { entro:0, salio:0 };
+    const m = porMesMedio[r.periodo][r.medio];
+    if (r.tipo === 'Ingreso') m.entro += parseFloat(r.importe)||0;
+    else m.salio += parseFloat(r.importe)||0;
+  });
+  const MEDIOS = ['Caja','Banco Macro','Valores a depositar'];
+  const filas = [];
+  Object.keys(porMesMedio).sort(_tabOrdenPeriodos).forEach(periodo => {
+    let totEntro=0, totSalio=0;
+    MEDIOS.forEach(medio => {
+      const d = porMesMedio[periodo][medio] || {entro:0,salio:0};
+      totEntro += d.entro; totSalio += d.salio;
+      filas.push({ periodo, medio, entro:d.entro, salio:d.salio, neto:d.entro-d.salio });
+    });
+    filas.push({ periodo, medio:'TOTAL', entro:totEntro, salio:totSalio, neto:totEntro-totSalio, esTotal:true });
+  });
+  return filas;
+}
+
+function tabRenderCajaBancoMes(){
+  const filtro = document.getElementById('tab-filtro-mes')?.value || '';
+  const filas = _tabCalcularCajaBancoMes().filter(f=>!filtro||f.periodo===filtro);
+  const tbl = document.getElementById('tab-tabla-caja-banco');
+  if (!tbl) return;
+  tbl.innerHTML = `<div class="tbl-wrap"><table class="tbl"><thead><tr>
+    <th>Mes</th><th>Medio</th><th style="text-align:right">Entró</th><th style="text-align:right">Salió</th><th style="text-align:right">Neto</th>
+  </tr></thead><tbody>
+  ${filas.map(f=>`<tr${f.esTotal?' style="font-weight:700;border-top:2px solid var(--brd)"':''}><td>${esc(f.periodo)}</td><td>${esc(f.medio)}</td><td style="text-align:right">${_fxFmt(f.entro)}</td><td style="text-align:right">${_fxFmt(f.salio)}</td><td style="text-align:right;color:${f.neto>=0?'var(--P)':'var(--D)'}">${_fxFmt(f.neto)}</td></tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--txt2)">Sin datos — cargá el Mayor</td></tr>'}
+  </tbody></table></div>`;
+}
+
 function tabExportarExcel(cual){
   if (!_tabData) return;
-  const mapa = { resumen:['resumen_mes','resumen_mensual'], fondos:['fondos','fondos'], clientes:['clientes_mes','ventas_por_cliente'], proveedores:['proveedores_mes','compras_por_proveedor'] };
-  const conf = mapa[cual];
-  if (!conf) return;
-  const filas = _tabData[conf[0]] || [];
+  const mapa = {
+    resumen: () => [_tabData.resumen_mes||[], 'resumen_mensual'],
+    fondos: () => [_tabData.fondos||[], 'fondos'],
+    resumenClientes: () => [_tabCalcularClientesMes(), 'clientes_por_mes'],
+    resumenProveedores: () => [_tabCalcularProveedoresMes(), 'proveedores_por_mes'],
+    cajaBancoMes: () => [_tabCalcularCajaBancoMes(), 'caja_banco_por_mes'],
+    resultadoProducto: () => [_tabCalcularResultadoProducto(), 'kilos_unidades_clientes'],
+  };
+  const fn = mapa[cual];
+  if (!fn) return;
+  const [filas, nombre] = fn();
   if (!filas.length) { toast('No hay datos para exportar'); return; }
   const ws = XLSX.utils.json_to_sheet(filas);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Datos');
-  XLSX.writeFile(wb, `lila_${conf[1]}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  XLSX.writeFile(wb, `lila_${nombre}_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
