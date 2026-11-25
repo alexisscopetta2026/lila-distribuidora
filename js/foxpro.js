@@ -931,27 +931,37 @@ function tabRenderResumenProveedores(){
   </tbody></table></div>`;
 }
 
-// ─── Caja y Banco por mes (desde analisis.v_fondos, sin transferencias internas) ───
+// ─── Caja y Banco por mes (desde analisis.v_fondos) ───
+// Cada medio por separado muestra su movimiento REAL (con transferencias
+// entre Caja/Banco/Valores incluidas — si no, una cuenta que solo mueve
+// plata hacia otra queda en cero y parece que no pasó nada). Solo la fila
+// TOTAL excluye esas transferencias internas, para no contar dos veces la
+// misma plata moviéndose de una cuenta a otra.
 function _tabCalcularCajaBancoMes(){
   const porMesMedio = {};
+  const totalSinTransf = {};
   (_tabData.fondos||[]).forEach(r => {
-    if (r.categoria === 'Transferencia interna') return;
     if (!porMesMedio[r.periodo]) porMesMedio[r.periodo] = {};
     if (!porMesMedio[r.periodo][r.medio]) porMesMedio[r.periodo][r.medio] = { entro:0, salio:0 };
     const m = porMesMedio[r.periodo][r.medio];
     if (r.tipo === 'Ingreso') m.entro += parseFloat(r.importe)||0;
     else m.salio += parseFloat(r.importe)||0;
+
+    if (r.categoria === 'Transferencia interna') return;
+    if (!totalSinTransf[r.periodo]) totalSinTransf[r.periodo] = { entro:0, salio:0 };
+    const t = totalSinTransf[r.periodo];
+    if (r.tipo === 'Ingreso') t.entro += parseFloat(r.importe)||0;
+    else t.salio += parseFloat(r.importe)||0;
   });
   const MEDIOS = ['Caja','Banco Macro','Valores a depositar'];
   const filas = [];
   Object.keys(porMesMedio).sort(_tabOrdenPeriodos).forEach(periodo => {
-    let totEntro=0, totSalio=0;
     MEDIOS.forEach(medio => {
       const d = porMesMedio[periodo][medio] || {entro:0,salio:0};
-      totEntro += d.entro; totSalio += d.salio;
       filas.push({ periodo, medio, entro:d.entro, salio:d.salio, neto:d.entro-d.salio });
     });
-    filas.push({ periodo, medio:'TOTAL', entro:totEntro, salio:totSalio, neto:totEntro-totSalio, esTotal:true });
+    const t = totalSinTransf[periodo] || {entro:0,salio:0};
+    filas.push({ periodo, medio:'TOTAL (sin transferencias internas)', entro:t.entro, salio:t.salio, neto:t.entro-t.salio, esTotal:true });
   });
   return filas;
 }
