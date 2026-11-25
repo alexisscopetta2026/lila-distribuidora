@@ -984,7 +984,7 @@ function navInfTabs(e){
 }
 
 function infTab(tab){
-    const tabs = ['ventas','descuentos','descuentos-cliente','clientes','productos','comisiones','gerencial','comisiones2','cmg-cli','financiamiento','financiero','fondos','plazos','calce','historico'];
+    const tabs = ['ventas','descuentos','descuentos-cliente','clientes','productos','comisiones','gerencial','comisiones2','cmg-cli','financiamiento','financiero','fondos','plazos','calce','historico','foxpro'];
 
   setBreadcrumbSub('inf', tab);
 
@@ -1011,6 +1011,9 @@ function infTab(tab){
   } 
   if (tab === 'descuentos-cliente') {
     cargarPeriodosDescuentosCliente().then(() => renderDescuentosCliente());
+  }
+  if (tab === 'foxpro') {
+    cargarMesesFoxPro();
   }
 }
 

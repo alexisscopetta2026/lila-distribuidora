@@ -3423,6 +3423,7 @@ input.no-spin {
     <button id="inf-tab-plazos" class="btn sm" onclick="infTab('plazos')" tabindex="-1">📋 Plazos</button>
     <button id="inf-tab-calce" class="btn sm" onclick="infTab('calce')" tabindex="-1">📊 Calce de plazos</button>
     <button id="inf-tab-historico" class="btn sm" onclick="infTab('historico')" tabindex="-1">📈 Evolución histórica</button>
+    <button id="inf-tab-foxpro" class="btn sm" onclick="infTab('foxpro')" tabindex="-1">🧾 Contabilidad FoxPro</button>
   </div>
 
   <!-- Área de contenido scrolleable -->
@@ -3464,6 +3465,35 @@ input.no-spin {
         <button class="btn" onclick="limpiarResultadoProducto()" style="padding:10px 18px;">🗑 Limpiar</button>
       </div>
       <div id="res-status" style="display:none;margin-top:10px;"></div>
+    </div>
+  </div>
+
+  <!-- Informes → 🧾 Contabilidad FoxPro: subir el PDF del Mayor tal cual sale de FoxPro -->
+  <div id="inf-sec-foxpro" style="display:none;">
+    <div class="card" style="margin-bottom:12px;">
+      <div style="font-weight:600;margin-bottom:6px;">🧾 Mayor de Cuentas — PDF de FoxPro</div>
+      <p style="font-size:12px;color:var(--txt2);margin-bottom:10px;">
+        Arrastrá uno o varios PDF del "Mayor de Cuentas" (los que exporta FoxPro, sin convertir a Excel).
+        Se detecta el mes solo, se valida cada cuenta contra el "Totales mes" que imprime el propio PDF,
+        y si todo cierra, se guarda reemplazando ese mes. Si algo no cierra, no se guarda nada de ese mes.
+      </p>
+      <div id="fx-drop" ondragover="fxDragOver(event)" ondragleave="fxDragLeave(event)" ondrop="fxDrop(event)"
+           style="border:2px dashed var(--brd);border-radius:10px;padding:24px;text-align:center;cursor:pointer;margin-bottom:10px"
+           onclick="document.getElementById('fx-file').click()">
+        <div style="font-size:28px;margin-bottom:6px">📄⬇️</div>
+        <div style="font-size:13px;color:var(--txt2)">Arrastrá acá el/los PDF del Mayor, o hacé clic para elegirlos</div>
+        <input type="file" id="fx-file" accept=".pdf" multiple style="display:none" onchange="fxSeleccionarArchivos(this)">
+      </div>
+      <div id="fx-archivos" style="margin-bottom:10px"></div>
+      <button id="btn-fx-procesar" class="btn P" onclick="fxProcesarArchivos()" disabled style="padding:10px 24px;font-weight:700">🔎 Extraer y validar</button>
+      <div id="fx-status" style="display:none;margin-top:10px;"></div>
+    </div>
+
+    <div id="fx-preview"></div>
+
+    <div class="card" style="margin-top:12px">
+      <div style="font-weight:600;margin-bottom:8px">📅 Meses ya cargados</div>
+      <div id="fx-meses"></div>
     </div>
   </div>
 
@@ -5437,17 +5467,19 @@ input.no-spin {
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<script src="js/app.js?v=20261123-01"></script>
-<script src="js/maestros.js?v=20261123-01"></script>
-<script src="js/ventas.js?v=20261123-01"></script>
-<script src="js/tesoreria.js?v=20261123-01"></script>
-<script src="js/contabilidad.js?v=20261123-01"></script>
-<script src="js/informes.js?v=20261123-01"></script>
-<script src="js/inf_productos.js?v=20261123-01"></script>
-<script src="js/logistica.js?v=20261123-01"></script>
-<script src="js/movil_header_observer.js?v=20261123-01"></script>
-<script src="js/instalar_app.js?v=20261123-01"></script>
-<script src="js/informe_fondos.js?v=20261123-01"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="js/app.js?v=20261124-01"></script>
+<script src="js/maestros.js?v=20261124-01"></script>
+<script src="js/ventas.js?v=20261124-01"></script>
+<script src="js/tesoreria.js?v=20261124-01"></script>
+<script src="js/contabilidad.js?v=20261124-01"></script>
+<script src="js/informes.js?v=20261124-01"></script>
+<script src="js/inf_productos.js?v=20261124-01"></script>
+<script src="js/logistica.js?v=20261124-01"></script>
+<script src="js/movil_header_observer.js?v=20261124-01"></script>
+<script src="js/instalar_app.js?v=20261124-01"></script>
+<script src="js/informe_fondos.js?v=20261124-01"></script>
+<script src="js/foxpro.js?v=20261124-01"></script>
 
 <!-- ── Bottom sheet: edición de pedido móvil ── -->
 <div id="epm-backdrop"
