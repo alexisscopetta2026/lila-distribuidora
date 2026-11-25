@@ -3424,6 +3424,7 @@ input.no-spin {
     <button id="inf-tab-calce" class="btn sm" onclick="infTab('calce')" tabindex="-1">📊 Calce de plazos</button>
     <button id="inf-tab-historico" class="btn sm" onclick="infTab('historico')" tabindex="-1">📈 Evolución histórica</button>
     <button id="inf-tab-foxpro" class="btn sm" onclick="infTab('foxpro')" tabindex="-1">🧾 Contabilidad FoxPro</button>
+    <button id="inf-tab-tablero" class="btn sm" onclick="infTab('tablero')" tabindex="-1">📊 Tablero</button>
   </div>
 
   <!-- Área de contenido scrolleable -->
@@ -3517,6 +3518,40 @@ input.no-spin {
     </div>
 
     <div id="fx-preview-balance"></div>
+  </div>
+
+  <!-- Informes → 📊 Tablero: resumen armado desde el Mayor/Balance (cajón "analisis") -->
+  <div id="inf-sec-tablero" style="display:none;">
+    <div class="card" style="margin-bottom:12px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+      <div class="fg" style="min-width:170px">
+        <label style="font-size:12px;font-weight:600;color:var(--txt2)">Mes</label>
+        <select id="tab-filtro-mes" onchange="tabRenderTodo()"><option value="">Todos los meses cargados</option></select>
+      </div>
+      <button class="btn" onclick="fxCargarTablero()">🔄 Actualizar</button>
+      <div id="tab-status" style="display:none;font-size:13px;color:var(--txt2)"></div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-weight:600">📊 Resumen por mes</div>
+        <button class="btn sm" onclick="tabExportarExcel('resumen')">📥 Exportar</button>
+      </div>
+      <div style="height:260px"><canvas id="tab-chart-resumen"></canvas></div>
+      <div id="tab-tabla-resumen" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-weight:600">💰 Caja y banco por categoría</div>
+        <button class="btn sm" onclick="tabExportarExcel('fondos')">📥 Exportar</button>
+      </div>
+      <div style="height:280px"><canvas id="tab-chart-fondos"></canvas></div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-weight:600;margin-bottom:8px">❓ Faltantes — qué pedirle a FoxPro</div>
+      <div id="tab-tabla-faltantes"></div>
+    </div>
   </div>
 
   <!-- Informes → 💵 Fondos: evolución de Caja / Banco (lee movimientos_mayores) -->
@@ -5490,18 +5525,18 @@ input.no-spin {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="js/app.js?v=20261124-05"></script>
-<script src="js/maestros.js?v=20261124-05"></script>
-<script src="js/ventas.js?v=20261124-05"></script>
-<script src="js/tesoreria.js?v=20261124-05"></script>
-<script src="js/contabilidad.js?v=20261124-05"></script>
-<script src="js/informes.js?v=20261124-05"></script>
-<script src="js/inf_productos.js?v=20261124-05"></script>
-<script src="js/logistica.js?v=20261124-05"></script>
-<script src="js/movil_header_observer.js?v=20261124-05"></script>
-<script src="js/instalar_app.js?v=20261124-05"></script>
-<script src="js/informe_fondos.js?v=20261124-05"></script>
-<script src="js/foxpro.js?v=20261124-05"></script>
+<script src="js/app.js?v=20261125-01"></script>
+<script src="js/maestros.js?v=20261125-01"></script>
+<script src="js/ventas.js?v=20261125-01"></script>
+<script src="js/tesoreria.js?v=20261125-01"></script>
+<script src="js/contabilidad.js?v=20261125-01"></script>
+<script src="js/informes.js?v=20261125-01"></script>
+<script src="js/inf_productos.js?v=20261125-01"></script>
+<script src="js/logistica.js?v=20261125-01"></script>
+<script src="js/movil_header_observer.js?v=20261125-01"></script>
+<script src="js/instalar_app.js?v=20261125-01"></script>
+<script src="js/informe_fondos.js?v=20261125-01"></script>
+<script src="js/foxpro.js?v=20261125-01"></script>
 
 <!-- ── Bottom sheet: edición de pedido móvil ── -->
 <div id="epm-backdrop"

@@ -644,3 +644,138 @@ function _fxRenderComparacionBalance(idx, comparacion){
     <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Cuenta</th><th style="text-align:right">Debe (Balance)</th><th style="text-align:right">Debe (Mayor)</th><th style="text-align:right">Haber (Balance)</th><th style="text-align:right">Haber (Mayor)</th><th style="text-align:center">Estado</th></tr></thead>
     <tbody>${comparacion.map(c=>`<tr><td>${esc(c.cuenta)}</td><td style="text-align:right">${_fxFmt(c.debe_mes)}</td><td style="text-align:right">${_fxFmt(c.mayor_debe)}</td><td style="text-align:right">${_fxFmt(c.haber_mes)}</td><td style="text-align:right">${_fxFmt(c.mayor_haber)}</td><td style="text-align:center">${badge[c.estado]||esc(c.estado)}</td></tr>`).join('')}</tbody></table></div>`;
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// ─── FASE 3: TABLERO — resumen, fondos y faltantes ───
+// Todo llega de una sola vez por fx_tablero() (lee el cajón "analisis",
+// que la API no ve directo). El filtro de ZONA todavía no se puede hacer:
+// las vistas agrupan por el nombre tal cual lo escribe FoxPro, sin vínculo
+// con el cliente/zona real del ERP — eso es la Fase 4, pendiente.
+// ═══════════════════════════════════════════════════════════════════════
+let _tabData = null;
+let _tabCharts = {};
+
+function _tabDestruir(nombre){ if(_tabCharts[nombre]){ try{_tabCharts[nombre].destroy();}catch(e){} delete _tabCharts[nombre]; } }
+function _tabColores(){
+  const isDark = matchMedia('(prefers-color-scheme: dark)').matches;
+  return { grid: isDark?'rgba(255,255,255,0.08)':'rgba(0,0,0,0.06)', texto: isDark?'#aaa':'#777' };
+}
+function _tabOrdenPeriodos(a,b){
+  const [ma,aa]=a.split('-'),[mb,ab]=b.split('-');
+  return (aa+ma.padStart(2,'0')).localeCompare(ab+mb.padStart(2,'0'));
+}
+
+async function fxCargarTablero(){
+  const el = document.getElementById('tab-status');
+  if(el){el.style.display='block';el.textContent='Cargando...';}
+  const { data, error } = await sb.rpc('fx_tablero');
+  if (error) { if(el)el.textContent='❌ Error: '+error.message; console.error(error); return; }
+  _tabData = data || {};
+  if(el){el.style.display='none';el.textContent='';}
+  _tabPoblarFiltroMes();
+  tabRenderTodo();
+}
+
+function _tabPoblarFiltroMes(){
+  const sel = document.getElementById('tab-filtro-mes');
+  if (!sel || !_tabData) return;
+  const periodos = Array.from(new Set((_tabData.resumen_mes||[]).map(r=>r.periodo))).sort(_tabOrdenPeriodos);
+  const actual = sel.value;
+  sel.innerHTML = '<option value="">Todos los meses cargados</option>' + periodos.map(p=>{
+    const [mm,aaaa] = p.split('-');
+    return `<option value="${esc(p)}">${_FX_MESES[parseInt(mm)]||mm} ${aaaa}</option>`;
+  }).join('');
+  if (periodos.includes(actual)) sel.value = actual;
+}
+
+function tabRenderTodo(){
+  if (!_tabData) return;
+  tabRenderResumen();
+  tabRenderFondos();
+  tabRenderFaltantes();
+}
+
+function tabRenderResumen(){
+  const filtro = document.getElementById('tab-filtro-mes')?.value || '';
+  const filas = (_tabData.resumen_mes||[]).filter(r=>!filtro||r.periodo===filtro).sort((a,b)=>_tabOrdenPeriodos(a.periodo,b.periodo));
+  const {grid,texto} = _tabColores();
+  _tabDestruir('resumen');
+  const ctx = document.getElementById('tab-chart-resumen');
+  if (ctx) {
+    _tabCharts.resumen = new Chart(ctx, {
+      type:'bar',
+      data:{ labels: filas.map(f=>f.periodo),
+        datasets:[
+          {label:'Ventas', data:filas.map(f=>f.ventas||0), backgroundColor:'#378ADD'},
+          {label:'Cobros', data:filas.map(f=>f.cobros||0), backgroundColor:'#1D9E75'},
+          {label:'Compras', data:filas.map(f=>f.compras||0), backgroundColor:'#D85A30'},
+          {label:'Pagos a prov.', data:filas.map(f=>f.pagos_proveedores||0), backgroundColor:'#C47A00'},
+          {label:'Sueldos', data:filas.map(f=>f.sueldos||0), backgroundColor:'#8E44AD'},
+        ]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{position:'bottom',labels:{color:texto,boxWidth:10,font:{size:10}}}},
+        scales:{x:{ticks:{color:texto,font:{size:10}},grid:{display:false}}, y:{ticks:{color:texto,font:{size:10}},grid:{color:grid}}}}
+    });
+  }
+  const tbl = document.getElementById('tab-tabla-resumen');
+  if (tbl) tbl.innerHTML = `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Mes</th><th style="text-align:right">Ventas</th><th style="text-align:right">Cobros</th><th style="text-align:right">Compras</th><th style="text-align:right">Pagos prov.</th><th style="text-align:right">Sueldos</th><th style="text-align:right">Clientes activos</th></tr></thead><tbody>
+    ${filas.map(f=>`<tr><td>${esc(f.periodo)}</td><td style="text-align:right">${_fxFmt(f.ventas)}</td><td style="text-align:right">${_fxFmt(f.cobros)}</td><td style="text-align:right">${_fxFmt(f.compras)}</td><td style="text-align:right">${_fxFmt(f.pagos_proveedores)}</td><td style="text-align:right">${_fxFmt(f.sueldos)}</td><td style="text-align:right">${f.clientes_activos??'—'}</td></tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--txt2)">Sin datos — cargá el Mayor en la pestaña de arriba</td></tr>'}
+  </tbody></table></div>`;
+}
+
+function tabRenderFondos(){
+  const filtro = document.getElementById('tab-filtro-mes')?.value || '';
+  const filas = (_tabData.fondos||[]).filter(r=>!filtro||r.periodo===filtro);
+  const porCat = {};
+  filas.forEach(f=>{
+    if(!porCat[f.categoria]) porCat[f.categoria] = {ingreso:0, egreso:0};
+    if(f.tipo==='Ingreso') porCat[f.categoria].ingreso += f.importe||0;
+    else porCat[f.categoria].egreso += f.importe||0;
+  });
+  const cats = Object.keys(porCat).sort((a,b)=>(porCat[b].ingreso+porCat[b].egreso)-(porCat[a].ingreso+porCat[a].egreso));
+  const {grid,texto} = _tabColores();
+  _tabDestruir('fondos');
+  const ctx = document.getElementById('tab-chart-fondos');
+  if (ctx) {
+    _tabCharts.fondos = new Chart(ctx, {
+      type:'bar', indexAxis:'y',
+      data:{ labels: cats,
+        datasets:[
+          {label:'Ingresos', data:cats.map(c=>porCat[c].ingreso), backgroundColor:'#1D9E75'},
+          {label:'Egresos', data:cats.map(c=>-porCat[c].egreso), backgroundColor:'#D85A30'},
+        ]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{position:'bottom',labels:{color:texto,boxWidth:10,font:{size:10}}},
+          tooltip:{callbacks:{label:c=>' '+c.dataset.label+': '+_fxFmt(Math.abs(c.parsed.x))}}},
+        scales:{x:{ticks:{color:texto,font:{size:10},callback:v=>_fxFmt(Math.abs(v))},grid:{color:grid}}, y:{ticks:{color:texto,font:{size:10}},grid:{display:false}}}}
+    });
+  }
+}
+
+function tabRenderFaltantes(){
+  const cobertura = (_tabData.cobertura||[]).filter(r=>r.estado!=='Está');
+  const mesesDeducidos = (_tabData.mes_deducido||[]).filter(r=>r.neto_deducido!==null && r.neto_deducido!==undefined);
+  const tbl = document.getElementById('tab-tabla-faltantes');
+  if (!tbl) return;
+  const filasCobertura = cobertura.length ? cobertura.map(c=>`<tr><td>${esc(c.periodo)}</td><td>${esc(c.cuenta)}</td><td>${c.estado==='Mes sin mayor'?'<span class="b bD">Mes sin Mayor cargado</span>':'<span class="b bW">Falta esta cuenta en ese mes</span>'}</td></tr>`).join('') : '<tr><td colspan="3" style="color:var(--txt2);text-align:center">✅ Sin faltantes — está todo lo cargado</td></tr>';
+  const filasDeducidas = mesesDeducidos.map(m=>`<tr><td>${esc(m.periodo_balance)}</td><td>${esc(m.cuenta)}</td><td>${esc(m.cuales)}</td><td style="text-align:right">${_fxFmt(m.neto_deducido)}</td></tr>`).join('');
+  tbl.innerHTML = `
+    <div style="font-weight:600;font-size:13px;margin-bottom:6px">Cuentas que faltan en el Mayor (pedir a FoxPro)</div>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Mes</th><th>Cuenta</th><th>Qué pasa</th></tr></thead><tbody>${filasCobertura}</tbody></table></div>
+    ${mesesDeducidos.length ? `<div style="font-weight:600;font-size:13px;margin:14px 0 6px">Mes deducido a partir del Balance (cuando falta un solo mes, se puede calcular solo)</div>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Balance de</th><th>Cuenta</th><th>Mes que falta</th><th style="text-align:right">Movimiento neto deducido</th></tr></thead><tbody>${filasDeducidas}</tbody></table></div>` : ''}
+  `;
+}
+
+function tabExportarExcel(cual){
+  if (!_tabData) return;
+  const mapa = { resumen:['resumen_mes','resumen_mensual'], fondos:['fondos','fondos'], clientes:['clientes_mes','ventas_por_cliente'], proveedores:['proveedores_mes','compras_por_proveedor'] };
+  const conf = mapa[cual];
+  if (!conf) return;
+  const filas = _tabData[conf[0]] || [];
+  if (!filas.length) { toast('No hay datos para exportar'); return; }
+  const ws = XLSX.utils.json_to_sheet(filas);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Datos');
+  XLSX.writeFile(wb, `lila_${conf[1]}_${new Date().toISOString().slice(0,10)}.xlsx`);
+}

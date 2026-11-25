@@ -1001,7 +1001,7 @@ function navInfTabs(e){
 }
 
 function infTab(tab){
-    const tabs = ['ventas','descuentos','descuentos-cliente','clientes','productos','comisiones','gerencial','comisiones2','cmg-cli','financiamiento','financiero','fondos','plazos','calce','historico','foxpro'];
+    const tabs = ['ventas','descuentos','descuentos-cliente','clientes','productos','comisiones','gerencial','comisiones2','cmg-cli','financiamiento','financiero','fondos','plazos','calce','historico','foxpro','tablero'];
 
   setBreadcrumbSub('inf', tab);
 
@@ -1031,6 +1031,9 @@ function infTab(tab){
   }
   if (tab === 'foxpro') {
     cargarMesesFoxPro();
+  }
+  if (tab === 'tablero') {
+    fxCargarTablero();
   }
 }
 
