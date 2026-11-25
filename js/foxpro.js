@@ -70,8 +70,27 @@ function _fxDetectarPeriodo(lineas){
 }
 
 // ─── 3. PARSEAR LAS CUENTAS Y SUS MOVIMIENTOS ───
+// El concepto puede venir VACÍO (FoxPro imprime esa línea sin texto entre
+// el asiento y los importes — pasó en mayo/2026, cuenta 11201, asiento
+// "7854 -"). Por eso NO usamos un regex que exija texto ahí: partimos la
+// línea en columnas por posición (fecha, asiento, "-", ...concepto..., debe,
+// haber, saldo) — el concepto son las palabras que quedan en el medio,
+// y puede ser ninguna.
 const _fxReCuenta = /^Cuenta: (\d{5}) (\d{5}) (.+)$/;
-const _fxReMov = /^(\d\d\/\d\d\/\d{4}) (\d+) - (.+?) (-?[\d,]+\.\d\d) (-?[\d,]+\.\d\d) (\S+)$/;
+const _fxReNumero = /^-?[\d,]+\.\d\d$|^-?\*+,?\*+\.\*\*$/;
+
+function _fxParsearLineaMov(l){
+  if (!/^\d\d\/\d\d\/\d{4}\s/.test(l)) return null;
+  const partes = l.split(' ');
+  if (partes.length < 6 || partes[2] !== '-') return null;
+  const fechaStr = partes[0], asientoStr = partes[1];
+  const saldoStr = partes[partes.length-1];
+  const haberStr = partes[partes.length-2];
+  const debeStr = partes[partes.length-3];
+  if (!_fxReNumero.test(debeStr) || !_fxReNumero.test(haberStr)) return null;
+  const concepto = partes.slice(3, partes.length-3).join(' ').trim();
+  return { fechaStr, asientoStr, concepto, debeStr, haberStr };
+}
 
 function _fxParsearMayor(lineas){
   const cuentas = [];
@@ -85,23 +104,31 @@ function _fxParsearMayor(lineas){
       continue;
     }
     if (!cur) continue;
-    const mm = l.match(_fxReMov);
+    const mm = _fxParsearLineaMov(l);
     if (mm) {
-      const [, fechaStr, asientoStr, concepto, deStr, haStr] = mm;
+      const { fechaStr, asientoStr, concepto, debeStr, haberStr } = mm;
       const [dd, mo, aa] = fechaStr.split('/');
       const fecha = new Date(parseInt(aa), parseInt(mo)-1, parseInt(dd)).toISOString().split('T')[0];
-      const debe = _fxNum(deStr), haber = _fxNum(haStr);
+      const debe = _fxNum(debeStr), haber = _fxNum(haberStr);
       if (debe === null || haber === null) {
-        avisos.push(`${cur.nombre}: movimiento del ${fechaStr} con importe ilegible (asteriscos) — revisar a mano`);
+        avisos.push(`${cur.nombre}: movimiento del ${fechaStr} (asiento ${asientoStr}) con Debe/Haber ilegible (asteriscos) — revisar a mano`);
         continue;
       }
-      cur.movs.push({ fecha, asiento: parseInt(asientoStr), concepto: concepto.trim().toUpperCase(), debe, haber });
+      const conceptoFinal = concepto ? concepto.toUpperCase() : 'SIN CONCEPTO';
+      if (!concepto) avisos.push(`${cur.nombre}: movimiento del ${fechaStr} (asiento ${asientoStr}) sin concepto en el PDF — se guardó igual como "SIN CONCEPTO"`);
+      cur.movs.push({ fecha, asiento: parseInt(asientoStr), concepto: conceptoFinal, debe, haber });
       continue;
     }
     if (l.startsWith('Totales mes')) {
       const nums = l.replace('Totales mes','').trim().split(/\s+/).map(_fxNum);
       cur.totMes = nums;
       continue;
+    }
+    // Línea que empieza con fecha pero no matcheó ningún patrón conocido:
+    // en vez de perderla en silencio, se avisa (así nunca vuelve a pasar
+    // lo de mayo sin que se note).
+    if (/^\d\d\/\d\d\/\d{4}\s/.test(l)) {
+      avisos.push(`${cur.nombre}: línea con formato inesperado, no se pudo leer: "${l}"`);
     }
   }
   return { cuentas, avisos };
