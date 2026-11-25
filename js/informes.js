@@ -168,13 +168,18 @@ function procesarGerencial() {
     const ventasFiles = results.slice(filesResult.length, filesResult.length + filesVentas.length);
     const saldosFiles = results.slice(filesResult.length + filesVentas.length);
 
-    _gerData = { meses: {}, clientes: {}, productos: {} };
+    // productosPorMes guarda cada producto separado por mes (lo que se
+    // guarda en la base); productos es el acumulado de todos los meses
+    // cargados en esta pasada (lo que usan los gráficos para mostrar
+    // "Top productos" de todo el período a la vista).
+    _gerData = { meses: {}, clientes: {}, productos: {}, productosPorMes: {} };
 
     // Procesar resultados (productos) — filas útiles desde fila 11 (índice 10)
     // Estructura: col0=cod, col1=articulo, col2=cant, col3=kilos, col4=ventaNeta, col5=costo, col6=diferencia
     resultFiles.forEach(f => {
       const mesKey = detectarMes(f.name, f.data);
       if(!_gerData.meses[mesKey]) _gerData.meses[mesKey] = {venta:0,costo:0,margen:0};
+      if(!_gerData.productosPorMes[mesKey]) _gerData.productosPorMes[mesKey] = {};
       f.data.forEach((row,i) => {
         if(i < 10) return; // saltear encabezados
         const cod = row[0];
@@ -187,6 +192,9 @@ function procesarGerencial() {
         _gerData.meses[mesKey].venta += venta;
         _gerData.meses[mesKey].costo += costo;
         _gerData.meses[mesKey].margen += margen;
+        if(!_gerData.productosPorMes[mesKey][art]) _gerData.productosPorMes[mesKey][art] = {venta:0,margen:0};
+        _gerData.productosPorMes[mesKey][art].venta += venta;
+        _gerData.productosPorMes[mesKey][art].margen += margen;
         if(!_gerData.productos[art]) _gerData.productos[art] = {venta:0,margen:0};
         _gerData.productos[art].venta += venta;
         _gerData.productos[art].margen += margen;
@@ -236,65 +244,48 @@ function procesarGerencial() {
   });
 }
 
+// Guarda reemplazando SOLO los meses que trae esta carga (y solo en la
+// tabla que corresponda a cada tipo de archivo) — así subir únicamente el
+// mes nuevo no borra los meses ya guardados antes, en ninguna de las 3
+// categorías (resultados, ventas por cliente, saldos por cliente).
 async function guardarGerencialSupabase(data) {
-  const ordenMeses = ['Ene','Feb','Mar','Abr','May','Jun'];
   const anio = 2026;
 
-  // Limpiar datos anteriores del año
-  await sb.from('ger_resultados').delete().eq('anio', anio);
-  await sb.from('ger_ventas_cliente').delete().eq('anio', anio);
-  await sb.from('ger_saldos_cliente').delete().eq('anio', anio);
-
-  // Guardar resultados por mes
   const rowsResultados = [];
-  for(const [mes, mesData] of Object.entries(data.meses)) {
-    // Guardar totales del mes como un registro resumen
-  }
-  // Guardar productos
-  for(const [art, prodData] of Object.entries(data.productos)) {
-    // Los productos no tienen mes individual aquí, son acumulados
-    // Guardarlos con mes='TOTAL'
-    rowsResultados.push({
-      mes: 'TOTAL', anio,
-      articulo: art,
-      venta_neta: Math.round(prodData.venta * 100) / 100,
-      costo: 0,
-      margen: Math.round(prodData.margen * 100) / 100,
-      pct_margen: prodData.venta > 0 ? Math.round(prodData.margen/prodData.venta*10000)/100 : 0
-    });
-  }
-  if(rowsResultados.length > 0) {
-    // Insertar en lotes de 500
-    for(let i=0; i<rowsResultados.length; i+=500) {
-      await sb.from('ger_resultados').insert(rowsResultados.slice(i, i+500));
+  const mesesResultados = new Set();
+  for(const [mes, productos] of Object.entries(data.productosPorMes || {})) {
+    mesesResultados.add(mes);
+    for(const [art, prodData] of Object.entries(productos)) {
+      rowsResultados.push({
+        mes, anio, articulo: art,
+        venta_neta: Math.round(prodData.venta * 100) / 100,
+        costo: 0,
+        margen: Math.round(prodData.margen * 100) / 100,
+        pct_margen: prodData.venta > 0 ? Math.round(prodData.margen/prodData.venta*10000)/100 : 0
+      });
     }
   }
 
-  // Guardar ventas por cliente
   const rowsVentas = [];
+  const mesesVentas = new Set();
+  const rowsSaldos = [];
+  const mesesSaldos = new Set();
   for(const [cod, cliData] of Object.entries(data.clientes)) {
     for(const [mes, venta] of Object.entries(cliData.ventas)) {
-      if(venta > 0) {
-        rowsVentas.push({mes, anio, codigo: parseInt(cod), cliente: cliData.nombre, venta});
-      }
+      if(venta > 0) { mesesVentas.add(mes); rowsVentas.push({mes, anio, codigo: parseInt(cod), cliente: cliData.nombre, venta}); }
     }
-  }
-  for(let i=0; i<rowsVentas.length; i+=500) {
-    await sb.from('ger_ventas_cliente').insert(rowsVentas.slice(i, i+500));
+    for(const [mes, saldo] of Object.entries(cliData.saldos)) {
+      if(saldo !== 0) { mesesSaldos.add(mes); rowsSaldos.push({mes, anio, codigo: parseInt(cod), cliente: cliData.nombre, saldo}); }
+    }
   }
 
-  // Guardar saldos por cliente
-  const rowsSaldos = [];
-  for(const [cod, cliData] of Object.entries(data.clientes)) {
-    for(const [mes, saldo] of Object.entries(cliData.saldos)) {
-      if(saldo !== 0) {
-        rowsSaldos.push({mes, anio, codigo: parseInt(cod), cliente: cliData.nombre, saldo});
-      }
-    }
-  }
-  for(let i=0; i<rowsSaldos.length; i+=500) {
-    await sb.from('ger_saldos_cliente').insert(rowsSaldos.slice(i, i+500));
-  }
+  if(mesesResultados.size) await sb.from('ger_resultados').delete().eq('anio', anio).in('mes', Array.from(mesesResultados));
+  if(mesesVentas.size) await sb.from('ger_ventas_cliente').delete().eq('anio', anio).in('mes', Array.from(mesesVentas));
+  if(mesesSaldos.size) await sb.from('ger_saldos_cliente').delete().eq('anio', anio).in('mes', Array.from(mesesSaldos));
+
+  for(let i=0; i<rowsResultados.length; i+=500) await sb.from('ger_resultados').insert(rowsResultados.slice(i, i+500));
+  for(let i=0; i<rowsVentas.length; i+=500) await sb.from('ger_ventas_cliente').insert(rowsVentas.slice(i, i+500));
+  for(let i=0; i<rowsSaldos.length; i+=500) await sb.from('ger_saldos_cliente').insert(rowsSaldos.slice(i, i+500));
 }
 
 async function cargarGerencialSupabase() {
