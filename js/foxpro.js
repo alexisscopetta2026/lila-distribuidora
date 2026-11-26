@@ -1119,7 +1119,18 @@ async function bcProcesarArchivo(){
     const soloBanco = filas.filter((f,i)=>!usadoB.has(i));
     const soloMayor = mayor.filter((m,i)=>!usadoM.has(i));
 
+    // Id estable por fila (no cambia aunque se ordene/filtre/agrupe la
+    // pantalla) — así la selección para emparejar a mano no se rompe.
+    let _bcIdSeq = 1;
+    coincidencias.forEach(c => c._id = _bcIdSeq++);
+    soloBanco.forEach(f => f._id = _bcIdSeq++);
+    soloMayor.forEach(m => m._id = _bcIdSeq++);
+
     _bcResultado = { periodo, mesNum: parseInt(mm), anio: parseInt(aaaa), saldoInicial, saldoFinal, netoBanco, netoMayor, diferencia: netoBanco-netoMayor, coincidencias, soloBanco, soloMayor, manuales: [], avisos };
+    _bcEstado.coincidencias = { orden:null, dir:1, filtro:'', agrupar:false, abiertos:new Set() };
+    _bcEstado.soloBanco = { orden:null, dir:1, filtro:'', agrupar:false, abiertos:new Set() };
+    _bcEstado.soloMayor = { orden:null, dir:1, filtro:'', agrupar:false, abiertos:new Set() };
+    _bcSelBanco = new Set(); _bcSelMayor = new Set();
     _bcRenderResultado();
     _setImportStatus('bc-status', '', '');
   } catch(e) {
@@ -1130,21 +1141,144 @@ async function bcProcesarArchivo(){
   }
 }
 
+// Estado de cada una de las 3 listas: orden de columna, filtro de texto,
+// si está agrupada por cliente/proveedor, y qué grupos están abiertos.
+let _bcEstado = {
+  coincidencias: { orden:null, dir:1, filtro:'', agrupar:false, abiertos:new Set() },
+  soloBanco:     { orden:null, dir:1, filtro:'', agrupar:false, abiertos:new Set() },
+  soloMayor:     { orden:null, dir:1, filtro:'', agrupar:false, abiertos:new Set() }
+};
+
+// Arma las filas de una lista en un formato común (fecha/importe/nombre,
+// más los campos propios de cada lista) para poder ordenar/filtrar/agrupar
+// con el mismo código sin importar cuál de las 3 listas sea.
+function _bcNormalizar(lista){
+  if (lista === 'coincidencias') {
+    return _bcResultado.coincidencias.map(c => ({ _id:c._id, _raw:c, _nombre:c.mayor.concepto,
+      fecha:c.banco.fecha, nombreBanco:c.banco.descripcion, importe:c.banco.importe, nombreFoxpro:c.mayor.concepto,
+      _buscable:(c.banco.descripcion+' '+c.mayor.concepto+' '+c.banco.importe).toLowerCase() }));
+  }
+  if (lista === 'soloBanco') {
+    return _bcResultado.soloBanco.map(f => ({ _id:f._id, _raw:f, _nombre:f.descripcion,
+      fecha:f.fecha, categoria:_bcCategoria(f.descripcion), descripcion:f.descripcion, importe:f.importe,
+      _buscable:(f.descripcion+' '+f.importe).toLowerCase() }));
+  }
+  // soloMayor
+  return _bcResultado.soloMayor.map(m => ({ _id:m._id, _raw:m, _nombre:m.concepto,
+    fecha:m.fecha, concepto:m.concepto, importe:m.neto,
+    _buscable:(m.concepto+' '+m.neto).toLowerCase() }));
+}
+
+function _bcAplicarFiltroOrden(lista, filas){
+  const est = _bcEstado[lista];
+  let out = filas;
+  if (est.filtro.trim()) out = out.filter(f => f._buscable.includes(est.filtro.trim().toLowerCase()));
+  if (est.orden) {
+    out = [...out].sort((a,b) => {
+      const va = a[est.orden], vb = b[est.orden];
+      const cmp = typeof va === 'number' ? va-vb : String(va||'').localeCompare(String(vb||''));
+      return cmp * est.dir;
+    });
+  }
+  return out;
+}
+
+function bcOrdenar(lista, campo){
+  const est = _bcEstado[lista];
+  if (est.orden === campo) est.dir *= -1; else { est.orden = campo; est.dir = 1; }
+  _bcRenderResultado();
+}
+function bcFiltrar(lista, valor){ _bcEstado[lista].filtro = valor; _bcRenderResultado(); }
+function bcToggleAgrupar(lista){ _bcEstado[lista].agrupar = !_bcEstado[lista].agrupar; _bcRenderResultado(); }
+function bcToggleGrupo(lista, clave){
+  const s = _bcEstado[lista].abiertos;
+  if (s.has(clave)) s.delete(clave); else s.add(clave);
+  _bcRenderResultado();
+}
+
+function _bcTh(lista, campo, label, derecha){
+  const est = _bcEstado[lista];
+  const flecha = est.orden===campo ? (est.dir===1?' ▲':' ▼') : '';
+  return `<th style="cursor:pointer;user-select:none;${derecha?'text-align:right':''}" onclick="bcOrdenar('${lista}','${campo}')">${label}${flecha}</th>`;
+}
+
+function _bcBarraLista(lista, etiquetaAgrupar){
+  const est = _bcEstado[lista];
+  return `<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+    <input type="text" placeholder="Buscar por nombre o importe..." value="${esc(est.filtro)}" oninput="bcFiltrar('${lista}', this.value)" style="flex:1;min-width:160px;padding:6px 10px;font-size:13px;border:1px solid var(--brd);border-radius:6px;background:var(--bg2)">
+    <button class="btn sm ${est.agrupar?'P':''}" onclick="bcToggleAgrupar('${lista}')">${est.agrupar?'📋 Ver lista':'🗂 '+etiquetaAgrupar}</button>
+  </div>`;
+}
+
+function _bcGrupos(lista, filas){
+  const grupos = {};
+  filas.forEach(f => {
+    const clave = (f._nombre||'').trim().toUpperCase() || '(SIN NOMBRE)';
+    if (!grupos[clave]) grupos[clave] = { nombre: f._nombre||'(sin nombre)', filas: [] };
+    grupos[clave].filas.push(f);
+  });
+  return Object.entries(grupos).sort((a,b)=>a[0].localeCompare(b[0]));
+}
+
 function _bcRenderResultado(){
   const el = document.getElementById('bc-resultado');
   if (!el || !_bcResultado) return;
   const r = _bcResultado;
   const mesNombre = (_FX_MESES[r.mesNum]||'?') + ' ' + r.anio;
 
-  const porCategoria = {};
-  r.soloBanco.forEach((f,i) => { const c = _bcCategoria(f.descripcion); (porCategoria[c]=porCategoria[c]||[]).push(i); });
+  const normCoinc = _bcAplicarFiltroOrden('coincidencias', _bcNormalizar('coincidencias'));
+  const normBanco = _bcAplicarFiltroOrden('soloBanco', _bcNormalizar('soloBanco'));
+  const normMayor = _bcAplicarFiltroOrden('soloMayor', _bcNormalizar('soloMayor'));
 
-  const filaBanco = (f,i) => `<tr><td><input type="checkbox" ${_bcSelBanco.has(i)?'checked':''} onchange="bcToggleSel('banco',${i})"></td><td>${esc(f.fecha)}</td><td style="font-size:12px">${esc(f.descripcion)}</td><td style="text-align:right">${_fxFmt(f.importe)}</td></tr>`;
-  const filaMayor = (m,i) => `<tr><td><input type="checkbox" ${_bcSelMayor.has(i)?'checked':''} onchange="bcToggleSel('mayor',${i})"></td><td>${esc(m.fecha)}</td><td style="font-size:12px">${esc(m.concepto)}</td><td style="text-align:right">${_fxFmt(m.neto)}</td></tr>`;
+  const selBancoTotal = normBanco.filter(f=>_bcSelBanco.has(f._id)).reduce((s,f)=>s+f.importe,0);
+  const selMayorTotal = normMayor.filter(f=>_bcSelMayor.has(f._id)).reduce((s,f)=>s+f.importe,0);
+  const nSelBanco = Array.from(_bcSelBanco).length, nSelMayor = Array.from(_bcSelMayor).length;
+  const sumaIgual = nSelBanco && nSelMayor && Math.abs(selBancoTotal-selMayorTotal) < 0.01;
 
-  const selBancoTotal = Array.from(_bcSelBanco).reduce((s,i)=>s+r.soloBanco[i].importe,0);
-  const selMayorTotal = Array.from(_bcSelMayor).reduce((s,i)=>s+r.soloMayor[i].neto,0);
-  const sumaIgual = _bcSelBanco.size && _bcSelMayor.size && Math.abs(selBancoTotal-selMayorTotal) < 0.01;
+  const filaBanco = f => `<tr><td><input type="checkbox" ${_bcSelBanco.has(f._id)?'checked':''} onchange="bcToggleSel('banco',${f._id})"></td><td>${esc(f.fecha)}</td><td style="font-size:12px">${esc(f.descripcion)}</td><td style="text-align:right">${_fxFmt(f.importe)}</td></tr>`;
+  const filaMayor = m => `<tr><td><input type="checkbox" ${_bcSelMayor.has(m._id)?'checked':''} onchange="bcToggleSel('mayor',${m._id})"></td><td>${esc(m.fecha)}</td><td style="font-size:12px">${esc(m.concepto)}</td><td style="text-align:right">${_fxFmt(m.importe)}</td></tr>`;
+
+  const tablaCoincidencias = est => `<div class="tbl-wrap"><table class="tbl"><thead><tr>
+      ${_bcTh('coincidencias','fecha','Fecha')}${_bcTh('coincidencias','nombreBanco','Banco')}${_bcTh('coincidencias','importe','Importe',true)}${_bcTh('coincidencias','nombreFoxpro','FoxPro')}
+    </tr></thead><tbody>
+    ${normCoinc.map(c=>`<tr><td>${esc(c.fecha)}</td><td style="font-size:12px">${esc(c.nombreBanco)}</td><td style="text-align:right">${_fxFmt(c.importe)}</td><td style="font-size:12px">${esc(c.nombreFoxpro)}</td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--txt2)">Ninguno</td></tr>'}
+    </tbody></table></div>`;
+
+  const tablaBanco = () => {
+    if (_bcEstado.soloBanco.agrupar) {
+      return _bcGrupos('soloBanco', normBanco).map(([clave,g]) => {
+        const abierto = _bcEstado.soloBanco.abiertos.has(clave);
+        const sub = g.filas.reduce((s,f)=>s+f.importe,0);
+        return `<div style="border:1px solid var(--brd);border-radius:8px;margin-bottom:6px;overflow:hidden">
+          <div style="padding:8px 10px;background:var(--bg2);cursor:pointer;display:flex;justify-content:space-between" onclick="bcToggleGrupo('soloBanco','${clave.replace(/'/g,"\\'")}')">
+            <span>${abierto?'▾':'▸'} <b>${esc(g.nombre)}</b> (${g.filas.length})</span><span>${_fxFmt(sub)}</span>
+          </div>
+          ${abierto ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th></th><th>Fecha</th><th>Descripción</th><th style="text-align:right">Importe</th></tr></thead><tbody>${g.filas.map(filaBanco).join('')}</tbody></table></div>` : ''}
+        </div>`;
+      }).join('') || '<div style="text-align:center;color:var(--txt2)">Ninguno</div>';
+    }
+    return `<div class="tbl-wrap"><table class="tbl"><thead><tr><th></th>${_bcTh('soloBanco','fecha','Fecha')}${_bcTh('soloBanco','categoria','Tipo')}${_bcTh('soloBanco','descripcion','Descripción')}${_bcTh('soloBanco','importe','Importe',true)}</tr></thead><tbody>
+      ${normBanco.map(f=>`<tr><td><input type="checkbox" ${_bcSelBanco.has(f._id)?'checked':''} onchange="bcToggleSel('banco',${f._id})"></td><td>${esc(f.fecha)}</td><td style="font-size:11px;color:var(--txt2)">${esc(f.categoria)}</td><td style="font-size:12px">${esc(f.descripcion)}</td><td style="text-align:right">${_fxFmt(f.importe)}</td></tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--txt2)">Ninguno</td></tr>'}
+    </tbody></table></div>`;
+  };
+
+  const tablaMayor = () => {
+    if (_bcEstado.soloMayor.agrupar) {
+      return _bcGrupos('soloMayor', normMayor).map(([clave,g]) => {
+        const abierto = _bcEstado.soloMayor.abiertos.has(clave);
+        const sub = g.filas.reduce((s,f)=>s+f.importe,0);
+        return `<div style="border:1px solid var(--brd);border-radius:8px;margin-bottom:6px;overflow:hidden">
+          <div style="padding:8px 10px;background:var(--bg2);cursor:pointer;display:flex;justify-content:space-between" onclick="bcToggleGrupo('soloMayor','${clave.replace(/'/g,"\\'")}')">
+            <span>${abierto?'▾':'▸'} <b>${esc(g.nombre)}</b> (${g.filas.length})</span><span>${_fxFmt(sub)}</span>
+          </div>
+          ${abierto ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th></th><th>Fecha</th><th>Concepto</th><th style="text-align:right">Importe</th></tr></thead><tbody>${g.filas.map(filaMayor).join('')}</tbody></table></div>` : ''}
+        </div>`;
+      }).join('') || '<div style="text-align:center;color:var(--txt2)">Ninguno</div>';
+    }
+    return `<div class="tbl-wrap"><table class="tbl"><thead><tr><th></th>${_bcTh('soloMayor','fecha','Fecha')}${_bcTh('soloMayor','concepto','Concepto')}${_bcTh('soloMayor','importe','Importe',true)}</tr></thead><tbody>
+      ${normMayor.map(filaMayor).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--txt2)">Ninguno</td></tr>'}
+    </tbody></table></div>`;
+  };
 
   el.innerHTML = `
     <div class="card" style="margin-bottom:12px;border:2px solid var(--P)">
@@ -1158,7 +1292,7 @@ function _bcRenderResultado(){
         <div><div style="font-size:11px;color:var(--txt2)">Diferencia</div><div style="font-weight:700;color:${Math.abs(r.diferencia)<0.01?'var(--P)':'var(--D)'}">${_fxFmt(r.diferencia)}</div></div>
       </div>
       <div style="font-size:13px">✅ Coinciden: <b>${r.coincidencias.length}</b> &nbsp; | &nbsp; ❔ Solo en el banco: <b>${r.soloBanco.length}</b> &nbsp; | &nbsp; ❔ Solo en FoxPro: <b>${r.soloMayor.length}</b> ${r.manuales.length?` &nbsp; | &nbsp; 🤝 Emparejados a mano: <b>${r.manuales.length}</b>`:''}</div>
-      <button class="btn sm" style="margin-top:8px" onclick="bcExportarExcel()">📥 Exportar todo a Excel</button>
+      <button class="btn sm" style="margin-top:8px" onclick="bcExportarExcel()">📥 Exportar a Excel (respeta orden y filtro)</button>
     </div>
 
     ${r.manuales.length ? `<div class="card" style="margin-bottom:12px">
@@ -1171,33 +1305,27 @@ function _bcRenderResultado(){
     </div>` : ''}
 
     <div class="card" style="margin-bottom:12px">
-      <div style="font-weight:600;margin-bottom:8px">✅ Coinciden (${r.coincidencias.length})</div>
-      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Fecha</th><th>Banco</th><th style="text-align:right">Importe</th><th>FoxPro</th></tr></thead><tbody>
-      ${r.coincidencias.map(c=>`<tr><td>${esc(c.banco.fecha)}</td><td style="font-size:12px">${esc(c.banco.descripcion)}</td><td style="text-align:right">${_fxFmt(c.banco.importe)}</td><td style="font-size:12px">${esc(c.mayor.concepto)}</td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--txt2)">Ninguno</td></tr>'}
-      </tbody></table></div>
+      <div style="font-weight:600;margin-bottom:8px">✅ Coinciden (${normCoinc.length}${normCoinc.length!==r.coincidencias.length?' de '+r.coincidencias.length:''})</div>
+      ${_bcBarraLista('coincidencias','(sin agrupar)')}
+      ${tablaCoincidencias()}
     </div>
 
     <div class="card" style="margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div style="font-weight:600">❔ Solo en el banco (${r.soloBanco.length})</div>
+        <div style="font-weight:600">❔ Solo en el banco (${normBanco.length}${normBanco.length!==r.soloBanco.length?' de '+r.soloBanco.length:''})</div>
         <div style="font-size:12px">Seleccionado: ${_fxFmt(selBancoTotal)}</div>
       </div>
-      ${Object.entries(porCategoria).map(([cat,idxs])=>`
-        <div style="font-size:12px;font-weight:700;color:var(--txt2);margin:8px 0 4px">${esc(cat)} (${idxs.length}) — total ${_fxFmt(idxs.reduce((s,i)=>s+r.soloBanco[i].importe,0))}</div>
-        <div class="tbl-wrap"><table class="tbl"><thead><tr><th></th><th>Fecha</th><th>Descripción</th><th style="text-align:right">Importe</th></tr></thead><tbody>
-        ${idxs.map(i=>filaBanco(r.soloBanco[i],i)).join('')}
-        </tbody></table></div>
-      `).join('') || '<div style="text-align:center;color:var(--txt2)">Ninguno</div>'}
+      ${_bcBarraLista('soloBanco','Agrupar por cliente/proveedor')}
+      ${tablaBanco()}
     </div>
 
     <div class="card" style="margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div style="font-weight:600">❔ Solo en FoxPro (${r.soloMayor.length})</div>
+        <div style="font-weight:600">❔ Solo en FoxPro (${normMayor.length}${normMayor.length!==r.soloMayor.length?' de '+r.soloMayor.length:''})</div>
         <div style="font-size:12px">Seleccionado: ${_fxFmt(selMayorTotal)}</div>
       </div>
-      <div class="tbl-wrap"><table class="tbl"><thead><tr><th></th><th>Fecha</th><th>Concepto</th><th style="text-align:right">Importe</th></tr></thead><tbody>
-      ${r.soloMayor.map((m,i)=>filaMayor(m,i)).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--txt2)">Ninguno</td></tr>'}
-      </tbody></table></div>
+      ${_bcBarraLista('soloMayor','Agrupar por cliente/proveedor')}
+      ${tablaMayor()}
     </div>
 
     <div class="card" style="margin-bottom:12px;${sumaIgual?'border:2px solid var(--P)':''}">
@@ -1208,23 +1336,22 @@ function _bcRenderResultado(){
   `;
 }
 
-function bcToggleSel(lado, idx){
+function bcToggleSel(lado, id){
   const set = lado==='banco' ? _bcSelBanco : _bcSelMayor;
-  if (set.has(idx)) set.delete(idx); else set.add(idx);
+  if (set.has(id)) set.delete(id); else set.add(id);
   _bcRenderResultado();
 }
 
 async function bcConfirmarManual(){
   const r = _bcResultado;
-  const bancoSel = Array.from(_bcSelBanco).sort((a,b)=>a-b);
-  const mayorSel = Array.from(_bcSelMayor).sort((a,b)=>a-b);
-  const bancoItems = bancoSel.map(i=>r.soloBanco[i]);
-  const mayorItems = mayorSel.map(i=>r.soloMayor[i]);
+  const bancoItems = r.soloBanco.filter(f=>_bcSelBanco.has(f._id));
+  const mayorItems = r.soloMayor.filter(m=>_bcSelMayor.has(m._id));
   const resumen = `Banco: ${bancoItems.map(f=>f.descripcion+' ('+_fxFmt(f.importe)+')').join(' + ')}\nFoxPro: ${mayorItems.map(m=>m.concepto+' ('+_fxFmt(m.neto)+')').join(' + ')}`;
   if (!await _confirmar(`¿Confirmás unir esto?\n\n${resumen}`, {titulo:'Emparejar a mano', textoOk:'Confirmar'})) return;
   r.manuales.push({ banco: bancoItems, mayor: mayorItems });
-  r.soloBanco = r.soloBanco.filter((_,i)=>!_bcSelBanco.has(i));
-  r.soloMayor = r.soloMayor.filter((_,i)=>!_bcSelMayor.has(i));
+  const idsBanco = new Set(bancoItems.map(f=>f._id)), idsMayor = new Set(mayorItems.map(m=>m._id));
+  r.soloBanco = r.soloBanco.filter(f=>!idsBanco.has(f._id));
+  r.soloMayor = r.soloMayor.filter(m=>!idsMayor.has(m._id));
   _bcSelBanco = new Set(); _bcSelMayor = new Set();
   _bcRenderResultado();
 }
@@ -1240,10 +1367,13 @@ function bcDeshacerManual(i){
 function bcExportarExcel(){
   const r = _bcResultado;
   if (!r) return;
+  const normCoinc = _bcAplicarFiltroOrden('coincidencias', _bcNormalizar('coincidencias'));
+  const normBanco = _bcAplicarFiltroOrden('soloBanco', _bcNormalizar('soloBanco'));
+  const normMayor = _bcAplicarFiltroOrden('soloMayor', _bcNormalizar('soloMayor'));
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(r.coincidencias.map(c=>({fecha:c.banco.fecha, banco_desc:c.banco.descripcion, importe:c.banco.importe, foxpro_concepto:c.mayor.concepto}))), 'Coinciden');
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(r.soloBanco.map(f=>({fecha:f.fecha, descripcion:f.descripcion, importe:f.importe, categoria:_bcCategoria(f.descripcion)}))), 'Solo_Banco');
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(r.soloMayor.map(m=>({fecha:m.fecha, concepto:m.concepto, importe:m.neto}))), 'Solo_FoxPro');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(normCoinc.map(c=>({fecha:c.fecha, banco_desc:c.nombreBanco, importe:c.importe, foxpro_concepto:c.nombreFoxpro}))), 'Coinciden');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(normBanco.map(f=>({fecha:f.fecha, descripcion:f.descripcion, importe:f.importe, categoria:f.categoria}))), 'Solo_Banco');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(normMayor.map(m=>({fecha:m.fecha, concepto:m.concepto, importe:m.importe}))), 'Solo_FoxPro');
   if (r.manuales.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(r.manuales.map(em=>({banco: em.banco.map(f=>f.descripcion+' ('+f.importe+')').join(' + '), foxpro: em.mayor.map(m=>m.concepto+' ('+m.neto+')').join(' + ')}))), 'Emparejado_manual');
   XLSX.writeFile(wb, `lila_conciliacion_banco_${r.periodo}.xlsx`);
 }
