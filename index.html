@@ -3518,6 +3518,27 @@ input.no-spin {
     </div>
 
     <div id="fx-preview-balance"></div>
+
+    <div class="card" style="margin-bottom:12px;border-top:3px solid var(--brd);padding-top:14px">
+      <div style="font-weight:600;margin-bottom:6px;">🏦 Conciliar banco — extracto de Banco Macro</div>
+      <p style="font-size:12px;color:var(--txt2);margin-bottom:10px;">
+        Subí el .xls de "Últimos movimientos" del home banking de Macro. Se cruza contra la cuenta
+        11102 Banco Macro del Mayor de ese mes (mismo importe exacto, fecha a menos de 7 días).
+        No toca <code>movimientos_bancarios</code> (eso lo usa Tesorería aparte).
+      </p>
+      <div id="bc-drop" ondragover="bcDragOver(event)" ondragleave="bcDragLeave(event)" ondrop="bcDrop(event)"
+           style="border:2px dashed var(--brd);border-radius:10px;padding:24px;text-align:center;cursor:pointer;margin-bottom:10px"
+           onclick="document.getElementById('bc-file').click()">
+        <div style="font-size:28px;margin-bottom:6px">🏦⬇️</div>
+        <div style="font-size:13px;color:var(--txt2)">Arrastrá acá el .xls del banco, o hacé clic para elegirlo</div>
+        <input type="file" id="bc-file" accept=".xls,.xlsx" style="display:none" onchange="bcSeleccionarArchivo(this)">
+      </div>
+      <div id="bc-archivo" style="margin-bottom:10px"></div>
+      <button id="btn-bc-procesar" class="btn P" onclick="bcProcesarArchivo()" disabled style="padding:10px 24px;font-weight:700">🔎 Procesar y conciliar</button>
+      <div id="bc-status" style="display:none;margin-top:10px;"></div>
+    </div>
+
+    <div id="bc-resultado"></div>
   </div>
 
   <!-- Informes → 📊 Tablero: resumen armado desde el Mayor/Balance (cajón "analisis") -->
@@ -5563,18 +5584,18 @@ input.no-spin {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="js/app.js?v=20261125-03"></script>
-<script src="js/maestros.js?v=20261125-03"></script>
-<script src="js/ventas.js?v=20261125-03"></script>
-<script src="js/tesoreria.js?v=20261125-03"></script>
-<script src="js/contabilidad.js?v=20261125-03"></script>
-<script src="js/informes.js?v=20261125-03"></script>
-<script src="js/inf_productos.js?v=20261125-03"></script>
-<script src="js/logistica.js?v=20261125-03"></script>
-<script src="js/movil_header_observer.js?v=20261125-03"></script>
-<script src="js/instalar_app.js?v=20261125-03"></script>
-<script src="js/informe_fondos.js?v=20261125-03"></script>
-<script src="js/foxpro.js?v=20261125-03"></script>
+<script src="js/app.js?v=20261126-01"></script>
+<script src="js/maestros.js?v=20261126-01"></script>
+<script src="js/ventas.js?v=20261126-01"></script>
+<script src="js/tesoreria.js?v=20261126-01"></script>
+<script src="js/contabilidad.js?v=20261126-01"></script>
+<script src="js/informes.js?v=20261126-01"></script>
+<script src="js/inf_productos.js?v=20261126-01"></script>
+<script src="js/logistica.js?v=20261126-01"></script>
+<script src="js/movil_header_observer.js?v=20261126-01"></script>
+<script src="js/instalar_app.js?v=20261126-01"></script>
+<script src="js/informe_fondos.js?v=20261126-01"></script>
+<script src="js/foxpro.js?v=20261126-01"></script>
 
 <!-- ── Bottom sheet: edición de pedido móvil ── -->
 <div id="epm-backdrop"

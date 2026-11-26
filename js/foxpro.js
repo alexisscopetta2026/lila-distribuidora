@@ -997,3 +997,253 @@ function tabExportarExcel(cual){
   XLSX.utils.book_append_sheet(wb, ws, 'Datos');
   XLSX.writeFile(wb, `lila_${nombre}_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// ─── CONCILIAR BANCO — extracto de Banco Macro vs cuenta 11102 del Mayor ───
+// Guarda en public.banco_extracto (NO en movimientos_bancarios, que usa
+// Tesorería aparte). El cruce automático es solo "mismo importe exacto y
+// fecha a ≤7 días" — nunca suma importes a ciegas; cuando un cobro llegó
+// partido en varias transferencias, es el admin quien lo empareja a mano
+// viendo los nombres (no se arma solo).
+// ═══════════════════════════════════════════════════════════════════════
+let _bcArchivo = null;
+let _bcResultado = null;       // { periodo, mesNum, anio, saldoInicial, saldoFinal, netoBanco, netoMayor,
+                                //   diferencia, coincidencias, soloBanco, soloMayor, manuales, avisos }
+let _bcSelBanco = new Set();   // índices seleccionados en soloBanco para emparejar a mano
+let _bcSelMayor = new Set();   // índices seleccionados en soloMayor
+
+function _bcExcelFecha(n){
+  // Las fechas del .xls de Macro vienen como número de serie de Excel.
+  return new Date(Math.round((n-25569)*86400*1000)).toISOString().slice(0,10);
+}
+
+function _bcCategoria(desc){
+  const d = (desc||'').toUpperCase();
+  if (d.includes('IMP. AFIP') || d.includes('IMP.AFIP')) return 'IMP. AFIP';
+  if (d.includes('TARJETA')) return 'DB Tarjeta de crédito';
+  if (d.includes('PAGO SERVICIO')) return 'Pago de servicio';
+  if (d.includes('DEBTRFDISTINTIT')) return 'DEBTRFDISTINTIT';
+  if (d.includes('ING TRANSF') || d.includes('CREDIN') || d.includes('TEF')) return 'Entradas (transferencia/crédito)';
+  if (d.includes('TRANSF')) return 'Salidas a CUIT (transferencia)';
+  return 'Otros';
+}
+
+function bcDragOver(e){ e.preventDefault(); document.getElementById('bc-drop').style.borderColor='var(--P)'; }
+function bcDragLeave(e){ document.getElementById('bc-drop').style.borderColor='var(--brd)'; }
+function bcDrop(e){
+  e.preventDefault();
+  document.getElementById('bc-drop').style.borderColor='var(--brd)';
+  const f = Array.from(e.dataTransfer.files).find(f=>/\.xlsx?$/i.test(f.name));
+  if (f) _bcSetArchivo(f);
+}
+function bcSeleccionarArchivo(input){
+  const f = input.files?.[0];
+  if (f) _bcSetArchivo(f);
+  input.value = '';
+}
+function _bcSetArchivo(f){
+  _bcArchivo = f;
+  document.getElementById('bc-archivo').innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--bg2);border-radius:6px;font-size:13px">
+    <span>📄 ${esc(f.name)}</span><button class="btn sm D" onclick="_bcArchivo=null;document.getElementById('bc-archivo').innerHTML='';document.getElementById('btn-bc-procesar').disabled=true">✕</button>
+  </div>`;
+  document.getElementById('btn-bc-procesar').disabled = false;
+}
+
+async function bcProcesarArchivo(){
+  if (!_bcArchivo) return;
+  const btn = document.getElementById('btn-bc-procesar');
+  _bloquearBoton(btn, true, '⏳ Procesando...');
+  _setImportStatus('bc-status', 'loading', 'Leyendo el extracto y cruzando contra el Mayor. No cierres esta pantalla.');
+  document.getElementById('bc-resultado').innerHTML = '';
+  _bcSelBanco = new Set(); _bcSelMayor = new Set();
+
+  try {
+    const buf = await _bcArchivo.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
+    const filas = data.slice(3)
+      .filter(r => r[0] && r[3] !== '')
+      .map(r => ({ fecha: _bcExcelFecha(r[0]), nroTx: String(r[1]||''), descripcion: String(r[2]||''), importe: parseFloat(r[3])||0, saldo: parseFloat(r[4]) }));
+    if (!filas.length) { _setImportStatus('bc-status', 'err', 'No se encontraron movimientos en el archivo. ¿Es el .xls correcto de "Últimos movimientos"?'); _bloquearBoton(btn,false); return; }
+
+    // OJO: no reordenar `filas` — el banco la entrega del más nuevo al más
+    // viejo, y la fecha no trae hora. Si hay varios movimientos el mismo
+    // día, el único orden que respeta la secuencia real dentro de ese día
+    // es el que ya trae el archivo; reordenar por fecha rompe el saldo
+    // inicial/final calculado más abajo.
+
+    // Determinar el mes predominante; avisar si el archivo trae otros meses mezclados.
+    const porMes = {};
+    filas.forEach(f => { const p = f.fecha.slice(0,7); porMes[p] = (porMes[p]||0)+1; });
+    const periodoISO = Object.entries(porMes).sort((a,b)=>b[1]-a[1])[0][0]; // 'YYYY-MM'
+    const [aaaa, mm] = periodoISO.split('-');
+    const periodo = mm + '-' + aaaa;
+    const avisos = [];
+    Object.entries(porMes).forEach(([p,n]) => { if (p !== periodoISO) avisos.push(`${n} movimiento(s) del extracto caen en ${p}, fuera del mes principal (${periodoISO}) — igual se guardan y concilian con su propio mes.`); });
+
+    // El archivo viene del más nuevo (índice 0) al más viejo (último índice).
+    const saldoInicial = filas[filas.length-1].saldo - filas[filas.length-1].importe;
+    const saldoFinal = filas[0].saldo;
+    const netoBanco = filas.reduce((s,f)=>s+f.importe, 0);
+
+    // Guardar (reemplaza los meses que trae este archivo)
+    const mesesTocados = Array.from(new Set(filas.map(f=>{ const [a,m] = f.fecha.slice(0,7).split('-'); return m+'-'+a; })));
+    for (const p of mesesTocados) await sb.from('banco_extracto').delete().eq('periodo', p);
+    const filasGuardar = filas.map(f => { const [a,m] = f.fecha.slice(0,7).split('-'); return { periodo: m+'-'+a, fecha: f.fecha, nro_transaccion: f.nroTx, descripcion: f.descripcion, importe: f.importe, saldo: f.saldo }; });
+    for (let i=0;i<filasGuardar.length;i+=500) await sb.from('banco_extracto').insert(filasGuardar.slice(i,i+500));
+
+    // Traer el Mayor de la cuenta 11102 para los meses tocados
+    const { data: mayorRows } = await sb.from('movimientos_mayores').select('fecha,asiento,concepto,debe,haber,periodo')
+      .in('periodo', mesesTocados).ilike('cuenta', '11102%');
+    const mayor = (mayorRows||[]).map(m => ({ fecha: m.fecha, asiento: m.asiento, concepto: m.concepto, neto: (parseFloat(m.debe)||0)-(parseFloat(m.haber)||0) }));
+    const netoMayor = mayor.reduce((s,m)=>s+m.neto, 0);
+
+    // Emparejamiento automático: candidatos válidos (mismo importe exacto,
+    // fecha a ≤7 días), ordenados globalmente por cercanía de fecha — el par
+    // más "obvio" se asigna primero, así no depende del orden del archivo.
+    const dias = (a,b) => Math.abs((new Date(a) - new Date(b)) / 86400000);
+    const pares = [];
+    filas.forEach((b,bi) => mayor.forEach((m,mi) => {
+      if (Math.abs(m.neto - b.importe) < 0.01) {
+        const d = dias(m.fecha, b.fecha);
+        if (d <= 7) pares.push({ bi, mi, d });
+      }
+    }));
+    pares.sort((x,y)=>x.d-y.d);
+    const usadoB = new Set(), usadoM = new Set(), coincidencias = [];
+    for (const p of pares) {
+      if (usadoB.has(p.bi) || usadoM.has(p.mi)) continue;
+      usadoB.add(p.bi); usadoM.add(p.mi);
+      coincidencias.push({ banco: filas[p.bi], mayor: mayor[p.mi] });
+    }
+    const soloBanco = filas.filter((f,i)=>!usadoB.has(i));
+    const soloMayor = mayor.filter((m,i)=>!usadoM.has(i));
+
+    _bcResultado = { periodo, mesNum: parseInt(mm), anio: parseInt(aaaa), saldoInicial, saldoFinal, netoBanco, netoMayor, diferencia: netoBanco-netoMayor, coincidencias, soloBanco, soloMayor, manuales: [], avisos };
+    _bcRenderResultado();
+    _setImportStatus('bc-status', '', '');
+  } catch(e) {
+    console.error(e);
+    _setImportStatus('bc-status', 'err', 'Error procesando el extracto: '+(e.message||e));
+  } finally {
+    _bloquearBoton(btn, false);
+  }
+}
+
+function _bcRenderResultado(){
+  const el = document.getElementById('bc-resultado');
+  if (!el || !_bcResultado) return;
+  const r = _bcResultado;
+  const mesNombre = (_FX_MESES[r.mesNum]||'?') + ' ' + r.anio;
+
+  const porCategoria = {};
+  r.soloBanco.forEach((f,i) => { const c = _bcCategoria(f.descripcion); (porCategoria[c]=porCategoria[c]||[]).push(i); });
+
+  const filaBanco = (f,i) => `<tr><td><input type="checkbox" ${_bcSelBanco.has(i)?'checked':''} onchange="bcToggleSel('banco',${i})"></td><td>${esc(f.fecha)}</td><td style="font-size:12px">${esc(f.descripcion)}</td><td style="text-align:right">${_fxFmt(f.importe)}</td></tr>`;
+  const filaMayor = (m,i) => `<tr><td><input type="checkbox" ${_bcSelMayor.has(i)?'checked':''} onchange="bcToggleSel('mayor',${i})"></td><td>${esc(m.fecha)}</td><td style="font-size:12px">${esc(m.concepto)}</td><td style="text-align:right">${_fxFmt(m.neto)}</td></tr>`;
+
+  const selBancoTotal = Array.from(_bcSelBanco).reduce((s,i)=>s+r.soloBanco[i].importe,0);
+  const selMayorTotal = Array.from(_bcSelMayor).reduce((s,i)=>s+r.soloMayor[i].neto,0);
+  const sumaIgual = _bcSelBanco.size && _bcSelMayor.size && Math.abs(selBancoTotal-selMayorTotal) < 0.01;
+
+  el.innerHTML = `
+    <div class="card" style="margin-bottom:12px;border:2px solid var(--P)">
+      <div style="font-weight:700;margin-bottom:8px">🏦 ${mesNombre} — resultado de la conciliación</div>
+      ${r.avisos.length ? `<div style="font-size:12px;color:var(--W);margin-bottom:8px">⚠️ ${r.avisos.map(esc).join('<br>')}</div>` : ''}
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:10px">
+        <div><div style="font-size:11px;color:var(--txt2)">Saldo inicial (banco)</div><div style="font-weight:700">${_fxFmt(r.saldoInicial)}</div></div>
+        <div><div style="font-size:11px;color:var(--txt2)">Saldo final (banco)</div><div style="font-weight:700">${_fxFmt(r.saldoFinal)}</div></div>
+        <div><div style="font-size:11px;color:var(--txt2)">Neto del mes — banco</div><div style="font-weight:700">${_fxFmt(r.netoBanco)}</div></div>
+        <div><div style="font-size:11px;color:var(--txt2)">Neto del mes — FoxPro</div><div style="font-weight:700">${_fxFmt(r.netoMayor)}</div></div>
+        <div><div style="font-size:11px;color:var(--txt2)">Diferencia</div><div style="font-weight:700;color:${Math.abs(r.diferencia)<0.01?'var(--P)':'var(--D)'}">${_fxFmt(r.diferencia)}</div></div>
+      </div>
+      <div style="font-size:13px">✅ Coinciden: <b>${r.coincidencias.length}</b> &nbsp; | &nbsp; ❔ Solo en el banco: <b>${r.soloBanco.length}</b> &nbsp; | &nbsp; ❔ Solo en FoxPro: <b>${r.soloMayor.length}</b> ${r.manuales.length?` &nbsp; | &nbsp; 🤝 Emparejados a mano: <b>${r.manuales.length}</b>`:''}</div>
+      <button class="btn sm" style="margin-top:8px" onclick="bcExportarExcel()">📥 Exportar todo a Excel</button>
+    </div>
+
+    ${r.manuales.length ? `<div class="card" style="margin-bottom:12px">
+      <div style="font-weight:600;margin-bottom:8px">🤝 Emparejados a mano</div>
+      ${r.manuales.map((em,i) => `<div style="border:1px solid var(--brd);border-radius:8px;padding:8px;margin-bottom:8px">
+        <div style="font-size:12px;color:var(--txt2);margin-bottom:4px">Banco: ${em.banco.map(f=>esc(f.descripcion)+' ('+_fxFmt(f.importe)+')').join(' + ')}</div>
+        <div style="font-size:12px;color:var(--txt2)">FoxPro: ${em.mayor.map(m=>esc(m.concepto)+' ('+_fxFmt(m.neto)+')').join(' + ')}</div>
+        <button class="btn sm D" style="margin-top:4px" onclick="bcDeshacerManual(${i})">Deshacer</button>
+      </div>`).join('')}
+    </div>` : ''}
+
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-weight:600;margin-bottom:8px">✅ Coinciden (${r.coincidencias.length})</div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Fecha</th><th>Banco</th><th style="text-align:right">Importe</th><th>FoxPro</th></tr></thead><tbody>
+      ${r.coincidencias.map(c=>`<tr><td>${esc(c.banco.fecha)}</td><td style="font-size:12px">${esc(c.banco.descripcion)}</td><td style="text-align:right">${_fxFmt(c.banco.importe)}</td><td style="font-size:12px">${esc(c.mayor.concepto)}</td></tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--txt2)">Ninguno</td></tr>'}
+      </tbody></table></div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-weight:600">❔ Solo en el banco (${r.soloBanco.length})</div>
+        <div style="font-size:12px">Seleccionado: ${_fxFmt(selBancoTotal)}</div>
+      </div>
+      ${Object.entries(porCategoria).map(([cat,idxs])=>`
+        <div style="font-size:12px;font-weight:700;color:var(--txt2);margin:8px 0 4px">${esc(cat)} (${idxs.length}) — total ${_fxFmt(idxs.reduce((s,i)=>s+r.soloBanco[i].importe,0))}</div>
+        <div class="tbl-wrap"><table class="tbl"><thead><tr><th></th><th>Fecha</th><th>Descripción</th><th style="text-align:right">Importe</th></tr></thead><tbody>
+        ${idxs.map(i=>filaBanco(r.soloBanco[i],i)).join('')}
+        </tbody></table></div>
+      `).join('') || '<div style="text-align:center;color:var(--txt2)">Ninguno</div>'}
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-weight:600">❔ Solo en FoxPro (${r.soloMayor.length})</div>
+        <div style="font-size:12px">Seleccionado: ${_fxFmt(selMayorTotal)}</div>
+      </div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th></th><th>Fecha</th><th>Concepto</th><th style="text-align:right">Importe</th></tr></thead><tbody>
+      ${r.soloMayor.map((m,i)=>filaMayor(m,i)).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--txt2)">Ninguno</td></tr>'}
+      </tbody></table></div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px;${sumaIgual?'border:2px solid var(--P)':''}">
+      <div style="font-weight:600;margin-bottom:6px">🤝 Emparejar a mano lo seleccionado</div>
+      <div style="font-size:13px;margin-bottom:8px">Banco: <b>${_fxFmt(selBancoTotal)}</b> &nbsp;vs&nbsp; FoxPro: <b>${_fxFmt(selMayorTotal)}</b> ${sumaIgual?'<span style="color:var(--P);font-weight:700">✅ suman igual</span>':''}</div>
+      <button class="btn P" ${sumaIgual?'':'disabled'} onclick="bcConfirmarManual()">Confirmar emparejado</button>
+    </div>
+  `;
+}
+
+function bcToggleSel(lado, idx){
+  const set = lado==='banco' ? _bcSelBanco : _bcSelMayor;
+  if (set.has(idx)) set.delete(idx); else set.add(idx);
+  _bcRenderResultado();
+}
+
+async function bcConfirmarManual(){
+  const r = _bcResultado;
+  const bancoSel = Array.from(_bcSelBanco).sort((a,b)=>a-b);
+  const mayorSel = Array.from(_bcSelMayor).sort((a,b)=>a-b);
+  const bancoItems = bancoSel.map(i=>r.soloBanco[i]);
+  const mayorItems = mayorSel.map(i=>r.soloMayor[i]);
+  const resumen = `Banco: ${bancoItems.map(f=>f.descripcion+' ('+_fxFmt(f.importe)+')').join(' + ')}\nFoxPro: ${mayorItems.map(m=>m.concepto+' ('+_fxFmt(m.neto)+')').join(' + ')}`;
+  if (!await _confirmar(`¿Confirmás unir esto?\n\n${resumen}`, {titulo:'Emparejar a mano', textoOk:'Confirmar'})) return;
+  r.manuales.push({ banco: bancoItems, mayor: mayorItems });
+  r.soloBanco = r.soloBanco.filter((_,i)=>!_bcSelBanco.has(i));
+  r.soloMayor = r.soloMayor.filter((_,i)=>!_bcSelMayor.has(i));
+  _bcSelBanco = new Set(); _bcSelMayor = new Set();
+  _bcRenderResultado();
+}
+
+function bcDeshacerManual(i){
+  const r = _bcResultado, em = r.manuales[i];
+  r.soloBanco.push(...em.banco);
+  r.soloMayor.push(...em.mayor);
+  r.manuales.splice(i,1);
+  _bcRenderResultado();
+}
+
+function bcExportarExcel(){
+  const r = _bcResultado;
+  if (!r) return;
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(r.coincidencias.map(c=>({fecha:c.banco.fecha, banco_desc:c.banco.descripcion, importe:c.banco.importe, foxpro_concepto:c.mayor.concepto}))), 'Coinciden');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(r.soloBanco.map(f=>({fecha:f.fecha, descripcion:f.descripcion, importe:f.importe, categoria:_bcCategoria(f.descripcion)}))), 'Solo_Banco');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(r.soloMayor.map(m=>({fecha:m.fecha, concepto:m.concepto, importe:m.neto}))), 'Solo_FoxPro');
+  if (r.manuales.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(r.manuales.map(em=>({banco: em.banco.map(f=>f.descripcion+' ('+f.importe+')').join(' + '), foxpro: em.mayor.map(m=>m.concepto+' ('+m.neto+')').join(' + ')}))), 'Emparejado_manual');
+  XLSX.writeFile(wb, `lila_conciliacion_banco_${r.periodo}.xlsx`);
+}
